@@ -1,0 +1,59 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Noto+Sans+Thai:wght@300;400;500;600;700&display=swap');
+
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    font-family: 'Noto Sans Thai', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+  }
+  body {
+    @apply bg-white text-slate-900 antialiased min-h-screen selection:bg-slate-900 selection:text-white tracking-normal;
+  }
+}
+
+
+
+/* Custom Minimalist Scrollbars */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+.tms-card {
+  @apply bg-white border border-slate-200/70 shadow-[0_1px_3px_0_rgba(0,0,0,0.02)] rounded-lg transition-all;
+}
+
+
+.tms-card-hover {
+  @apply hover:border-slate-300 hover:shadow-sm transition-all;
+}
+
+/* Sidebar slide-in animation for mobile */
+@keyframes slideIn {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+.animate-slide-in {
+  animation: slideIn 0.25s ease-out;
+}

@@ -1,0 +1,128 @@
+const express = require('express');
+const router = express.Router();
+const { query } = require('../config/db');
+const { authenticateToken } = require('../middleware/auth');
+
+// GET /api/reports/dashboard
+router.get('/reports/dashboard', authenticateToken, async (req, res) => {
+  try {
+    const today = new Date().toISOString().slice(0, 10);
+
+    // 1. Total releases today
+    const releasesToday = await query(`SELECT COUNT(*) as count FROM car_release WHERE DATE(created_at) = ?`, [today]);
+
+    // 2. Financial Metrics
+    const salesSummary = await query(`
+      SELECT 
+        SUM(co.cash) as total_cash,
+        SUM(CASE WHEN co.transfer_according = 0 THEN co.transfer ELSE 0 END) as total_transfer_received,
+        SUM(CASE WHEN co.transfer_according = 1 THEN co.transfer ELSE 0 END) as pending_transfer_amount,
+        COUNT(CASE WHEN co.transfer_according = 1 THEN 1 END) as pending_transfer_count,
+        SUM(co.amount) as grand_total_amount
+      FROM check_out co
+      JOIN list_store ls ON co.list_id = ls.list_id
+      WHERE ls.bypass = 0
+    `);
+
+    // 3. Off-site checks count
+    const offSiteSummary = await query(`
+      SELECT COUNT(*) as off_site_count 
+      FROM check_out 
+      WHERE off_site = 1
+    `);
+
+    // 4. Problems count
+    const problemSummary = await query(`SELECT COUNT(*) as problem_count FROM problem`);
+
+    // 5. Daily sales chart (last 7 days)
+    const dailyStats = await query(`
+      SELECT 
+        DATE(co.date_time_check_out) as date,
+        SUM(co.cash) as cash,
+        SUM(CASE WHEN co.transfer_according = 0 THEN co.transfer ELSE 0 END) as transfer,
+        SUM(CASE WHEN co.transfer_according = 1 THEN co.transfer ELSE 0 END) as pending_transfer
+      FROM check_out co
+      JOIN list_store ls ON co.list_id = ls.list_id
+      WHERE ls.bypass = 0 AND co.date_time_check_out >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)
+      GROUP BY DATE(co.date_time_check_out)
+      ORDER BY date ASC
+    `);
+
+    // 6. Recent Releases
+    const recentReleases = await query(`
+      SELECT cr.car_release_id, cr.car_release_no, cr.created_at, cr.accounting_status,
+             c.license_plate, u.name as driver_name,
+             (SELECT COUNT(*) FROM list_store ls WHERE ls.car_release_id = cr.car_release_id) as store_count
+      FROM car_release cr
+      LEFT JOIN car c ON cr.car_id = c.car_id
+      LEFT JOIN user u ON cr.user_id = u.user_id
+      ORDER BY cr.car_release_id DESC
+      LIMIT 5
+    `);
+
+    res.json({
+      success: true,
+      summary: {
+        total_releases_today: releasesToday[0].count || 0,
+        total_cash: Number(salesSummary[0].total_cash || 0),
+        total_transfer_received: Number(salesSummary[0].total_transfer_received || 0),
+        pending_transfer_amount: Number(salesSummary[0].pending_transfer_amount || 0),
+        pending_transfer_count: Number(salesSummary[0].pending_transfer_count || 0),
+        grand_total_amount: Number(salesSummary[0].grand_total_amount || 0),
+        off_site_count: offSiteSummary[0].off_site_count || 0,
+        problem_count: problemSummary[0].problem_count || 0
+      },
+      dailyStats,
+      recentReleases
+    });
+  } catch (err) {
+    console.error('Dashboard stats error:', err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// GET /api/reports/pending-transfer (รายงานยอดโอนตามค้างชำระ)
+router.get('/reports/pending-transfer', authenticateToken, async (req, res) => {
+  try {
+    const list = await query(`
+      SELECT co.*, ls.store_name_result, ls.car_release_id,
+             cr.car_release_no, cr.created_at as release_date,
+             c.license_plate, u.name as driver_name,
+             s.store_name, s.telephone_number
+      FROM check_out co
+      JOIN list_store ls ON co.list_id = ls.list_id
+      JOIN car_release cr ON ls.car_release_id = cr.car_release_id
+      LEFT JOIN car c ON cr.car_id = c.car_id
+      LEFT JOIN user u ON cr.user_id = u.user_id
+      LEFT JOIN store s ON ls.store_id = s.store_id
+      WHERE co.transfer_according = 1 AND ls.bypass = 0
+      ORDER BY co.check_out_id DESC
+    `);
+    res.json({ success: true, pendingTransfers: list });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// GET /api/reports/off-site-checks (รายงานการเช็คเอาท์นอกสถานที่)
+router.get('/reports/off-site-checks', authenticateToken, async (req, res) => {
+  try {
+    const list = await query(`
+      SELECT co.*, ls.store_name_result, ls.lat_long as target_location,
+             cr.car_release_no, u.name as driver_name,
+             s.store_name, s.store_location
+      FROM check_out co
+      JOIN list_store ls ON co.list_id = ls.list_id
+      JOIN car_release cr ON ls.car_release_id = cr.car_release_id
+      LEFT JOIN user u ON cr.user_id = u.user_id
+      LEFT JOIN store s ON ls.store_id = s.store_id
+      WHERE co.off_site = 1
+      ORDER BY co.check_out_id DESC
+    `);
+    res.json({ success: true, offSiteChecks: list });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+module.exports = router;
