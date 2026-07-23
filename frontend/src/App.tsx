@@ -13,10 +13,21 @@ import { CreateCarRelease } from './pages/CreateCarRelease';
 import { CarReleaseDetail } from './pages/CarReleaseDetail';
 import { DriverCheckInOut } from './pages/DriverCheckInOut';
 import { CarReturnPage } from './pages/CarReturnPage';
-import { Stores } from './pages/Stores';
-import { Reports } from './pages/Reports';
-import { Users } from './pages/Users';
+import { StoresPage } from './pages/master/StoresPage';
+import { KeyHoldersPage } from './pages/master/KeyHoldersPage';
+import { PdaDevicesPage } from './pages/master/PdaDevicesPage';
+import { PaymentsPage } from './pages/master/PaymentsPage';
+import { VehiclesPage } from './pages/master/VehiclesPage';
+import { ParkingPage } from './pages/master/ParkingPage';
+import { AccountingStatusPage } from './pages/master/AccountingStatusPage';
 
+import { UsersListPage } from './pages/users/UsersListPage';
+import { UserLevelsPage } from './pages/users/UserLevelsPage';
+import { PermissionsPage } from './pages/users/PermissionsPage';
+import { AccessPage } from './pages/users/AccessPage';
+import { OptimoRoutePage } from './pages/OptimoRoutePage';
+import { ImportOptimoPage } from './pages/ImportOptimoPage';
+import { Reports } from './pages/Reports';
 
 const ProtectedLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { isAuthenticated, loading } = useAuth();
@@ -35,11 +46,11 @@ const ProtectedLayout: React.FC<{ children: React.ReactNode }> = ({ children }) 
 
   return (
     <SidebarProvider>
-      <div className="min-h-screen bg-white flex flex-col text-slate-900 font-sans">
+      <div className="h-screen bg-white flex flex-col text-slate-900 font-sans overflow-hidden">
         <Navbar />
-        <div className="flex flex-1 bg-white">
+        <div className="flex flex-1 bg-white overflow-hidden">
           <Sidebar />
-          <main className="flex-1 p-3 sm:p-5 w-full max-w-full bg-white overflow-x-hidden">
+          <main className="flex-1 p-3 sm:p-5 w-full max-w-full bg-white overflow-y-auto overflow-x-hidden">
             {children}
           </main>
         </div>
@@ -104,14 +115,28 @@ export const App: React.FC = () => {
               </ProtectedLayout>
             }
           />
-          <Route
-            path="/stores"
-            element={
-              <ProtectedLayout>
-                <Stores />
-              </ProtectedLayout>
-            }
-          />
+
+          {/* Master Data Standalone Pages */}
+          <Route path="/stores" element={<Navigate to="/master/stores" replace />} />
+          <Route path="/master" element={<Navigate to="/master/stores" replace />} />
+          <Route path="/master/stores" element={<ProtectedLayout><StoresPage /></ProtectedLayout>} />
+          <Route path="/master/keys" element={<ProtectedLayout><KeyHoldersPage /></ProtectedLayout>} />
+          <Route path="/master/pda" element={<ProtectedLayout><PdaDevicesPage /></ProtectedLayout>} />
+          <Route path="/master/payments" element={<ProtectedLayout><PaymentsPage /></ProtectedLayout>} />
+          <Route path="/master/vehicles" element={<ProtectedLayout><VehiclesPage /></ProtectedLayout>} />
+          <Route path="/master/parking" element={<ProtectedLayout><ParkingPage /></ProtectedLayout>} />
+          <Route path="/master/accounting-status" element={<ProtectedLayout><AccountingStatusPage /></ProtectedLayout>} />
+
+          {/* User Management & Permissions Standalone Pages */}
+          <Route path="/users" element={<ProtectedLayout><UsersListPage /></ProtectedLayout>} />
+          <Route path="/user-levels" element={<ProtectedLayout><UserLevelsPage /></ProtectedLayout>} />
+          <Route path="/permissions" element={<ProtectedLayout><PermissionsPage /></ProtectedLayout>} />
+          <Route path="/user-access" element={<ProtectedLayout><AccessPage /></ProtectedLayout>} />
+
+          {/* OptimoRoute Map & Import */}
+          <Route path="/optimoroute" element={<ProtectedLayout><OptimoRoutePage /></ProtectedLayout>} />
+          <Route path="/import-optimo" element={<ProtectedLayout><ImportOptimoPage /></ProtectedLayout>} />
+
           <Route
             path="/reports"
             element={
@@ -120,16 +145,7 @@ export const App: React.FC = () => {
               </ProtectedLayout>
             }
           />
-          <Route
-            path="/users"
-            element={
-              <ProtectedLayout>
-                <Users />
-              </ProtectedLayout>
-            }
-          />
-          <Route path="/permissions" element={<Navigate to="/users" replace />} />
-          <Route path="/user-levels" element={<Navigate to="/users" replace />} />
+
           <Route path="*" element={<Navigate to="/" replace />} />
 
         </Routes>

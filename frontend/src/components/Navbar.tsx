@@ -59,9 +59,24 @@ export const Navbar: React.FC = () => {
 
         {user && (
           <div className="flex items-center gap-2.5 pl-1">
-            <div className="w-7 h-7 rounded-md bg-slate-100 text-slate-700 font-semibold border border-slate-200/70 flex items-center justify-center text-xs">
-              {user.name ? user.name.charAt(0).toUpperCase() : 'U'}
-            </div>
+            {user.user_image ? (
+              <img
+                src={
+                  user.user_image.startsWith('http') || user.user_image.startsWith('data:')
+                    ? user.user_image
+                    : `http://localhost:5000${user.user_image.startsWith('/') ? '' : '/'}${user.user_image}`
+                }
+                alt={user.name}
+                className="w-7 h-7 rounded-md object-cover border border-slate-200/80 shadow-2xs"
+                onError={(e) => {
+                  (e.target as HTMLElement).style.display = 'none';
+                }}
+              />
+            ) : (
+              <div className="w-7 h-7 rounded-md bg-slate-100 text-slate-700 font-semibold border border-slate-200/70 flex items-center justify-center text-xs">
+                {user.name ? user.name.charAt(0).toUpperCase() : 'U'}
+              </div>
+            )}
             <div className="text-left hidden lg:block">
               <div className="text-xs font-semibold text-slate-800 leading-tight">{user.name}</div>
               <div className="text-[10px] text-slate-400">{user.level_user_name || 'ผู้ใช้งาน'}</div>

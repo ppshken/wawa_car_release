@@ -23,9 +23,14 @@ import {
   Coins,
   Key,
   Users,
+  Layers,
+  KeyRound,
+  Shield,
   ChevronsLeft,
   ChevronsRight,
   X,
+  Map,
+  DownloadCloud,
 } from 'lucide-react';
 
 export const Sidebar: React.FC = () => {
@@ -55,77 +60,143 @@ export const Sidebar: React.FC = () => {
       return !!permissions[key];
     }
     if (user?.level_user_id === 1) return true;
-    if (key === 'dashboard' || key === 'releases') return true;
-    if (user?.level_user_id === 2 && (key === 'create_release' || key === 'driver' || key === 'return' || key === 'stores' || key === 'reports')) return true;
-    if (user?.level_user_id === 3 && (key === 'driver' || key === 'return')) return true;
+    if (key === 'dashboard' || key === 'releases' || key === 'optimoroute' || key === 'import_optimo') return true;
+    if (user?.level_user_id === 2 && (key === 'create_release' || key === 'driver' || key === 'return' || key === 'stores' || key === 'reports' || key === 'optimoroute' || key === 'import_optimo')) return true;
+    if (user?.level_user_id === 3 && (key === 'driver' || key === 'return' || key === 'optimoroute')) return true;
     return false;
   };
 
-  const navItems = [
+  const mainNavItems = [
     { to: '/', label: 'แดชบอร์ด', icon: LayoutDashboard, key: 'dashboard' },
     { to: '/releases', label: 'ใบปล่อยรถ', icon: Truck, key: 'releases' },
     { to: '/releases/create', label: 'สร้างใบปล่อยรถ', icon: FileText, key: 'create_release' },
     { to: '/driver', label: 'ประตูรถ (เช็คอิน)', icon: MapPin, key: 'driver' },
-    { to: '/users', label: 'จัดการผู้ใช้งาน & สิทธิ์', icon: Users, key: 'users' },
     { to: '/return', label: 'บันทึกคืนกุญแจ', icon: Key, key: 'return' },
     { to: '/reports', label: 'สถานะทางบัญชี', icon: ShieldCheck, key: 'reports' },
-    { to: '/profile', label: 'โปรไฟล์', icon: User },
-    { to: '/routes', label: 'จัดรถ & เส้นทาง', icon: Package },
-    { to: '/offsite', label: 'เช็คสินค้านอกพิกัด', icon: MapPinOff },
-    { to: '/distance', label: 'ระยะห่าง GPS', icon: Navigation },
-    { to: '/import-photos', label: 'นำเข้ารูปรถ', icon: Upload },
-    { to: '/pda', label: 'เครื่อง PDA', icon: Smartphone },
-    { to: '/sales-orders', label: 'ใบสั่งขาย', icon: Receipt },
-    { to: '/return-orders', label: 'ใบคืนสินค้า', icon: RotateCcw },
-    { to: '/return-delivery', label: 'ส่งคืนสินค้า', icon: Send },
-    { to: '/creditors', label: 'เจ้าหนี้', icon: Building },
-    { to: '/debtors', label: 'ลูกหนี้', icon: CreditCard },
-    { to: '/storage', label: 'ตำแหน่งวางสินค้า', icon: Grid },
-    { to: '/allowances', label: 'เบี้ยเลี้ยง', icon: Coins }
+    { to: '/optimoroute', label: 'เส้นทาง OptimoRoute', icon: Map, key: 'optimoroute' },
+    { to: '/import-optimo', label: 'นำเข้า OptimoRoute', icon: DownloadCloud, key: 'import_optimo' },
+    { to: '/profile', label: 'โปรไฟล์', icon: User }
   ].filter((item) => isMenuAllowed(item.key));
+
+  const userNavItems = [
+    { to: '/users', label: 'ผู้ใช้งาน', icon: Users, key: 'users' },
+    { to: '/user-levels', label: 'ระดับผู้ใช้งาน', icon: Layers, key: 'user_levels' },
+    { to: '/permissions', label: 'สิทธิ์ระบบ', icon: KeyRound, key: 'permissions' },
+    { to: '/user-access', label: 'กลุ่มการเข้าถึง', icon: Shield, key: 'user_access' },
+  ].filter((item) => isMenuAllowed(item.key) || user?.level_user_id === 1);
+
+  const masterNavItems = [
+    { to: '/master/stores', label: 'ร้านค้า', icon: Building, key: 'stores' },
+    { to: '/master/keys', label: 'ที่ฝากกุญแจ', icon: Key, key: 'keys' },
+    { to: '/master/pda', label: 'เครื่อง PDA', icon: Smartphone, key: 'pda' },
+    { to: '/master/payments', label: 'การชำระเงิน', icon: CreditCard, key: 'payments' },
+    { to: '/master/vehicles', label: 'รถ', icon: Truck, key: 'vehicles' },
+    { to: '/master/parking', label: 'ที่จอด', icon: MapPin, key: 'parking' },
+    { to: '/master/accounting-status', label: 'สถานะทางบัญชี', icon: ShieldCheck, key: 'accounting_status' }
+  ].filter((item) => isMenuAllowed(item.key) || user?.level_user_id === 1);
+
+  const otherNavItems = [
+    { to: '/routes', label: 'จัดรถ & เส้นทาง', icon: Package, key: 'routes' },
+    { to: '/offsite', label: 'เช็คสินค้านอกพิกัด', icon: MapPinOff, key: 'offsite' },
+    { to: '/distance', label: 'ระยะห่าง GPS', icon: Navigation, key: 'distance' },
+    { to: '/import-photos', label: 'นำเข้ารูปรถ', icon: Upload, key: 'import_photos' },
+    { to: '/sales-orders', label: 'ใบสั่งขาย', icon: Receipt, key: 'sales_orders' },
+    { to: '/return-orders', label: 'ใบคืนสินค้า', icon: RotateCcw, key: 'return_orders' },
+    { to: '/return-delivery', label: 'ส่งคืนสินค้า', icon: Send, key: 'return_delivery' },
+    { to: '/creditors', label: 'เจ้าหนี้', icon: Building, key: 'creditors' },
+    { to: '/debtors', label: 'ลูกหนี้', icon: CreditCard, key: 'debtors' },
+    { to: '/storage', label: 'ตำแหน่งวางสินค้า', icon: Grid, key: 'storage' },
+    { to: '/allowances', label: 'เบี้ยเลี้ยง', icon: Coins, key: 'allowances' }
+  ].filter((item) => isMenuAllowed(item.key));
+
+  const renderNavLink = (item: { to: string; label: string; icon: any }, isMobile: boolean) => {
+    const Icon = item.icon;
+    return (
+      <NavLink
+        key={item.to}
+        to={item.to}
+        end={item.to === '/'}
+        title={collapsed && !isMobile ? item.label : undefined}
+        className={({ isActive }) =>
+          `flex items-center ${collapsed && !isMobile ? 'justify-center' : ''} gap-3 ${collapsed && !isMobile ? 'px-0 py-2.5' : 'px-3 py-2'} rounded-md font-medium transition-all group relative ${
+            isActive
+              ? 'bg-slate-900 text-white shadow-sm font-semibold'
+              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+          }`
+        }
+      >
+        <Icon className="w-4 h-4 shrink-0" />
+        {(!collapsed || isMobile) && <span>{item.label}</span>}
+
+        {/* Tooltip for collapsed mode */}
+        {collapsed && !isMobile && (
+          <span className="absolute left-full ml-3 px-2.5 py-1.5 rounded-md bg-slate-900 text-white text-xs font-medium whitespace-nowrap opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50 shadow-lg pointer-events-none">
+            {item.label}
+            <span className="absolute top-1/2 -left-1 -translate-y-1/2 w-2 h-2 bg-slate-900 rotate-45" />
+          </span>
+        )}
+      </NavLink>
+    );
+  };
 
   const sidebarContent = (isMobile: boolean) => (
     <>
-      <div className="overflow-y-auto px-2 space-y-0.5 custom-scrollbar flex-1">
-        {/* Section header */}
-        {(!collapsed || isMobile) && (
-          <div className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider px-3 mb-2 mt-1">
-            เมนูหลัก
+      <div className="overflow-y-auto px-2 space-y-3 custom-scrollbar flex-1 py-1">
+        {/* Section 1: Main Menu */}
+        <div>
+          {(!collapsed || isMobile) && (
+            <div className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider px-3 mb-1 mt-1">
+              เมนูหลัก
+            </div>
+          )}
+          <div className="space-y-0.5">
+            {mainNavItems.map((item) => renderNavLink(item, isMobile))}
+          </div>
+        </div>
+
+        {/* Section 2: User Management Header & Items */}
+        {userNavItems.length > 0 && (
+          <div className="pt-2 border-t border-slate-100">
+            {(!collapsed || isMobile) && (
+              <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider px-3 mb-1 flex items-center justify-between">
+                <span>จัดการผู้ใช้งาน</span>
+                <span className="bg-slate-200/70 text-slate-700 text-[9px] px-1.5 py-0.2 rounded font-mono font-normal">4</span>
+              </div>
+            )}
+            <div className="space-y-0.5">
+              {userNavItems.map((item) => renderNavLink(item, isMobile))}
+            </div>
           </div>
         )}
-        {collapsed && !isMobile && (
-          <div className="h-3" />
+
+        {/* Section 3: Master Data Header & Items */}
+        {masterNavItems.length > 0 && (
+          <div className="pt-2 border-t border-slate-100">
+            {(!collapsed || isMobile) && (
+              <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider px-3 mb-1 flex items-center justify-between">
+                <span>ข้อมูลมาสเตอร์</span>
+                <span className="bg-slate-200/70 text-slate-700 text-[9px] px-1.5 py-0.2 rounded font-mono font-normal">7</span>
+              </div>
+            )}
+            <div className="space-y-0.5">
+              {masterNavItems.map((item) => renderNavLink(item, isMobile))}
+            </div>
+          </div>
         )}
 
-        {navItems.map((item) => {
-          const Icon = item.icon;
-          return (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              end={item.to === '/'}
-              title={collapsed && !isMobile ? item.label : undefined}
-              className={({ isActive }) =>
-                `flex items-center ${collapsed && !isMobile ? 'justify-center' : ''} gap-3 ${collapsed && !isMobile ? 'px-0 py-2.5' : 'px-3 py-2'} rounded-md font-medium transition-all group relative ${
-                  isActive
-                    ? 'bg-slate-900 text-white shadow-sm font-semibold'
-                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
-                }`
-              }
-            >
-              <Icon className="w-4 h-4 shrink-0" />
-              {(!collapsed || isMobile) && <span>{item.label}</span>}
-
-              {/* Tooltip for collapsed mode */}
-              {collapsed && !isMobile && (
-                <span className="absolute left-full ml-3 px-2.5 py-1.5 rounded-md bg-slate-900 text-white text-xs font-medium whitespace-nowrap opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50 shadow-lg pointer-events-none">
-                  {item.label}
-                  <span className="absolute top-1/2 -left-1 -translate-y-1/2 w-2 h-2 bg-slate-900 rotate-45" />
-                </span>
-              )}
-            </NavLink>
-          );
-        })}
+        {/* Section 4: Other Operations */}
+        {otherNavItems.length > 0 && (
+          <div className="pt-2 border-t border-slate-100">
+            {(!collapsed || isMobile) && (
+              <div className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider px-3 mb-1">
+                การจัดการอื่นๆ
+              </div>
+            )}
+            <div className="space-y-0.5">
+              {otherNavItems.map((item) => renderNavLink(item, isMobile))}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Footer + Collapse Toggle */}
@@ -160,7 +231,7 @@ export const Sidebar: React.FC = () => {
     <>
       {/* ─── DESKTOP SIDEBAR ─── */}
       <aside
-        className={`hidden lg:flex flex-col justify-between bg-white border-r border-slate-200/70 shrink-0 py-3 min-h-[calc(100vh-3.5rem)] text-xs transition-all duration-300 ease-in-out ${
+        className={`hidden lg:flex flex-col justify-between bg-white border-r border-slate-200/70 shrink-0 py-3 h-full text-xs transition-all duration-300 ease-in-out ${
           collapsed ? 'w-14' : 'w-56'
         }`}
       >

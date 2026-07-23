@@ -203,7 +203,6 @@ CREATE TABLE car_return (
 -- ---------------------------------------------------------
 CREATE TABLE list_store (
   list_id             INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-  car_release_id      INT UNSIGNED NOT NULL,
   store_id            INT UNSIGNED NOT NULL,
   group_store_id      INT UNSIGNED,
   row_order           INT DEFAULT 0 COMMENT 'ลำดับการแวะร้าน',

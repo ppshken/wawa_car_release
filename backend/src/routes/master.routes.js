@@ -56,33 +56,81 @@ router.post('/stores', authenticateToken, async (req, res) => {
 router.post('/stores/import', authenticateToken, upload.single('file'), async (req, res) => {
   try {
     if (!req.file) {
-      return res.status(400).json({ success: false, message: 'Excel or CSV file required' });
+      return res.status(400).json({ success: false, message: 'กรุณาอัปโหลดไฟล์ Excel หรือ CSV' });
     }
 
     const workbook = xlsx.readFile(req.file.path);
     const sheetName = workbook.SheetNames[0];
     const sheetData = xlsx.utils.sheet_to_json(workbook.Sheets[sheetName]);
 
-    let count = 0;
-    for (const row of sheetData) {
-      const store_name = row['ชื่อร้านค้า'] || row['store_name'] || row['Store Name'];
-      if (!store_name) continue;
-
-      const store_address = row['ที่อยู่'] || row['store_address'] || row['Address'] || '';
-      const telephone_number = row['เบอร์โทรศัพท์'] || row['telephone_number'] || row['Phone'] || '';
-      const store_location = row['พิกัด'] || row['lat_long'] || row['store_location'] || row['Location'] || '';
-
-      await query(
-        `INSERT INTO store (store_name, store_address, telephone_number, store_location) VALUES (?, ?, ?, ?)`,
-        [store_name, store_address, String(telephone_number), store_location]
-      );
-      count++;
+    if (!Array.isArray(sheetData) || sheetData.length === 0) {
+      return res.status(400).json({ success: false, message: 'ไม่พบข้อมูลในไฟล์ Excel' });
     }
 
-    res.json({ success: true, message: `Successfully imported ${count} stores` });
+    let insertedCount = 0;
+    let updatedCount = 0;
+    let rowIndex = 0;
+
+    for (const row of sheetData) {
+      rowIndex++;
+      let rawStoreId = row['รหัสร้านค้า'] || row['store_id'] || row['store_no'] || row['Store ID'] || row['ID'] || row['StoreNo'] || row['StoreID'];
+      const store_name = row['ชื่อร้านค้า'] || row['store_name'] || row['Store Name'] || row['StoreName'];
+
+      if (!store_name) continue;
+
+      if (!rawStoreId || String(rawStoreId).trim() === '') {
+        rawStoreId = `ST-${Date.now().toString().slice(-4)}${rowIndex}`;
+      }
+
+      const store_id = String(rawStoreId).trim();
+      const store_address = row['ที่อยู่'] || row['store_address'] || row['Address'] || '';
+      const telephone_number = row['เบอร์โทรศัพท์'] || row['telephone_number'] || row['Phone'] || row['Tel'] || '';
+      const fax_number = row['แฟกซ์'] || row['fax_number'] || row['Fax'] || '';
+      const email = row['อีเมล'] || row['email'] || row['Email'] || '';
+      const url = row['เว็บไซต์'] || row['url'] || row['URL'] || row['Website'] || '';
+      const store_location = row['พิกัด'] || row['lat_long'] || row['store_location'] || row['Location'] || row['GPS'] || '';
+
+      const sql = `
+        INSERT INTO store (store_id, store_name, store_address, telephone_number, fax_number, email, url, store_location)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        ON DUPLICATE KEY UPDATE
+          store_name = VALUES(store_name),
+          store_address = VALUES(store_address),
+          telephone_number = VALUES(telephone_number),
+          fax_number = VALUES(fax_number),
+          email = VALUES(email),
+          url = VALUES(url),
+          store_location = VALUES(store_location)
+      `;
+
+      const result = await query(sql, [
+        store_id,
+        store_name,
+        store_address || null,
+        telephone_number ? String(telephone_number) : null,
+        fax_number ? String(fax_number) : null,
+        email ? String(email) : null,
+        url ? String(url) : null,
+        store_location ? String(store_location) : null
+      ]);
+
+      if (result.affectedRows === 1) {
+        insertedCount++;
+      } else if (result.affectedRows === 2) {
+        updatedCount++;
+      }
+    }
+
+    res.json({
+      success: true,
+      message: `นำเข้าข้อมูลร้านค้าเรียบร้อยแล้ว (เพิ่มใหม่ ${insertedCount} รายการ, อัปเดต ${updatedCount} รายการ)`,
+      insertedCount: insertedCount + updatedCount,
+      insertedCountOnly: insertedCount,
+      updatedCountOnly: updatedCount
+    });
   } catch (err) {
     console.error('Import error:', err);
-    res.status(500).json({ success: false, message: err.message });
+    res.status(500).json({ success: false, message: err.message || 'เกิดข้อผิดพลาดในการนำเข้าไฟล์ Excel' });
   }
 });
 
@@ -98,12 +146,31 @@ router.get('/group-stores', authenticateToken, async (req, res) => {
 
 router.post('/group-stores', authenticateToken, async (req, res) => {
   try {
-    const { group_store_name, group_color } = req.body;
-    const result = await query(
-      'INSERT INTO group_store (group_store_name, group_color) VALUES (?, ?)',
-      [group_store_name, group_color || '#3b82f6']
-    );
-    res.json({ success: true, message: 'Group store added', group_store_id: result.insertId });
+    const { group_store_name, group_color, car_id, car, date, group_date } = req.body;
+    const vehicleId = car_id || car || null;
+    const targetDate = date || group_date || new Date().toISOString().slice(0, 10);
+    const color = group_color || '#3b82f6';
+
+    let result;
+    try {
+      result = await query(
+        'INSERT INTO group_store (group_store_name, group_color, car_id, date) VALUES (?, ?, ?, ?)',
+        [group_store_name, color, vehicleId, targetDate]
+      );
+    } catch (e1) {
+      try {
+        result = await query(
+          'INSERT INTO group_store (group_store_name, group_color, car) VALUES (?, ?, ?)',
+          [group_store_name, color, vehicleId]
+        );
+      } catch (e2) {
+        result = await query(
+          'INSERT INTO group_store (group_store_name, group_color) VALUES (?, ?)',
+          [group_store_name, color]
+        );
+      }
+    }
+    res.json({ success: true, message: 'Group store added', group_store_id: result.insertId, car: vehicleId, date: targetDate });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }

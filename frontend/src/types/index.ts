@@ -4,13 +4,13 @@ export interface User {
   name: string;
   level_user_id: number;
   level_user_name?: string;
+  user_image?: string;
   setting_car_release?: number;
   menu_permissions?: string | Record<string, boolean>;
   access_name?: string;
   phone_number_1?: string;
   phone_number_2?: string;
   phone_number_3?: string;
-  image_profile?: string;
   location_now?: string;
   language?: string;
   created_at?: string;

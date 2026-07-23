@@ -23,13 +23,18 @@ router.post('/login', async (req, res) => {
     );
 
     if (users.length === 0) {
-      return res.status(401).json({ success: false, message: 'Invalid username or password' });
+      return res.status(401).json({ success: false, message: 'ชื่อผู้ใช้งานหรือรหัสผ่านไม่ถูกต้อง' });
     }
 
     const user = users[0];
+    const userStatus = (user.user_status || '').toString().toLowerCase();
+    if (userStatus === 'inactive' || userStatus === '0' || userStatus === 'disabled') {
+      return res.status(403).json({ success: false, message: 'บัญชีถูกปิดการใช้งาน' });
+    }
+
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) {
-      return res.status(401).json({ success: false, message: 'Invalid username or password' });
+      return res.status(401).json({ success: false, message: 'ชื่อผู้ใช้งานหรือรหัสผ่านไม่ถูกต้อง' });
     }
 
     const tokenPayload = {
@@ -65,7 +70,8 @@ router.post('/login', async (req, res) => {
 router.get('/me', authenticateToken, async (req, res) => {
   try {
     const users = await query(
-      `SELECT u.user_id, u.username, u.name, u.phone_number_1, u.level_user_id, u.image_profile, u.location_now,
+      `SELECT u.user_id, u.username, u.name, u.phone_number_1, u.level_user_id,
+              COALESCE(u.user_image, u.image_profile) AS user_image, u.location_now,
               IF(u.user_status = 'inactive' OR u.user_status = '0', 'inactive', 'active') AS user_status,
               l.level_user_name, l.setting_car_release, l.menu_permissions, a.access_id, a.access_name
        FROM user u
@@ -75,27 +81,54 @@ router.get('/me', authenticateToken, async (req, res) => {
       [req.user.user_id]
     );
 
-
     if (users.length === 0) {
       return res.status(404).json({ success: false, message: 'User not found' });
     }
 
-    res.json({ success: true, user: users[0] });
+    const user = users[0];
+    if (user.user_status === 'inactive') {
+      return res.status(403).json({ success: false, message: 'บัญชีถูกปิดการใช้งาน' });
+    }
+
+    res.json({ success: true, user });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
 });
 
 
+const { upload, saveBase64Image } = require('../middleware/upload');
+
+// Ensure user_image column exists
+async function ensureUserImageColumns() {
+  try {
+    const cols = await query("SHOW COLUMNS FROM user LIKE 'user_image'");
+    if (cols.length === 0) {
+      await query("ALTER TABLE user ADD COLUMN user_image VARCHAR(255) NULL AFTER level_user_id");
+    }
+  } catch (err) {
+    console.error("Error checking user_image column:", err.message);
+  }
+}
+ensureUserImageColumns();
+
 // GET /api/users
 router.get('/users', authenticateToken, async (req, res) => {
   try {
     const users = await query(
-      `SELECT u.user_id, u.username, u.name, u.phone_number_1, u.level_user_id, u.location_now,
+      `SELECT u.user_id,
+              u.username,
+              u.name,
+              u.phone_number_1,
+              u.level_user_id,
+              u.user_image,
+              u.location_now,
               IF(u.user_status = 'inactive' OR u.user_status = '0', 'inactive', 'active') AS user_status,
-              l.level_user_name, l.setting_car_release, a.access_id, a.access_name
+              l.level_user_name,
+              l.setting_car_release,
+              a.access_id,
+              a.access_name
        FROM user u
-
        LEFT JOIN level_user l ON u.level_user_id = l.level_user_id
        LEFT JOIN access a ON l.access_id = a.access_id
        ORDER BY u.user_id DESC`
@@ -107,7 +140,7 @@ router.get('/users', authenticateToken, async (req, res) => {
 });
 
 // POST /api/users (Create User)
-router.post('/users', authenticateToken, async (req, res) => {
+router.post('/users', authenticateToken, upload.single('user_image'), async (req, res) => {
   try {
     const { username, password, name, phone_number_1, level_user_id, user_status } = req.body;
     if (!username || !password || !name) {
@@ -119,38 +152,66 @@ router.post('/users', authenticateToken, async (req, res) => {
       return res.status(400).json({ success: false, message: 'Username นี้ถูกใช้งานแล้ว' });
     }
 
+    let user_image = null;
+    if (req.file) {
+      user_image = `/uploads/${req.file.filename}`;
+    } else if (req.body.user_image) {
+      user_image = saveBase64Image(req.body.user_image);
+    }
+
     const hashedPassword = await bcrypt.hash(password, 10);
     const result = await query(
-      `INSERT INTO user (username, password, name, phone_number_1, level_user_id, user_status) VALUES (?, ?, ?, ?, ?, ?)`,
-      [username, hashedPassword, name, phone_number_1 || '', level_user_id || 3, user_status || 'active']
+      `INSERT INTO user (username, password, name, phone_number_1, level_user_id, user_status, user_image) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [username, hashedPassword, name, phone_number_1 || '', level_user_id || 3, user_status || 'active', user_image]
     );
 
-    res.json({ success: true, message: 'เพิ่มพนักงานใหม่เรียบร้อยแล้ว', user_id: result.insertId });
+    res.json({ success: true, message: 'เพิ่มพนักงานใหม่เรียบร้อยแล้ว', user_id: result.insertId, user_image });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
 });
 
 // PUT /api/users/:id (Update User)
-router.put('/users/:id', authenticateToken, async (req, res) => {
+router.put('/users/:id', authenticateToken, upload.single('user_image'), async (req, res) => {
   try {
     const { id } = req.params;
     const { name, phone_number_1, level_user_id, password, user_status } = req.body;
 
-    if (password && password.trim() !== '') {
-      const hashedPassword = await bcrypt.hash(password, 10);
-      await query(
-        `UPDATE user SET name = ?, phone_number_1 = ?, level_user_id = ?, password = ?, user_status = ? WHERE user_id = ?`,
-        [name, phone_number_1 || '', level_user_id, hashedPassword, user_status || 'active', id]
-      );
-    } else {
-      await query(
-        `UPDATE user SET name = ?, phone_number_1 = ?, level_user_id = ?, user_status = ? WHERE user_id = ?`,
-        [name, phone_number_1 || '', level_user_id, user_status || 'active', id]
-      );
+    let user_image = undefined;
+    if (req.file) {
+      user_image = `/uploads/${req.file.filename}`;
+    } else if (req.body.user_image !== undefined) {
+      user_image = saveBase64Image(req.body.user_image);
     }
 
-    res.json({ success: true, message: 'อัปเดตข้อมูลผู้ใช้งานเรียบร้อยแล้ว' });
+    if (password && password.trim() !== '') {
+      const hashedPassword = await bcrypt.hash(password, 10);
+      if (user_image !== undefined) {
+        await query(
+          `UPDATE user SET name = ?, phone_number_1 = ?, level_user_id = ?, password = ?, user_status = ?, user_image = ? WHERE user_id = ?`,
+          [name, phone_number_1 || '', level_user_id, hashedPassword, user_status || 'active', user_image, id]
+        );
+      } else {
+        await query(
+          `UPDATE user SET name = ?, phone_number_1 = ?, level_user_id = ?, password = ?, user_status = ? WHERE user_id = ?`,
+          [name, phone_number_1 || '', level_user_id, hashedPassword, user_status || 'active', id]
+        );
+      }
+    } else {
+      if (user_image !== undefined) {
+        await query(
+          `UPDATE user SET name = ?, phone_number_1 = ?, level_user_id = ?, user_status = ?, user_image = ? WHERE user_id = ?`,
+          [name, phone_number_1 || '', level_user_id, user_status || 'active', user_image, id]
+        );
+      } else {
+        await query(
+          `UPDATE user SET name = ?, phone_number_1 = ?, level_user_id = ?, user_status = ? WHERE user_id = ?`,
+          [name, phone_number_1 || '', level_user_id, user_status || 'active', id]
+        );
+      }
+    }
+
+    res.json({ success: true, message: 'อัปเดตข้อมูลผู้ใช้งานเรียบร้อยแล้ว', user_image });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
@@ -172,6 +233,13 @@ router.put('/users/:id/status', authenticateToken, async (req, res) => {
 router.delete('/users/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
+    const targetUser = await query('SELECT user_id, username, level_user_id FROM user WHERE user_id = ?', [id]);
+    if (targetUser.length > 0) {
+      const u = targetUser[0];
+      if (u.level_user_id === 1 || u.username === 'admin' || u.username === 'user1.admin') {
+        return res.status(400).json({ success: false, message: 'ไม่สามารถลบบัญชีผู้ใช้งานระดับ Admin ได้' });
+      }
+    }
     await query('DELETE FROM user WHERE user_id = ?', [id]);
     res.json({ success: true, message: 'ลบผู้ใช้งานเรียบร้อยแล้ว' });
   } catch (err) {

@@ -1,4 +1,5 @@
-import React from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { AlertTriangle, Trash2, X } from 'lucide-react';
 
 interface ConfirmModalProps {
@@ -22,14 +23,43 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({
   onCancel,
   isLoading = false
 }) => {
-  if (!isOpen) return null;
+  const [visible, setVisible] = useState(false);
+  const [closing, setClosing] = useState(false);
 
-  return (
-    <div className="fixed inset-0 z-[99999] bg-slate-900/40 backdrop-blur-[2px] flex items-center justify-center p-4 animate-in fade-in duration-150">
-      <div className="bg-white rounded-xl border border-slate-200 shadow-2xl max-w-md w-full p-5 space-y-4 animate-in zoom-in-95 duration-150 relative">
+  useEffect(() => {
+    if (isOpen) {
+      setVisible(true);
+      setClosing(false);
+    } else if (visible) {
+      // Trigger closing animation
+      setClosing(true);
+      const timer = setTimeout(() => {
+        setVisible(false);
+        setClosing(false);
+      }, 200);
+      return () => clearTimeout(timer);
+    }
+  }, [isOpen]);
+
+  const handleCancel = useCallback(() => {
+    if (isLoading) return;
+    onCancel();
+  }, [isLoading, onCancel]);
+
+  if (!visible) return null;
+
+  return createPortal(
+    <div
+      className={`fixed inset-0 z-[99999] flex items-center justify-center p-4 ${closing ? 'animate-backdrop-out' : 'animate-backdrop-in'}`}
+      style={{ backgroundColor: 'rgba(15, 23, 42, 0.4)', backdropFilter: 'blur(2px)' }}
+    >
+      <div
+        className={`bg-white rounded-xl border border-slate-200 shadow-2xl max-w-md w-full p-5 space-y-4 relative ${closing ? 'animate-modal-out' : 'animate-modal-in'}`}
+        onClick={(e) => e.stopPropagation()}
+      >
         {/* Close Icon Button */}
         <button
-          onClick={onCancel}
+          onClick={handleCancel}
           className="absolute top-4 right-4 p-1 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
         >
           <X className="w-4 h-4" />
@@ -51,7 +81,7 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({
         <div className="pt-2 flex justify-end gap-2 border-t border-slate-100">
           <button
             type="button"
-            onClick={onCancel}
+            onClick={handleCancel}
             disabled={isLoading}
             className="bg-white border border-slate-200 text-slate-700 hover:bg-slate-100 font-medium px-4 py-2 rounded-lg text-xs transition-colors disabled:opacity-50"
           >
@@ -69,7 +99,8 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };
 
