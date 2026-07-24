@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import api from '../services/api';
 import { CarRelease, KeyHolder, Parking } from '../types';
 import { MultiImageUpload } from '../components/MultiImageUpload';
+import { SearchableSelect } from '../components/SearchableSelect';
 import { RotateCcw, Key, MapPin, Fuel, Camera, Check } from 'lucide-react';
 
 export const CarReturnPage: React.FC = () => {
@@ -118,60 +119,45 @@ export const CarReturnPage: React.FC = () => {
       </div>
 
       <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 space-y-4 text-xs">
-        <div className="space-y-1">
-          <label className="text-slate-300 font-medium">เลือกใบปล่อยรถที่ต้องการคืน *</label>
-          <select
-            value={selectedReleaseId}
-            onChange={(e) => setSelectedReleaseId(Number(e.target.value))}
-            required
-            className="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-white focus:outline-none focus:border-blue-500"
-          >
-            {activeReleases.length === 0 ? (
-              <option value="">ไม่มีใบปล่อยรถที่รอคืน</option>
-            ) : (
-              activeReleases.map((r) => (
-                <option key={r.car_release_id} value={r.car_release_id}>
-                  {r.car_release_no} - {r.license_plate} ({r.driver_name})
-                </option>
-              ))
-            )}
-          </select>
-        </div>
+        <SearchableSelect
+          label="เลือกใบปล่อยรถที่ต้องการคืน"
+          required
+          value={selectedReleaseId}
+          onChange={(val) => setSelectedReleaseId(Number(val) || "")}
+          placeholder="-- เลือกใบปล่อยรถที่ต้องการคืน --"
+          searchPlaceholder="พิมพ์ค้นหา (เลขใบปล่อย / ทะเบียน / คนขับ)..."
+          options={activeReleases.map((r) => ({
+            value: r.car_release_id,
+            label: `${r.car_release_no} - ${r.license_plate} (${r.driver_name})`,
+            badge: r.license_plate,
+          }))}
+          emptyText="ไม่มีใบปล่อยรถที่รอคืน"
+        />
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div className="space-y-1">
-            <label className="text-slate-300 font-medium flex items-center gap-1">
-              <Key className="w-3.5 h-3.5 text-amber-400" /> ผู้ถือกุญแจรถ
-            </label>
-            <select
-              value={selectedKeyHolderId}
-              onChange={(e) => setSelectedKeyHolderId(Number(e.target.value))}
-              className="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-white focus:outline-none focus:border-blue-500"
-            >
-              {keyHolders.map((k) => (
-                <option key={k.key_holder_id} value={k.key_holder_id}>
-                  {k.key_holder_name}
-                </option>
-              ))}
-            </select>
-          </div>
+          <SearchableSelect
+            label="ผู้ถือกุญแจรถ"
+            value={selectedKeyHolderId}
+            onChange={(val) => setSelectedKeyHolderId(Number(val) || "")}
+            placeholder="-- เลือกผู้ถือกุญแจ --"
+            searchPlaceholder="พิมพ์ค้นหาผู้ถือกุญแจ..."
+            options={keyHolders.map((k) => ({
+              value: k.key_holder_id,
+              label: k.key_holder_name,
+            }))}
+          />
 
-          <div className="space-y-1">
-            <label className="text-slate-300 font-medium flex items-center gap-1">
-              <MapPin className="w-3.5 h-3.5 text-blue-400" /> จุดจอดรถ
-            </label>
-            <select
-              value={selectedParkingId}
-              onChange={(e) => setSelectedParkingId(Number(e.target.value))}
-              className="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-white focus:outline-none focus:border-blue-500"
-            >
-              {parkings.map((p) => (
-                <option key={p.parking_id} value={p.parking_id}>
-                  {p.parking_name}
-                </option>
-              ))}
-            </select>
-          </div>
+          <SearchableSelect
+            label="จุดจอดรถ"
+            value={selectedParkingId}
+            onChange={(val) => setSelectedParkingId(Number(val) || "")}
+            placeholder="-- เลือกจุดจอดรถ --"
+            searchPlaceholder="พิมพ์ค้นหาจุดจอด..."
+            options={parkings.map((p) => ({
+              value: p.parking_id,
+              label: p.parking_name,
+            }))}
+          />
 
           <div className="space-y-1">
             <label className="text-slate-300 font-medium">เลขไมล์ตอนกลับ (กิโลเมตร)</label>

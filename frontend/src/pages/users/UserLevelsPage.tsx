@@ -3,6 +3,7 @@ import api from "../../services/api";
 import { useToast } from "../../context/ToastContext";
 import { ConfirmModal } from "../../components/ConfirmModal";
 import { AnimatedDrawer } from "../../components/AnimatedDrawer";
+import { SearchableSelect } from "../../components/SearchableSelect";
 import { UsersSubNav } from "../../components/UsersSubNav";
 import {
   Layers,
@@ -278,20 +279,18 @@ export const UserLevelsPage: React.FC = () => {
             required
           />
         </div>
-        <div>
-          <label className="block text-slate-700 font-semibold mb-1">กลุ่มสิทธิ์ระบบ (Access Role)</label>
-          <select
-            value={formLevelAccessId}
-            onChange={(e) => setFormLevelAccessId(e.target.value ? Number(e.target.value) : "")}
-            className={inputCls}
-          >
-            {accesses.map((acc) => (
-              <option key={acc.access_id} value={acc.access_id}>
-                {acc.access_name} ({acc.description || "สิทธิ์ทั่วไป"})
-              </option>
-            ))}
-          </select>
-        </div>
+        <SearchableSelect
+          label="กลุ่มสิทธิ์ระบบ (Access Role)"
+          value={formLevelAccessId}
+          onChange={(val) => setFormLevelAccessId(val !== "" ? Number(val) : "")}
+          placeholder="-- เลือกกลุ่มสิทธิ์ระบบ --"
+          searchPlaceholder="พิมพ์ค้นหากลุ่มสิทธิ์..."
+          options={accesses.map((acc) => ({
+            value: acc.access_id,
+            label: acc.access_name,
+            subLabel: acc.description || "สิทธิ์ทั่วไป",
+          }))}
+        />
         <div className="pt-2">
           <label className="flex items-center gap-2 cursor-pointer select-none">
             <input

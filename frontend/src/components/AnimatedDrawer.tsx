@@ -11,6 +11,7 @@ interface AnimatedDrawerProps {
   onSubmit: (e: React.FormEvent) => void;
   submitLabel: string;
   isDirty?: boolean;
+  maxWidthClass?: string;
   children: React.ReactNode;
 }
 
@@ -22,6 +23,7 @@ export const AnimatedDrawer: React.FC<AnimatedDrawerProps> = ({
   onSubmit,
   submitLabel,
   isDirty = false,
+  maxWidthClass = "max-w-md sm:max-w-lg",
   children,
 }) => {
   const [visible, setVisible] = useState(false);
@@ -72,7 +74,7 @@ export const AnimatedDrawer: React.FC<AnimatedDrawerProps> = ({
         }}
       >
         <div
-          className={`w-full max-w-md sm:max-w-lg bg-white h-full shadow-2xl flex flex-col border-l border-slate-200 ${
+          className={`w-full ${maxWidthClass} bg-white h-full shadow-2xl flex flex-col border-l border-slate-200 ${
             closing ? "animate-drawer-out" : "animate-drawer-in"
           }`}
         >

@@ -21,6 +21,8 @@ import { useNavigate } from "react-router-dom";
 interface PreviewStop {
   rowOrder: number;
   locationNo: string;
+  orderNo?: string;
+  data_store_no?: string;
   storeName: string;
   address: string;
   quantity: number;
@@ -31,7 +33,7 @@ interface PreviewStop {
 
 interface PreviewGroup {
   groupStoreName: string;
-  groupColor: string;
+  groupColor?: string;
   driverName: string;
   vehiclePlate: string;
   totalStops: number;
@@ -89,7 +91,10 @@ export const ImportOptimoPage: React.FC = () => {
     setImporting(true);
 
     try {
-      const res = await api.post("/optimoroute/import", { date: selectedDate });
+      const res = await api.post("/optimoroute/import", {
+        date: selectedDate,
+        routes: previewData.routes,
+      });
       if (res.data.success) {
         showSuccess(res.data.message || "บันทึกข้อมูลเข้าฐานข้อมูลสำเร็จ");
         setResultStats(res.data.stats);
@@ -114,7 +119,7 @@ export const ImportOptimoPage: React.FC = () => {
           <div>
             <h1 className="text-base font-bold text-slate-900">นำเข้าข้อมูล OptimoRoute (Preview & Save)</h1>
             <p className="text-slate-500 text-[11px]">
-              พรีวิวตรวจสอบข้อมูลเส้นทางจาก OptimoRoute API ก่อนยืนยันนำเข้าลงฐานข้อมูล (<span className="font-mono text-blue-600">group_store</span>, <span className="font-mono text-blue-600">store</span>, <span className="font-mono text-blue-600">list_store</span>)
+              พรีวิวตรวจสอบข้อมูลเส้นทางจาก OptimoRoute API ก่อนยืนยันนำเข้าลงฐานข้อมูล (<span className="font-mono text-blue-600">สายรถ</span>, <span className="font-mono text-blue-600">ร้านค้า</span>, <span className="font-mono text-blue-600">รายการจัดส่ง</span>)
             </p>
           </div>
         </div>
@@ -197,7 +202,7 @@ export const ImportOptimoPage: React.FC = () => {
                       <span>{group.groupStoreName}</span>
                     </div>
                     <div className="text-[10px] text-slate-300 font-mono">
-                      {group.totalStops} จุดส่ง · คนขับ: {group.driverName} ({group.vehiclePlate})
+                      {group.totalStops} จุดส่ง · คนขับ : {group.driverName} ({group.vehiclePlate})
                     </div>
                   </div>
 
@@ -207,10 +212,10 @@ export const ImportOptimoPage: React.FC = () => {
                       <thead className="bg-slate-50 text-[10px] text-slate-500 font-semibold uppercase tracking-wider border-b border-slate-100">
                         <tr>
                           <th className="px-3 py-1.5 w-10 text-center">ลำดับ</th>
+                          <th className="px-3 py-1.5 w-28">รหัสออเดอร์ (orderNo)</th>
                           <th className="px-3 py-1.5 w-24">Store ID / LocationNo</th>
                           <th className="px-3 py-1.5">ชื่อร้านค้า / จุดแวะ</th>
                           <th className="px-3 py-1.5">ที่อยู่</th>
-                          <th className="px-3 py-1.5 w-20 text-center">จำนวน (Sum)</th>
                           <th className="px-3 py-1.5 w-32 text-center">พิกัด (lat,long)</th>
                         </tr>
                       </thead>
@@ -219,6 +224,9 @@ export const ImportOptimoPage: React.FC = () => {
                           <tr key={stop.rowOrder} className="hover:bg-slate-50">
                             <td className="px-3 py-1.5 text-center font-mono font-bold text-slate-500">
                               {stop.rowOrder}
+                            </td>
+                            <td className="px-3 py-1.5 font-mono text-emerald-700 font-bold">
+                              {stop.orderNo || stop.data_store_no || stop.locationNo || "–"}
                             </td>
                             <td className="px-3 py-1.5 font-mono text-blue-700 font-bold">
                               {stop.locationNo}
@@ -229,19 +237,8 @@ export const ImportOptimoPage: React.FC = () => {
                             <td className="px-3 py-1.5 text-slate-500 max-w-[200px] truncate">
                               {stop.address || "–"}
                             </td>
-                            <td className="px-3 py-1.5 text-center font-bold text-slate-800">
-                              {stop.quantity}
-                            </td>
                             <td className="px-3 py-1.5 text-center font-mono text-[10px]">
-                              {stop.lat_long ? (
-                                <span className="bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded border border-emerald-200">
-                                  {stop.lat_long}
-                                </span>
-                              ) : (
-                                <span className="bg-amber-50 text-amber-700 px-2 py-0.5 rounded border border-amber-200">
-                                  ไม่มีพิกัด
-                                </span>
-                              )}
+                              {stop.lat_long || "–"}
                             </td>
                           </tr>
                         ))}

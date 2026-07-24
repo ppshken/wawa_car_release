@@ -4,6 +4,7 @@ import { useToast } from "../../context/ToastContext";
 import { ConfirmModal } from "../../components/ConfirmModal";
 import { PaginationControl } from "../../components/PaginationControl";
 import { AnimatedDrawer } from "../../components/AnimatedDrawer";
+import { SearchableSelect } from "../../components/SearchableSelect";
 import { MasterSubNav } from "../../components/MasterSubNav";
 import {
   Smartphone,
@@ -296,16 +297,18 @@ export const PdaDevicesPage: React.FC = () => {
         {renderField("Serial Number", false,
           <input type="text" value={formPdaSerial} onChange={(e) => setFormPdaSerial(e.target.value)} placeholder="เช่น SN-987654321" className={`${inputCls} font-mono`} />
         )}
-        {renderField("ผู้ดูแล (เลือกจากผู้ใช้ในระบบ)", false,
-          <select value={formPdaUser} onChange={(e) => setFormPdaUser(e.target.value)} className={inputCls}>
-            <option value="">-- ยังไม่ระบุผู้ดูแล --</option>
-            {usersList.map((u) => (
-              <option key={u.user_id} value={u.name}>
-                {u.name} ({u.username})
-              </option>
-            ))}
-          </select>
-        )}
+        <SearchableSelect
+          label="ผู้ดูแล (เลือกจากผู้ใช้ในระบบ)"
+          value={formPdaUser}
+          onChange={(val) => setFormPdaUser(String(val))}
+          placeholder="-- ยังไม่ระบุผู้ดูแล --"
+          searchPlaceholder="พิมพ์ค้นหาผู้ใช้ (ชื่อ / username)..."
+          options={usersList.map((u) => ({
+            value: u.name,
+            label: `${u.name} (${u.username})`,
+            badge: u.username,
+          }))}
+        />
       </AnimatedDrawer>
 
       {/* Delete Confirm Modal */}

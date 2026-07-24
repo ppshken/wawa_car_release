@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import api from '../services/api';
 import { Car, User, GroupStore, Store, CarReleaseType } from '../types';
 import { MultiImageUpload } from '../components/MultiImageUpload';
+import { SearchableSelect } from '../components/SearchableSelect';
 import { PlusCircle, Trash2, Users, Truck, Camera, Check, Store as StoreIcon } from 'lucide-react';
 
 export const CreateCarRelease: React.FC = () => {
@@ -174,67 +175,56 @@ export const CreateCarRelease: React.FC = () => {
         </h2>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
-          <div className="space-y-1">
-            <label className="text-slate-300 font-medium">เลือกรถ *</label>
-            <select
-              value={selectedCarId}
-              onChange={(e) => setSelectedCarId(Number(e.target.value))}
-              required
-              className="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-slate-100 focus:outline-none focus:border-blue-500"
-            >
-              {cars.map((c) => (
-                <option key={c.car_id} value={c.car_id}>
-                  {c.license_plate} ({c.brand} {c.model})
-                </option>
-              ))}
-            </select>
-          </div>
+          <SearchableSelect
+            label="เลือกรถ"
+            required
+            value={selectedCarId}
+            onChange={(val) => setSelectedCarId(Number(val) || "")}
+            placeholder="-- เลือกรถ --"
+            searchPlaceholder="พิมพ์ค้นหารถ (ทะเบียน / ยี่ห้อ / รุ่น)..."
+            options={cars.map((c) => ({
+              value: c.car_id,
+              label: `${c.license_plate} (${c.brand} ${c.model})`,
+              badge: c.license_plate,
+            }))}
+          />
 
-          <div className="space-y-1">
-            <label className="text-slate-300 font-medium">พนักงานขับรถ *</label>
-            <select
-              value={selectedDriverId}
-              onChange={(e) => setSelectedDriverId(Number(e.target.value))}
-              required
-              className="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-slate-100 focus:outline-none focus:border-blue-500"
-            >
-              {drivers.map((d) => (
-                <option key={d.user_id} value={d.user_id}>
-                  {d.name} ({d.level_user_name || 'พนักงาน'})
-                </option>
-              ))}
-            </select>
-          </div>
+          <SearchableSelect
+            label="พนักงานขับรถ"
+            required
+            value={selectedDriverId}
+            onChange={(val) => setSelectedDriverId(Number(val) || "")}
+            placeholder="-- เลือกพนักงานขับรถ --"
+            searchPlaceholder="พิมพ์ค้นหาชื่อคนขับ..."
+            options={drivers.map((d) => ({
+              value: d.user_id,
+              label: `${d.name} (${d.level_user_name || "พนักงาน"})`,
+            }))}
+          />
 
-          <div className="space-y-1">
-            <label className="text-slate-300 font-medium">กรุ๊ป/โซนเส้นทาง</label>
-            <select
-              value={selectedGroupId}
-              onChange={(e) => setSelectedGroupId(Number(e.target.value))}
-              className="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-slate-100 focus:outline-none focus:border-blue-500"
-            >
-              {groups.map((g) => (
-                <option key={g.group_store_id} value={g.group_store_id}>
-                  {g.group_store_name}
-                </option>
-              ))}
-            </select>
-          </div>
+          <SearchableSelect
+            label="กรุ๊ป/โซนเส้นทาง"
+            value={selectedGroupId}
+            onChange={(val) => setSelectedGroupId(Number(val) || "")}
+            placeholder="-- เลือกกรุ๊ป/โซนเส้นทาง --"
+            searchPlaceholder="พิมพ์ค้นหากรุ๊ป/โซน..."
+            options={groups.map((g) => ({
+              value: g.group_store_id,
+              label: g.group_store_name,
+            }))}
+          />
 
-          <div className="space-y-1">
-            <label className="text-slate-300 font-medium">ประเภทการปล่อยรถ</label>
-            <select
-              value={selectedTypeId}
-              onChange={(e) => setSelectedTypeId(Number(e.target.value))}
-              className="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-slate-100 focus:outline-none focus:border-blue-500"
-            >
-              {releaseTypes.map((t) => (
-                <option key={t.car_release_type_id} value={t.car_release_type_id}>
-                  {t.type}
-                </option>
-              ))}
-            </select>
-          </div>
+          <SearchableSelect
+            label="ประเภทการปล่อยรถ"
+            value={selectedTypeId}
+            onChange={(val) => setSelectedTypeId(Number(val) || "")}
+            placeholder="-- เลือกประเภทการปล่อยรถ --"
+            searchPlaceholder="พิมพ์ค้นหาประเภท..."
+            options={releaseTypes.map((t) => ({
+              value: t.car_release_type_id,
+              label: t.type,
+            }))}
+          />
 
           <div className="space-y-1">
             <label className="text-slate-300 font-medium">เลขไมล์ออก (กิโลเมตร)</label>

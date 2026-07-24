@@ -34,6 +34,7 @@ app.use('/api/manage', userManagementRoutes);
 app.use('/api/master', masterDataRoutes);
 app.use('/api', masterDataRoutes);
 app.use('/api/optimoroute', optimoRouteRoutes);
+app.use('/api', optimoRouteRoutes);
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {

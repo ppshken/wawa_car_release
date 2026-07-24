@@ -440,21 +440,35 @@ router.delete('/payments/:id', authenticateToken, async (req, res) => {
 // GET /api/master/vehicles
 router.get('/vehicles', authenticateToken, async (req, res) => {
   try {
+    const targetDate = req.query.date || new Date().toISOString().slice(0, 10);
+    
+    // ดึงรถที่ถูกจัดสายแล้วในวันที่ระบุ
+    const assignedRows = await query(
+      `SELECT car_id FROM group_store WHERE (DATE_FORMAT(date, '%Y-%m-%d') = ? OR DATE_FORMAT(created_at, '%Y-%m-%d') = ?) AND car_id IS NOT NULL AND car_id != ''`,
+      [targetDate, targetDate]
+    );
+    const assignedCarIds = new Set((assignedRows || []).map((r) => String(r.car_id)));
+
     let vehicles = [];
     try {
-      vehicles = await query('SELECT car_id AS vehicle_id, car_id, car_code, license_plate, brand, model, sub_model, year, created_at FROM car ORDER BY created_at DESC');
+      vehicles = await query('SELECT * FROM car ORDER BY car_id DESC');
     } catch (e1) {
       try {
-        vehicles = await query('SELECT car_id AS vehicle_id, car_id, NULL AS car_code, license_plate, brand, model, sub_model, year, created_at FROM car ORDER BY created_at DESC');
+        vehicles = await query('SELECT car_id AS vehicle_id, car_id, license_plate, brand, model, sub_model, year FROM car ORDER BY car_id DESC');
       } catch (e2) {
-        try {
-          vehicles = await query('SELECT car_id AS vehicle_id, car_id, NULL AS car_code, license_plate, brand, model, sub_model, year FROM car ORDER BY car_id DESC');
-        } catch (e3) {
-          vehicles = await query('SELECT * FROM car');
-        }
+        vehicles = await query('SELECT * FROM car');
       }
     }
-    res.json({ success: true, vehicles });
+
+    const formattedVehicles = (vehicles || []).map((v) => ({
+      ...v,
+      vehicle_id: v.vehicle_id || v.car_id,
+      car_id: v.car_id || v.vehicle_id,
+      quantity: parseInt(v.quantity || v.max_load || v.car_load || 100, 10),
+      is_assigned_today: assignedCarIds.has(String(v.car_id || v.vehicle_id))
+    }));
+
+    res.json({ success: true, vehicles: formattedVehicles, assignedCarIds: Array.from(assignedCarIds) });
   } catch (err) {
     console.error('Fetch vehicles error:', err);
     res.status(500).json({ success: false, message: err.message });

@@ -5,6 +5,7 @@ import { useAuth } from "../../context/AuthContext";
 import { ConfirmModal } from "../../components/ConfirmModal";
 import { PaginationControl } from "../../components/PaginationControl";
 import { AnimatedDrawer } from "../../components/AnimatedDrawer";
+import { SearchableSelect } from "../../components/SearchableSelect";
 import { UsersSubNav } from "../../components/UsersSubNav";
 import {
   Users as UsersIcon,
@@ -605,33 +606,30 @@ export const UsersListPage: React.FC = () => {
             className={inputCls}
           />
         </div>
-        <div>
-          <label className="block text-slate-700 font-semibold mb-1">
-            ระดับผู้ใช้งาน <span className="text-rose-500">*</span>
-          </label>
-          <select
-            value={formLevelId}
-            onChange={(e) => setFormLevelId(Number(e.target.value))}
-            className={inputCls}
-          >
-            {levels.map((l) => (
-              <option key={l.level_user_id} value={l.level_user_id}>
-                {l.level_user_name} ({l.access_name || "Custom"})
-              </option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <label className="block text-slate-700 font-semibold mb-1">สถานะใช้งาน</label>
-          <select
-            value={formStatus}
-            onChange={(e) => setFormStatus(e.target.value as any)}
-            className={inputCls}
-          >
-            <option value="active">ใช้งานอยู่ (Active)</option>
-            <option value="inactive">ปิดการใช้งาน (Inactive)</option>
-          </select>
-        </div>
+        <SearchableSelect
+          label="ระดับผู้ใช้งาน"
+          required
+          value={formLevelId}
+          onChange={(val) => setFormLevelId(Number(val) || 3)}
+          placeholder="-- เลือกระดับผู้ใช้งาน --"
+          searchPlaceholder="พิมพ์ค้นหาระดับ..."
+          options={levels.map((l) => ({
+            value: l.level_user_id,
+            label: l.level_user_name,
+            subLabel: l.access_name || "Custom",
+          }))}
+        />
+
+        <SearchableSelect
+          label="สถานะใช้งาน"
+          value={formStatus}
+          onChange={(val) => setFormStatus(String(val) as any)}
+          placeholder="-- เลือกสถานะ --"
+          options={[
+            { value: "active", label: "ใช้งานอยู่ (Active)" },
+            { value: "inactive", label: "ปิดการใช้งาน (Inactive)" },
+          ]}
+        />
       </AnimatedDrawer>
 
       {/* Delete Confirm Modal */}
