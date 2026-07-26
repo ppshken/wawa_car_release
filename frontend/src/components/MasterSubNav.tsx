@@ -8,6 +8,7 @@ import {
   Truck,
   MapPin,
   ShieldCheck,
+  Layers,
 } from "lucide-react";
 
 export const MasterSubNav: React.FC = () => {
@@ -19,6 +20,7 @@ export const MasterSubNav: React.FC = () => {
     { to: "/master/vehicles", label: "รถ", icon: Truck },
     { to: "/master/parking", label: "ที่จอด", icon: MapPin },
     { to: "/master/accounting-status", label: "สถานะทางบัญชี", icon: ShieldCheck },
+    { to: "/master/position-product", label: "ตำแหน่งวางสินค้า", icon: Layers },
   ];
 
   return (

@@ -73,7 +73,7 @@ export const Sidebar: React.FC = () => {
     { to: '/driver', label: 'ประตูรถ (เช็คอิน)', icon: MapPin, key: 'driver' },
     { to: '/return', label: 'บันทึกคืนกุญแจ', icon: Key, key: 'return' },
     { to: '/reports', label: 'สถานะทางบัญชี', icon: ShieldCheck, key: 'reports' },
-    { to: '/optimoroute', label: 'เส้นทาง OptimoRoute', icon: Map, key: 'optimoroute' },
+    { to: '/route', label: 'เส้นทาง Route', icon: Map, key: 'optimoroute' },
     { to: '/import-optimo', label: 'นำเข้า OptimoRoute', icon: DownloadCloud, key: 'import_optimo' },
     { to: '/profile', label: 'โปรไฟล์', icon: User }
   ].filter((item) => isMenuAllowed(item.key));
@@ -92,7 +92,9 @@ export const Sidebar: React.FC = () => {
     { to: '/master/payments', label: 'การชำระเงิน', icon: CreditCard, key: 'payments' },
     { to: '/master/vehicles', label: 'รถ', icon: Truck, key: 'vehicles' },
     { to: '/master/parking', label: 'ที่จอด', icon: MapPin, key: 'parking' },
-    { to: '/master/accounting-status', label: 'สถานะทางบัญชี', icon: ShieldCheck, key: 'accounting_status' }
+    { to: '/master/accounting-status', label: 'สถานะทางบัญชี', icon: ShieldCheck, key: 'accounting_status' },
+    { to: '/master/position-product', label: 'ตำแหน่งวางสินค้า', icon: Grid, key: 'position_product' },
+    
   ].filter((item) => isMenuAllowed(item.key) || user?.level_user_id === 1);
 
   const otherNavItems = [

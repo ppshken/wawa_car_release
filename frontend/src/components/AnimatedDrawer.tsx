@@ -6,12 +6,13 @@ import { ConfirmModal } from "./ConfirmModal";
 interface AnimatedDrawerProps {
   isOpen: boolean;
   onClose: () => void;
-  title: string;
-  formId: string;
-  onSubmit: (e: React.FormEvent) => void;
-  submitLabel: string;
+  title: string | React.ReactNode;
+  formId?: string;
+  onSubmit?: (e: React.FormEvent) => void;
+  submitLabel?: string;
   isDirty?: boolean;
   maxWidthClass?: string;
+  footer?: React.ReactNode;
   children: React.ReactNode;
 }
 
@@ -24,6 +25,7 @@ export const AnimatedDrawer: React.FC<AnimatedDrawerProps> = ({
   submitLabel,
   isDirty = false,
   maxWidthClass = "max-w-md sm:max-w-lg",
+  footer,
   children,
 }) => {
   const [visible, setVisible] = useState(false);
@@ -80,44 +82,60 @@ export const AnimatedDrawer: React.FC<AnimatedDrawerProps> = ({
         >
           {/* Header */}
           <div className="p-3.5 px-4 border-b border-slate-200 flex items-center justify-between bg-white sticky top-0 z-10">
-            <div className="flex items-center gap-2.5">
+            <div className="flex items-center gap-2.5 min-w-0">
               <button
                 type="button"
                 onClick={handleRequestClose}
-                className="p-1 rounded-md text-slate-500 hover:text-slate-900 hover:bg-slate-100 transition-colors"
+                className="p-1 rounded-md text-slate-500 hover:text-slate-900 hover:bg-slate-100 transition-colors shrink-0"
                 title="ปิด"
               >
                 <X className="w-5 h-5" />
               </button>
-              <h3 className="font-bold text-slate-900 text-sm tracking-tight">
+              <div className="font-bold text-slate-900 text-sm tracking-tight truncate">
                 {title}
-              </h3>
+              </div>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 shrink-0">
               <button
                 type="button"
                 onClick={handleRequestClose}
                 className="bg-white border border-slate-200 text-slate-700 hover:bg-slate-100 font-medium px-3 py-1.5 rounded-lg text-xs transition-colors"
               >
-                ยกเลิก
+                ปิด
               </button>
-              <button
-                type="submit"
-                form={formId}
-                className="bg-slate-900 hover:bg-slate-800 text-white font-semibold px-4 py-1.5 rounded-lg text-xs transition-colors shadow-2xs"
-              >
-                {submitLabel}
-              </button>
+              {submitLabel && formId && (
+                <button
+                  type="submit"
+                  form={formId}
+                  className="bg-slate-900 hover:bg-slate-800 text-white font-semibold px-4 py-1.5 rounded-lg text-xs transition-colors shadow-2xs"
+                >
+                  {submitLabel}
+                </button>
+              )}
             </div>
           </div>
-          {/* Form */}
-          <form
-            id={formId}
-            onSubmit={onSubmit}
-            className="flex-1 overflow-y-auto p-5 space-y-4 text-xs custom-scrollbar"
-          >
-            <div className="space-y-3">{children}</div>
-          </form>
+
+          {/* Body Content */}
+          {formId ? (
+            <form
+              id={formId}
+              onSubmit={onSubmit}
+              className="flex-1 overflow-y-auto p-5 space-y-4 text-xs custom-scrollbar"
+            >
+              <div className="space-y-3">{children}</div>
+            </form>
+          ) : (
+            <div className="flex-1 overflow-y-auto p-5 space-y-4 text-xs custom-scrollbar">
+              {children}
+            </div>
+          )}
+
+          {/* Footer if specified */}
+          {footer && (
+            <div className="p-4 border-t border-slate-100 bg-slate-50/60 flex justify-between items-center shrink-0">
+              {footer}
+            </div>
+          )}
         </div>
       </div>
 

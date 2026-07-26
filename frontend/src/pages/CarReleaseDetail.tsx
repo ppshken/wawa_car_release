@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import api from '../services/api';
+import api, { getImageUrl } from '../services/api';
 import { CarRelease } from '../types';
 import {
   FileText,
@@ -23,12 +23,25 @@ export const CarReleaseDetail: React.FC = () => {
   const navigate = useNavigate();
   const [release, setRelease] = useState<CarRelease | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
-  const [accStatus, setAccStatus] = useState<string>('อนุมัติแล้ว');
+  const [accountingMaster, setAccountingMaster] = useState<any[]>([]);
+  const [accStatus, setAccStatus] = useState<string>('');
   const [accNote, setAccNote] = useState<string>('');
 
   useEffect(() => {
     if (id) fetchReleaseDetail(id);
+    fetchAccountingStatuses();
   }, [id]);
+
+  const fetchAccountingStatuses = async () => {
+    try {
+      const res = await api.get('/master/accounting-status');
+      if (res.data.success && (res.data.statuses || res.data.accounting_statuses)) {
+        setAccountingMaster(res.data.statuses || res.data.accounting_statuses);
+      }
+    } catch (err) {
+      console.error('Fetch accounting status master error:', err);
+    }
+  };
 
   const fetchReleaseDetail = async (releaseId: string) => {
     try {
@@ -36,7 +49,8 @@ export const CarReleaseDetail: React.FC = () => {
       const res = await api.get(`/car-release/${releaseId}`);
       if (res.data.success) {
         setRelease(res.data.release);
-        if (res.data.release.accounting_status) setAccStatus(res.data.release.accounting_status);
+        if (res.data.release.accounting_status_id) setAccStatus(String(res.data.release.accounting_status_id));
+        else if (res.data.release.accounting_status) setAccStatus(res.data.release.accounting_status);
         if (res.data.release.accounting_note) setAccNote(res.data.release.accounting_note);
       }
     } catch (err) {
@@ -180,7 +194,12 @@ export const CarReleaseDetail: React.FC = () => {
                     <span className="w-5 h-5 rounded bg-blue-500/20 text-blue-400 flex items-center justify-center text-[10px]">
                       {st.row_order}
                     </span>
-                    {st.store_name_result || st.store_name}
+                    <span>{st.store_name_result || st.store_name}</span>
+                    {(st.position_product_name || st.position_product_id) && (
+                      <span className="bg-amber-500/20 text-amber-300 border border-amber-500/40 text-[10px] px-2 py-0.5 rounded-md font-mono font-bold">
+                        จุดวาง {st.position_product_name || st.position_product_id}/{st.position_production_order || 1}
+                      </span>
+                    )}
                   </h3>
                   <p className="text-slate-400 text-[11px] mt-0.5">{st.store_address}</p>
                 </div>
@@ -282,11 +301,21 @@ export const CarReleaseDetail: React.FC = () => {
             <select
               value={accStatus}
               onChange={(e) => setAccStatus(e.target.value)}
-              className="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-white focus:outline-none focus:border-blue-500"
+              className="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-white focus:outline-none focus:border-blue-500 cursor-pointer"
             >
-              <option value="รอการตรวจสอบ">รอการตรวจสอบ</option>
-              <option value="อนุมัติแล้ว">อนุมัติแล้ว (Approved)</option>
-              <option value="ปฏิเสธ/ต้องแก้ไข">ปฏิเสธ / ต้องแก้ไข</option>
+              {accountingMaster.length > 0 ? (
+                accountingMaster.map((st) => (
+                  <option key={st.status_id} value={st.status_id}>
+                    {st.status_name} {st.description ? `(${st.description})` : ''}
+                  </option>
+                ))
+              ) : (
+                <>
+                  <option value="1">รอการตรวจสอบ</option>
+                  <option value="2">อนุมัติแล้ว</option>
+                  <option value="3">ปฏิเสธ / มีข้อโต้แย้ง</option>
+                </>
+              )}
             </select>
           </div>
 

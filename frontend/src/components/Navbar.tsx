@@ -3,6 +3,7 @@ import { useAuth } from '../context/AuthContext';
 import { useSidebar } from '../context/SidebarContext';
 import { Truck, LogOut, Bell, Menu, PanelLeftClose, PanelLeft } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { getImageUrl } from '../services/api';
 
 export const Navbar: React.FC = () => {
   const { user, logout } = useAuth();
@@ -61,11 +62,7 @@ export const Navbar: React.FC = () => {
           <div className="flex items-center gap-2.5 pl-1">
             {user.user_image ? (
               <img
-                src={
-                  user.user_image.startsWith('http') || user.user_image.startsWith('data:')
-                    ? user.user_image
-                    : `http://localhost:5000${user.user_image.startsWith('/') ? '' : '/'}${user.user_image}`
-                }
+                src={getImageUrl(user.user_image)}
                 alt={user.name}
                 className="w-7 h-7 rounded-md object-cover border border-slate-200/80 shadow-2xs"
                 onError={(e) => {

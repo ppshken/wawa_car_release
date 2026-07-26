@@ -6,62 +6,43 @@ const { authenticateToken } = require('../middleware/auth');
 // OptimoRoute API Proxy
 // =========================================================
 
-// Mock data สำหรับทดสอบ UI ก่อนใส่ API Key จริง
-function getMockRoutes(date) {
-  // จุดศูนย์กลาง — กรุงเทพฯ
-  const baseLat = 13.7563;
-  const baseLng = 100.5018;
 
-  return {
-    success: true,
-    date,
-    source: 'mock',
-    routes: [
-      {
-        routeId: 'ROUTE-001',
-        groupStoreName: 'Optimo Routes-001',
-        driverName: 'สมชาย ใจดี',
-        vehiclePlate: 'กข-1234',
-        color: '#3b82f6',
-        totalStops: 5,
-        stops: [
-          { stopId: 1, locationNo: 'OR-00001', orderNo: 'ORD-20260724-001', data_store_no: 'ORD-20260724-001', storeName: 'ร้านค้า A - สุขุมวิท', address: '123 ถ.สุขุมวิท แขวงคลองเตย', lat: baseLat + 0.012, lng: baseLng + 0.025, arrivalTime: '08:15', departureTime: '08:35', status: 'completed', type: 'delivery', quantity: 65 },
-          { stopId: 2, locationNo: 'OR-00002', orderNo: 'ORD-20260724-002', data_store_no: 'ORD-20260724-002', storeName: 'ร้านค้า B - สีลม', address: '456 ถ.สีลม แขวงสุริยวงศ์', lat: baseLat - 0.008, lng: baseLng + 0.012, arrivalTime: '09:00', departureTime: '09:20', status: 'completed', type: 'delivery', quantity: 50 },
-          { stopId: 3, locationNo: 'OR-00003', orderNo: 'ORD-20260724-003', data_store_no: 'ORD-20260724-003', storeName: 'ร้านค้า C - ลาดพร้าว', address: '789 ถ.ลาดพร้าว แขวงจอมพล', lat: baseLat + 0.035, lng: baseLng + 0.008, arrivalTime: '10:00', departureTime: '10:25', status: 'in_progress', type: 'delivery', quantity: 70 },
-          { stopId: 4, locationNo: 'OR-00004', orderNo: 'ORD-20260724-004', data_store_no: 'ORD-20260724-004', storeName: 'ร้านค้า D - รัชดา', address: '101 ถ.รัชดาภิเษก แขวงดินแดง', lat: baseLat + 0.025, lng: baseLng - 0.005, arrivalTime: '11:00', departureTime: '11:15', status: 'planned', type: 'delivery', quantity: 60 },
-          { stopId: 5, locationNo: 'OR-00005', orderNo: 'ORD-20260724-005', data_store_no: 'ORD-20260724-005', storeName: 'ร้านค้า E - บางนา', address: '202 ถ.บางนาตราด แขวงบางนา', lat: baseLat - 0.015, lng: baseLng + 0.045, arrivalTime: '12:00', departureTime: '12:20', status: 'planned', type: 'delivery', quantity: 60 },
-        ]
-      },
-      {
-        routeId: 'ROUTE-002',
-        groupStoreName: 'Optimo Routes-002',
-        driverName: 'สมหญิง รักงาน',
-        vehiclePlate: 'ขค-5678',
-        color: '#10b981',
-        totalStops: 4,
-        stops: [
-          { stopId: 1, locationNo: 'OR-00006', orderNo: 'ORD-20260724-006', data_store_no: 'ORD-20260724-006', storeName: 'ร้านค้า F - พระราม 9', address: '111 ถ.พระราม 9 แขวงห้วยขวาง', lat: baseLat + 0.018, lng: baseLng + 0.018, arrivalTime: '08:30', departureTime: '08:50', status: 'completed', type: 'delivery', quantity: 55 },
-          { stopId: 2, locationNo: 'OR-00007', orderNo: 'ORD-20260724-007', data_store_no: 'ORD-20260724-007', storeName: 'ร้านค้า G - อ่อมน้อย', address: '222 ถ.เพชรเกษม อ.กระทุ่มแบน', lat: baseLat - 0.025, lng: baseLng - 0.035, arrivalTime: '09:45', departureTime: '10:05', status: 'completed', type: 'delivery', quantity: 60 },
-          { stopId: 3, locationNo: 'OR-00008', orderNo: 'ORD-20260724-008', data_store_no: 'ORD-20260724-008', storeName: 'ร้านค้า H - มหาชัย', address: '333 ถ.เอกชัย จ.สมุทรสาคร', lat: baseLat - 0.040, lng: baseLng - 0.020, arrivalTime: '10:45', departureTime: '11:05', status: 'in_progress', type: 'delivery', quantity: 61 },
-          { stopId: 4, locationNo: 'OR-00009', orderNo: 'ORD-20260724-009', data_store_no: 'ORD-20260724-009', storeName: 'ร้านค้า I - พุทธมณฑล', address: '444 ถ.พุทธมณฑลสาย 4 อ.พุทธมณฑล', lat: baseLat + 0.005, lng: baseLng - 0.048, arrivalTime: '11:45', departureTime: '12:05', status: 'planned', type: 'delivery', quantity: 60 },
-        ]
-      },
-      {
-        routeId: 'ROUTE-003',
-        groupStoreName: 'Optimo Routes-003',
-        driverName: 'วิชัย เก่งมาก',
-        vehiclePlate: 'คง-9012',
-        color: '#f59e0b',
-        totalStops: 3,
-        stops: [
-          { stopId: 1, locationNo: 'OR-00010', orderNo: 'ORD-20260724-010', data_store_no: 'ORD-20260724-010', storeName: 'ร้านค้า J - นนทบุรี', address: '555 ถ.รัตนาธิเบศร์ จ.นนทบุรี', lat: baseLat + 0.045, lng: baseLng - 0.010, arrivalTime: '09:00', departureTime: '09:25', status: 'completed', type: 'delivery', quantity: 45 },
-          { stopId: 2, locationNo: 'OR-00011', orderNo: 'ORD-20260724-011', data_store_no: 'ORD-20260724-011', storeName: 'ร้านค้า K - ปทุมธานี', address: '666 ถ.รังสิต-นครนายก จ.ปทุมธานี', lat: baseLat + 0.065, lng: baseLng + 0.015, arrivalTime: '10:15', departureTime: '10:40', status: 'planned', type: 'delivery', quantity: 50 },
-          { stopId: 3, locationNo: 'OR-00012', orderNo: 'ORD-20260724-012', data_store_no: 'ORD-20260724-012', storeName: 'ร้านค้า L - มีนบุรี', address: '777 ถ.สุวินทวงศ์ แขวงมีนบุรี', lat: baseLat + 0.020, lng: baseLng + 0.060, arrivalTime: '11:30', departureTime: '11:50', status: 'planned', type: 'delivery', quantity: 55 },
-        ]
-      }
-    ]
-  };
-}
+
+// Auto-migration for OptimoRoute Tracking columns and delivery_settings table
+(async () => {
+  try {
+    const { query } = require('../config/db');
+    const cols = [
+      "ALTER TABLE list_store ADD COLUMN scheduled_time TIME NULL",
+      "ALTER TABLE list_store ADD COLUMN start_service_time DATETIME NULL",
+      "ALTER TABLE list_store ADD COLUMN end_service_time DATETIME NULL",
+      "ALTER TABLE list_store ADD COLUMN priority VARCHAR(20) DEFAULT 'medium'",
+      "ALTER TABLE list_store ADD COLUMN pod_image VARCHAR(500) NULL"
+    ];
+    for (const sql of cols) {
+      try { await query(sql); } catch (e) {}
+    }
+
+    await query(`
+      CREATE TABLE IF NOT EXISTS delivery_settings (
+        id INT PRIMARY KEY AUTO_INCREMENT,
+        service_time_per_stop INT DEFAULT 10,
+        priority_strategy VARCHAR(50) DEFAULT 'fastest_time',
+        depot_start_time VARCHAR(10) DEFAULT '08:00',
+        buffer_time_per_route INT DEFAULT 15,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+      )
+    `);
+
+    const rows = await query(`SELECT COUNT(*) as cnt FROM delivery_settings`);
+    if (!rows || rows[0].cnt === 0) {
+      await query(`
+        INSERT INTO delivery_settings (id, service_time_per_stop, priority_strategy, depot_start_time, buffer_time_per_route)
+        VALUES (1, 10, 'fastest_time', '08:00', 15)
+      `);
+    }
+  } catch (err) {}
+})();
 
 // GET /api/optimoroute/routes?date=YYYY-MM-DD
 // ดึงข้อมูลเส้นทางและจุดหยุดแวะโดยตรงจากฐานข้อมูลระบบ (group_store, list_store, store)
@@ -81,6 +62,7 @@ router.get('/routes', authenticateToken, async (req, res) => {
           gs.car_id,
           gs.load1,
           gs.date AS group_date,
+          IF(gs.status = 1 OR (SELECT COUNT(*) FROM car_release cr2 WHERE cr2.group_store_id = gs.group_store_id) > 0, 1, 0) AS group_status,
           ls.list_id,
           ls.data_store_no,
           ls.store_id,
@@ -90,6 +72,14 @@ router.get('/routes', authenticateToken, async (req, res) => {
           ls.store_name_result,
           ls.status,
           ls.created_at,
+          ls.scheduled_time,
+          ls.start_service_time,
+          ls.end_service_time,
+          ls.priority,
+          ls.pod_image,
+          ls.position_product_id,
+          ls.position_production_order,
+          pp.position_product_name,
           s.store_name,
           s.store_address,
           s.store_location,
@@ -99,6 +89,7 @@ router.get('/routes', authenticateToken, async (req, res) => {
         FROM group_store gs
         LEFT JOIN list_store ls ON ls.group_store_id = gs.group_store_id
         LEFT JOIN store s ON ls.store_id = s.store_id
+        LEFT JOIN position_product pp ON ls.position_product_id = pp.position_product_id
         LEFT JOIN car_release cr ON cr.group_store_id = gs.group_store_id
         LEFT JOIN car c ON (CAST(c.car_id AS CHAR) = CAST(gs.car_id AS CHAR) OR c.license_plate = gs.car_id OR cr.car_id = c.car_id)
         WHERE (
@@ -118,6 +109,7 @@ router.get('/routes', authenticateToken, async (req, res) => {
             gs.group_color,
             gs.car_id,
             gs.load1,
+            IF(gs.status = 1 OR (SELECT COUNT(*) FROM car_release cr2 WHERE cr2.group_store_id = gs.group_store_id) > 0, 1, 0) AS group_status,
             ls.list_id,
             ls.data_store_no,
             ls.store_id,
@@ -127,6 +119,9 @@ router.get('/routes', authenticateToken, async (req, res) => {
             ls.store_name_result,
             ls.status,
             ls.created_at,
+            ls.position_product_id,
+            ls.position_production_order,
+            pp.position_product_name,
             s.store_name,
             s.store_address,
             s.store_location,
@@ -136,6 +131,7 @@ router.get('/routes', authenticateToken, async (req, res) => {
           FROM group_store gs
           LEFT JOIN list_store ls ON ls.group_store_id = gs.group_store_id
           LEFT JOIN store s ON ls.store_id = s.store_id
+          LEFT JOIN position_product pp ON ls.position_product_id = pp.position_product_id
           LEFT JOIN car c ON (CAST(c.car_id AS CHAR) = CAST(gs.car_id AS CHAR) OR c.license_plate = gs.car_id)
           WHERE (
             (gs.date IS NOT NULL AND (gs.date = ? OR DATE_FORMAT(gs.date, '%Y-%m-%d') = ?))
@@ -167,6 +163,7 @@ router.get('/routes', authenticateToken, async (req, res) => {
     rows.forEach((row) => {
       const gId = row.group_store_id;
       if (!groupMap.has(gId)) {
+        const isReleased = Boolean(row.group_status === 1 || row.group_status === '1');
         groupMap.set(gId, {
           routeId: `ROUTE-${gId}`,
           groupStoreId: gId,
@@ -177,6 +174,8 @@ router.get('/routes', authenticateToken, async (req, res) => {
           load1: row.load1 || 0,
           vehicleCapacity: row.vehicle_capacity ? parseInt(row.vehicle_capacity, 10) : 0,
           color: row.group_color || colors[groupMap.size % colors.length],
+          status: isReleased ? 1 : 0,
+          is_released: isReleased,
           stops: []
         });
       }
@@ -205,6 +204,14 @@ router.get('/routes', authenticateToken, async (req, res) => {
           lat,
           lng,
           lat_long: locStr || (lat && lng ? `${lat},${lng}` : null),
+          scheduled_time: row.scheduled_time || '',
+          start_service_time: row.start_service_time || null,
+          end_service_time: row.end_service_time || null,
+          priority: row.priority || 'medium',
+          pod_image: row.pod_image || null,
+          position_product_id: row.position_product_id,
+          position_production_order: row.position_production_order,
+          position_product_name: row.position_product_name,
           arrivalTime: '',
           departureTime: '',
           status: row.status || 'pending',
@@ -239,26 +246,42 @@ router.post('/preview', authenticateToken, async (req, res) => {
     const apiKey = process.env.OPTIMOROUTE_API_KEY;
     const targetDate = req.body.date || new Date().toISOString().slice(0, 10);
 
-    let routeData = [];
-    let source = 'mock';
+    if (!apiKey || apiKey.trim() === '') {
+      return res.status(400).json({
+        success: false,
+        message: 'ยังไม่ได้ตั้งค่า OPTIMOROUTE_API_KEY ในไฟล์ .env ของ Backend'
+      });
+    }
 
-    // 1. ดึงข้อมูลจาก OptimoRoute API หรือใช้ Mock Data
-    if (apiKey && apiKey.trim() !== '') {
-      try {
-        const apiUrl = `https://api.optimoroute.com/v1/get_routes?key=${apiKey}&date=${targetDate}`;
-        const response = await fetch(apiUrl);
-        const data = await response.json();
-        if (response.ok && data.routes) {
-          routeData = data.routes;
-          source = 'api';
-        }
-      } catch (e) {
-        console.warn('Fetch OptimoRoute API error during preview:', e.message);
+    let routeData = [];
+    try {
+      const apiUrl = `https://api.optimoroute.com/v1/get_routes?key=${apiKey}&date=${targetDate}`;
+      const response = await fetch(apiUrl);
+      const data = await response.json();
+
+      if (!response.ok || (data && data.success === false)) {
+        return res.status(response.status || 400).json({
+          success: false,
+          message: `ไม่สามารถดึงข้อมูลจาก OptimoRoute API ได้: ${data?.message || data?.error || response.statusText || 'เกิดข้อผิดพลาดในการเชื่อมต่อ'}`
+        });
       }
+
+      if (data && data.routes) {
+        routeData = data.routes;
+      }
+    } catch (e) {
+      console.error('Fetch OptimoRoute API error during preview:', e.message);
+      return res.status(500).json({
+        success: false,
+        message: `เกิดข้อผิดพลาดในการเชื่อมต่อกับ OptimoRoute API: ${e.message}`
+      });
     }
 
     if (!routeData || routeData.length === 0) {
-      routeData = getMockRoutes(targetDate).routes;
+      return res.status(404).json({
+        success: false,
+        message: `ไม่พบเส้นทางจัดส่งใน OptimoRoute API สำหรับวันที่ ${targetDate}`
+      });
     }
 
     const RANDOM_PALETTE = [
@@ -324,7 +347,7 @@ router.post('/preview', authenticateToken, async (req, res) => {
     res.json({
       success: true,
       date: targetDate,
-      source,
+      source: 'api',
       totalGroups: previewRoutes.length,
       totalStops: totalStopsCount,
       routes: previewRoutes
@@ -346,23 +369,40 @@ router.post('/import', authenticateToken, async (req, res) => {
 
     let routeData = req.body.routes || [];
 
-    // 1. ดึงข้อมูลจาก OptimoRoute API หรือใช้ Mock Data หากไม่มีการส่ง routes จาก preview
+    // 1. ดึงข้อมูลจาก OptimoRoute API หากไม่มีการส่ง routes จาก preview
     if (!routeData || routeData.length === 0) {
-      if (apiKey && apiKey.trim() !== '') {
-        try {
-          const apiUrl = `https://api.optimoroute.com/v1/get_routes?key=${apiKey}&date=${targetDate}`;
-          const response = await fetch(apiUrl);
-          const data = await response.json();
-          if (response.ok && data.routes) {
-            routeData = data.routes;
-          }
-        } catch (e) {
-          console.warn('Fetch OptimoRoute API error during import:', e.message);
+      if (!apiKey || apiKey.trim() === '') {
+        return res.status(400).json({
+          success: false,
+          message: 'ยังไม่ได้ตั้งค่า OPTIMOROUTE_API_KEY ในไฟล์ .env ของ Backend'
+        });
+      }
+
+      try {
+        const apiUrl = `https://api.optimoroute.com/v1/get_routes?key=${apiKey}&date=${targetDate}`;
+        const response = await fetch(apiUrl);
+        const data = await response.json();
+        if (response.ok && data.routes) {
+          routeData = data.routes;
+        } else {
+          return res.status(response.status || 400).json({
+            success: false,
+            message: `ไม่สามารถดึงข้อมูลจาก OptimoRoute API ได้: ${data?.message || data?.error || response.statusText}`
+          });
         }
+      } catch (e) {
+        console.error('Fetch OptimoRoute API error during import:', e.message);
+        return res.status(500).json({
+          success: false,
+          message: `เกิดข้อผิดพลาดในการเชื่อมต่อกับ OptimoRoute API: ${e.message}`
+        });
       }
 
       if (!routeData || routeData.length === 0) {
-        routeData = getMockRoutes(targetDate).routes;
+        return res.status(404).json({
+          success: false,
+          message: `ไม่พบข้อมูลเส้นทาง OptimoRoute ที่จะนำเข้าในวันที่ ${targetDate}`
+        });
       }
     }
 
@@ -483,8 +523,8 @@ router.post('/import', authenticateToken, async (req, res) => {
         if (existingList.length === 0) {
           try {
             await query(
-              `INSERT INTO list_store (store_id, group_store_id, row_order, sum_quantity, lat_long, store_name_result, data_store_no, created_by, created_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+              `INSERT INTO list_store (store_id, group_store_id, row_order, sum_quantity, lat_long, store_name_result, data_store_no, created_by, created_at, status)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
               [
                 storeId,
                 groupStoreId,
@@ -494,13 +534,14 @@ router.post('/import', authenticateToken, async (req, res) => {
                 storeName,
                 orderNo,
                 req.user ? req.user.user_id : 1,
-                `${targetDate} 00:00:00`
+                `${targetDate} 00:00:00`,
+                'in_progress'
               ]
             );
           } catch (eIns) {
             await query(
-              `INSERT INTO list_store (store_id, group_store_id, row_order, sum_quantity, lat_long, store_name_result, created_by, created_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+              `INSERT INTO list_store (store_id, group_store_id, row_order, sum_quantity, lat_long, store_name_result, data_store_no, created_by, created_at, status)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
               [
                 storeId,
                 groupStoreId,
@@ -509,7 +550,8 @@ router.post('/import', authenticateToken, async (req, res) => {
                 storeLocation,
                 storeName,
                 req.user ? req.user.user_id : 1,
-                `${targetDate} 00:00:00`
+                `${targetDate} 00:00:00`,
+                'in_progress'
               ]
             );
           }
@@ -556,11 +598,16 @@ router.post('/stops', authenticateToken, async (req, res) => {
       store_id,
       data_store_no,
       orderNo,
+      order_no,
       store_name,
       address,
       row_order,
       sum_quantity,
       lat_long,
+      scheduled_time,
+      scheduledTime,
+      priority,
+      status,
       date
     } = req.body;
 
@@ -574,7 +621,12 @@ router.post('/stops', authenticateToken, async (req, res) => {
     const targetDate = date || new Date().toISOString().slice(0, 10);
     const quantityNum = sum_quantity ? parseInt(sum_quantity, 10) : 0;
     const rowOrderNum = row_order ? parseInt(row_order, 10) : 1;
-    const targetOrderNo = data_store_no || orderNo || null;
+    const targetOrderNo = data_store_no || orderNo || order_no || null;
+    const targetStatus = status || 'in_progress';
+    const targetScheduledTime = scheduled_time || scheduledTime || null;
+    const targetPriority = priority || 'medium';
+    const targetPosProdId = req.body.position_product_id ? parseInt(req.body.position_product_id, 10) : null;
+    const targetPosProdOrder = req.body.position_production_order !== undefined && req.body.position_production_order !== '' && req.body.position_production_order !== null ? parseInt(req.body.position_production_order, 10) : null;
 
     // ถ้ามี store_name ให้ upsert ลงตาราง store ด้วย
     if (store_name) {
@@ -594,16 +646,24 @@ router.post('/stops', authenticateToken, async (req, res) => {
     let insertRes;
     try {
       insertRes = await query(
-        `INSERT INTO list_store (store_id, group_store_id, row_order, sum_quantity, lat_long, store_name_result, data_store_no, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-        [targetStoreId, group_store_id, rowOrderNum, quantityNum, lat_long || null, storeNameResult, targetOrderNo, `${targetDate} 08:00:00`]
+        `INSERT INTO list_store (store_id, group_store_id, row_order, sum_quantity, lat_long, store_name_result, data_store_no, scheduled_time, priority, status, position_product_id, position_production_order, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [targetStoreId, group_store_id, rowOrderNum, quantityNum, lat_long || null, storeNameResult, targetOrderNo, targetScheduledTime, targetPriority, targetStatus, targetPosProdId, targetPosProdOrder, `${targetDate} 08:00:00`]
       );
     } catch (eIns) {
-      insertRes = await query(
-        `INSERT INTO list_store (store_id, group_store_id, row_order, sum_quantity, lat_long, store_name_result, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`,
-        [targetStoreId, group_store_id, rowOrderNum, quantityNum, lat_long || null, storeNameResult, `${targetDate} 08:00:00`]
-      );
+      try {
+        insertRes = await query(
+          `INSERT INTO list_store (store_id, group_store_id, row_order, sum_quantity, lat_long, store_name_result, data_store_no, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+          [targetStoreId, group_store_id, rowOrderNum, quantityNum, lat_long || null, storeNameResult, targetOrderNo, `${targetDate} 08:00:00`]
+        );
+      } catch (e2) {
+        insertRes = await query(
+          `INSERT INTO list_store (store_id, group_store_id, row_order, sum_quantity, lat_long, store_name_result, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?)`,
+          [targetStoreId, group_store_id, rowOrderNum, quantityNum, lat_long || null, storeNameResult, `${targetDate} 08:00:00`]
+        );
+      }
     }
 
     res.json({
@@ -637,12 +697,19 @@ router.put('/stops/:listId', authenticateToken, async (req, res) => {
       row_order,
       sum_quantity,
       lat_long,
-      status
+      scheduled_time,
+      scheduledTime,
+      status,
+      position_product_id,
+      position_production_order
     } = req.body;
 
     const rowOrderNum = row_order ? parseInt(row_order, 10) : 1;
     const quantityNum = sum_quantity !== undefined ? parseInt(sum_quantity, 10) : 1;
     const targetOrderNo = data_store_no || orderNo || null;
+    const targetScheduledTime = scheduled_time !== undefined ? scheduled_time : (scheduledTime !== undefined ? scheduledTime : null);
+    const targetPosProdId = position_product_id !== undefined ? (position_product_id ? parseInt(position_product_id, 10) : null) : null;
+    const targetPosProdOrder = position_production_order !== undefined && position_production_order !== '' && position_production_order !== null ? parseInt(position_production_order, 10) : null;
 
     // ถ้ามี store_id & store_name ให้อัปเดตตาราง store ด้วย
     if (store_id && store_name) {
@@ -658,25 +725,30 @@ router.put('/stops/:listId', authenticateToken, async (req, res) => {
       }
     }
 
+    const targetGroupId = (group_store_id !== undefined && group_store_id !== '' && group_store_id !== null) ? group_store_id : null;
+
     // อัปเดตข้อมูลใน list_store
     try {
       await query(
         `UPDATE list_store
-         SET group_store_id = COALESCE(?, group_store_id),
+         SET group_store_id = ?,
              store_id = COALESCE(?, store_id),
              row_order = ?,
              sum_quantity = ?,
              lat_long = ?,
              store_name_result = ?,
              data_store_no = ?,
-             status = COALESCE(?, status)
+             scheduled_time = COALESCE(?, scheduled_time),
+             status = COALESCE(?, status),
+             position_product_id = ?,
+             position_production_order = ?
          WHERE list_id = ?`,
-        [group_store_id || null, store_id || null, rowOrderNum, quantityNum, lat_long || null, store_name || null, targetOrderNo, status || null, listId]
+        [targetGroupId, store_id || null, rowOrderNum, quantityNum, lat_long || null, store_name || null, targetOrderNo, targetScheduledTime, status || null, targetPosProdId, targetPosProdOrder, listId]
       );
     } catch (eUp) {
       await query(
         `UPDATE list_store
-         SET group_store_id = COALESCE(?, group_store_id),
+         SET group_store_id = ?,
              store_id = COALESCE(?, store_id),
              row_order = ?,
              sum_quantity = ?,
@@ -684,7 +756,7 @@ router.put('/stops/:listId', authenticateToken, async (req, res) => {
              store_name_result = ?,
              status = COALESCE(?, status)
          WHERE list_id = ?`,
-        [group_store_id || null, store_id || null, rowOrderNum, quantityNum, lat_long || null, store_name || null, status || null, listId]
+        [targetGroupId, store_id || null, rowOrderNum, quantityNum, lat_long || null, store_name || null, status || null, listId]
       );
     }
 
@@ -793,6 +865,10 @@ router.get('/unassigned', authenticateToken, async (req, res) => {
         ls.lat_long,
         ls.store_name_result,
         ls.status,
+        ls.priority,
+        ls.position_product_id,
+        ls.position_production_order,
+        pp.position_product_name,
         ls.created_at,
         s.store_name,
         s.store_address,
@@ -800,6 +876,7 @@ router.get('/unassigned', authenticateToken, async (req, res) => {
         s.telephone_number
       FROM list_store ls
       LEFT JOIN store s ON ls.store_id = s.store_id
+      LEFT JOIN position_product pp ON ls.position_product_id = pp.position_product_id
       WHERE (ls.group_store_id IS NULL OR ls.group_store_id = 0)
         AND (DATE_FORMAT(ls.created_at, '%Y-%m-%d') = ? OR ? IS NULL)
       ORDER BY ls.list_id DESC`,
@@ -832,6 +909,10 @@ router.get('/unassigned', authenticateToken, async (req, res) => {
         lng,
         lat_long: locStr || (lat && lng ? `${lat},${lng}` : null),
         status: row.status || 'unassigned',
+        priority: row.priority || 'medium',
+        position_product_id: row.position_product_id,
+        position_production_order: row.position_production_order,
+        position_product_name: row.position_product_name,
         type: 'delivery',
         created_at: row.created_at
       };
@@ -860,7 +941,10 @@ router.post('/unassigned', authenticateToken, async (req, res) => {
       address,
       sum_quantity,
       lat_long,
-      date
+      priority,
+      date,
+      position_product_id,
+      position_production_order
     } = req.body;
 
     let targetStoreId = store_id ? String(store_id).trim() : `ST-${Date.now().toString().slice(-6)}`;
@@ -868,6 +952,9 @@ router.post('/unassigned', authenticateToken, async (req, res) => {
     const targetDate = date || new Date().toISOString().slice(0, 10);
     const quantityNum = sum_quantity ? parseInt(sum_quantity, 10) : 1;
     const targetOrderNo = data_store_no || orderNo || `ORD-${Date.now().toString().slice(-6)}`;
+    const targetPriority = priority || 'medium';
+    const targetPosProdId = position_product_id ? parseInt(position_product_id, 10) : null;
+    const targetPosProdOrder = position_production_order !== undefined && position_production_order !== '' && position_production_order !== null ? parseInt(position_production_order, 10) : 1;
 
     if (store_name) {
       try {
@@ -885,16 +972,24 @@ router.post('/unassigned', authenticateToken, async (req, res) => {
     let insertRes;
     try {
       insertRes = await query(
-        `INSERT INTO list_store (store_id, group_store_id, row_order, sum_quantity, lat_long, store_name_result, data_store_no, status, created_at)
-         VALUES (?, NULL, NULL, ?, ?, ?, ?, 'unassigned', ?)`,
-        [targetStoreId, quantityNum, lat_long || null, storeNameResult, targetOrderNo, `${targetDate} 08:00:00`]
+        `INSERT INTO list_store (store_id, group_store_id, row_order, sum_quantity, lat_long, store_name_result, data_store_no, priority, status, position_product_id, position_production_order, created_at)
+         VALUES (?, NULL, NULL, ?, ?, ?, ?, ?, 'unassigned', ?, ?, ?)`,
+        [targetStoreId, quantityNum, lat_long || null, storeNameResult, targetOrderNo, targetPriority, targetPosProdId, targetPosProdOrder, `${targetDate} 08:00:00`]
       );
     } catch (eIns) {
-      insertRes = await query(
-        `INSERT INTO list_store (store_id, group_store_id, row_order, sum_quantity, lat_long, store_name_result, status, created_at)
-         VALUES (?, NULL, NULL, ?, ?, ?, 'unassigned', ?)`,
-        [targetStoreId, quantityNum, lat_long || null, storeNameResult, `${targetDate} 08:00:00`]
-      );
+      try {
+        insertRes = await query(
+          `INSERT INTO list_store (store_id, group_store_id, row_order, sum_quantity, lat_long, store_name_result, data_store_no, status, created_at)
+           VALUES (?, NULL, NULL, ?, ?, ?, ?, 'unassigned', ?)`,
+          [targetStoreId, quantityNum, lat_long || null, storeNameResult, targetOrderNo, `${targetDate} 08:00:00`]
+        );
+      } catch (e2) {
+        insertRes = await query(
+          `INSERT INTO list_store (store_id, group_store_id, row_order, sum_quantity, lat_long, store_name_result, status, created_at)
+           VALUES (?, NULL, NULL, ?, ?, ?, 'unassigned', ?)`,
+          [targetStoreId, quantityNum, lat_long || null, storeNameResult, `${targetDate} 08:00:00`]
+        );
+      }
     }
 
     res.json({
@@ -929,6 +1024,9 @@ router.post('/unassigned/import', authenticateToken, async (req, res) => {
       const quantity = parseInt(item.sum_quantity || item.quantity || 1, 10);
       const latLong = item.lat_long || (item.lat && item.lng ? `${item.lat},${item.lng}` : null);
 
+      const posProdId = item.position_product_id ? parseInt(item.position_product_id, 10) : null;
+      const posProdOrder = item.position_production_order ? parseInt(item.position_production_order, 10) : 1;
+
       try {
         await query(
           `INSERT INTO store (store_id, store_name, store_address, store_location)
@@ -940,15 +1038,15 @@ router.post('/unassigned/import', authenticateToken, async (req, res) => {
 
       try {
         await query(
-          `INSERT INTO list_store (store_id, group_store_id, row_order, sum_quantity, lat_long, store_name_result, data_store_no, status, created_at)
-           VALUES (?, NULL, NULL, ?, ?, ?, ?, 'unassigned', ?)`,
-          [storeId, quantity, latLong || null, storeName, orderNo, `${targetDate} 08:00:00`]
+          `INSERT INTO list_store (store_id, group_store_id, row_order, sum_quantity, lat_long, store_name_result, data_store_no, status, position_product_id, position_production_order, created_at)
+           VALUES (?, NULL, NULL, ?, ?, ?, ?, 'unassigned', ?, ?, ?)`,
+          [storeId, quantity, latLong || null, storeName, orderNo, posProdId, posProdOrder, `${targetDate} 08:00:00`]
         );
       } catch (eIns) {
         await query(
-          `INSERT INTO list_store (store_id, group_store_id, row_order, sum_quantity, lat_long, store_name_result, status, created_at)
-           VALUES (?, NULL, NULL, ?, ?, ?, 'unassigned', ?)`,
-          [storeId, quantity, latLong || null, storeName, `${targetDate} 08:00:00`]
+          `INSERT INTO list_store (store_id, group_store_id, row_order, sum_quantity, lat_long, store_name_result, status, position_product_id, position_production_order, created_at)
+           VALUES (?, NULL, NULL, ?, ?, ?, 'unassigned', ?, ?, ?)`,
+          [storeId, quantity, latLong || null, storeName, posProdId, posProdOrder, `${targetDate} 08:00:00`]
         );
       }
       count++;
@@ -961,6 +1059,113 @@ router.post('/unassigned/import', authenticateToken, async (req, res) => {
     });
   } catch (err) {
     console.error('POST /unassigned/import error:', err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// GET /api/optimoroute/delivery-settings
+// ดึงข้อมูลการตั้งค่าการจัดส่งรวมของระบบจากฐานข้อมูล
+router.get('/delivery-settings', authenticateToken, async (req, res) => {
+  try {
+    const { query } = require('../config/db');
+    const rows = await query('SELECT * FROM delivery_settings ORDER BY id ASC LIMIT 1');
+    if (!rows || rows.length === 0) {
+      return res.json({
+        success: true,
+        settings: {
+          serviceTimePerStop: 10,
+          priorityStrategy: 'fastest_time',
+          depotStartTime: '08:00',
+          bufferTimePerRoute: 15
+        }
+      });
+    }
+
+    const s = rows[0];
+    res.json({
+      success: true,
+      settings: {
+        serviceTimePerStop: parseInt(s.service_time_per_stop || 10, 10),
+        priorityStrategy: s.priority_strategy || 'fastest_time',
+        depotStartTime: s.depot_start_time || '08:00',
+        bufferTimePerRoute: parseInt(s.buffer_time_per_route || 15, 10)
+      }
+    });
+  } catch (err) {
+    console.error('GET /delivery-settings error:', err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// POST /api/optimoroute/delivery-settings
+// บันทึกข้อมูลการตั้งค่าการจัดส่งลงฐานข้อมูล
+router.post('/delivery-settings', authenticateToken, async (req, res) => {
+  try {
+    const { query } = require('../config/db');
+    const { serviceTimePerStop, priorityStrategy, depotStartTime, bufferTimePerRoute } = req.body;
+
+    const rows = await query('SELECT id FROM delivery_settings LIMIT 1');
+    if (rows && rows.length > 0) {
+      await query(
+        `UPDATE delivery_settings
+         SET service_time_per_stop = ?,
+             priority_strategy = ?,
+             depot_start_time = ?,
+             buffer_time_per_route = ?,
+             updated_at = NOW()
+         WHERE id = ?`,
+        [
+          parseInt(serviceTimePerStop || 10, 10),
+          priorityStrategy || 'fastest_time',
+          depotStartTime || '08:00',
+          parseInt(bufferTimePerRoute || 15, 10),
+          rows[0].id
+        ]
+      );
+    } else {
+      await query(
+        `INSERT INTO delivery_settings (service_time_per_stop, priority_strategy, depot_start_time, buffer_time_per_route, updated_at)
+         VALUES (?, ?, ?, ?, NOW())`,
+        [
+          parseInt(serviceTimePerStop || 10, 10),
+          priorityStrategy || 'fastest_time',
+          depotStartTime || '08:00',
+          parseInt(bufferTimePerRoute || 15, 10)
+        ]
+      );
+    }
+
+    res.json({
+      success: true,
+      message: 'บันทึกการตั้งค่าจัดส่งลงฐานข้อมูลเรียบร้อยแล้ว'
+    });
+  } catch (err) {
+    console.error('POST /delivery-settings error:', err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// DELETE /api/optimoroute/unassigned/clear
+// ล้างข้อมูลรายการที่ยังไม่จัดสายทั้งหมดของวันที่ระบุ
+router.delete('/unassigned/clear', authenticateToken, async (req, res) => {
+  try {
+    const { query } = require('../config/db');
+    const targetDate = req.query.date || req.body.date || new Date().toISOString().slice(0, 10);
+
+    const result = await query(
+      `DELETE FROM list_store 
+       WHERE (group_store_id IS NULL OR group_store_id = 0)
+         AND DATE_FORMAT(created_at, '%Y-%m-%d') = ?`,
+      [targetDate]
+    );
+
+    res.json({
+      success: true,
+      message: `ล้างรายการที่ยังไม่จัดสายของวันที่ ${targetDate} เรียบร้อยแล้ว (จำนวน ${result.affectedRows || 0} รายการ)`,
+      affectedRows: result.affectedRows || 0
+    });
+  } catch (err) {
+    console.error('DELETE /unassigned/clear error:', err);
     res.status(500).json({ success: false, message: err.message });
   }
 });
@@ -1066,6 +1271,13 @@ router.post('/auto-route', authenticateToken, async (req, res) => {
       });
     }
 
+    const effectivePriority = req.body.priorityStrategy || req.body.strategy || 'fastest_time';
+
+    // จัดลำดับความสำคัญของรถตาม strategy
+    if (effectivePriority === 'max_load_first') {
+      selectedVehicles.sort((a, b) => b.capacity - a.capacity);
+    }
+
     // 4. คำนวณจัดสายโดยเริ่มจากคลังสินค้า (17.1266642, 102.9635667) -> จุดที่ 1 -> จุดที่ 2...
     const colors = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#64748b'];
     const createdRoutes = [];
@@ -1081,18 +1293,28 @@ router.post('/auto-route', authenticateToken, async (req, res) => {
       let currentLoad = 0;
       let currentPos = { lat: DEPOT.lat, lng: DEPOT.lng };
 
-      while (remainingItems.length > 0 && routeStops.length < maxStopsPerVehicle) {
-        // หาจุดที่ใกล้ที่สุดจากตำแหน่งปัจจุบัน (เริ่มจาก DEPOT)
+      while (remainingItems.length > 0) {
         let nearestIdx = -1;
         let minDist = Infinity;
 
-        for (let i = 0; i < remainingItems.length; i++) {
-          const item = remainingItems[i];
-          if (currentLoad + item.quantity <= vehicleCap) {
-            const dist = Math.hypot(item.lat - currentPos.lat, item.lng - currentPos.lng);
-            if (dist < minDist) {
-              minDist = dist;
+        if (effectivePriority === 'order_fifo') {
+          // เลือกรายการแรกตามลำดับออเดอร์ที่บรรจุได้
+          for (let i = 0; i < remainingItems.length; i++) {
+            if (currentLoad + remainingItems[i].quantity <= vehicleCap) {
               nearestIdx = i;
+              break;
+            }
+          }
+        } else {
+          // เลือกจุดที่ใกล้ที่สุดจากตำแหน่งปัจจุบัน
+          for (let i = 0; i < remainingItems.length; i++) {
+            const item = remainingItems[i];
+            if (currentLoad + item.quantity <= vehicleCap) {
+              const dist = Math.hypot(item.lat - currentPos.lat, item.lng - currentPos.lng);
+              if (dist < minDist) {
+                minDist = dist;
+                nearestIdx = i;
+              }
             }
           }
         }
@@ -1108,7 +1330,7 @@ router.post('/auto-route', authenticateToken, async (req, res) => {
       }
 
       if (routeStops.length > 0) {
-        const groupName = `Optimo AutoRoute-${String(createdRoutes.length + 1).padStart(3, '0')}`;
+        const groupName = `Auto-Route${String(createdRoutes.length + 1).padStart(3, '0')}`;
         const groupColor = colors[createdRoutes.length % colors.length];
 
         const groupRes = await query(
@@ -1118,16 +1340,40 @@ router.post('/auto-route', authenticateToken, async (req, res) => {
         );
         const newGroupId = groupRes.insertId;
 
+        // Calculate scheduled ETAs starting from depotStartTime
+        let currentMinutes = 8 * 60; // default 08:00
+        if (req.body.depotStartTime && typeof req.body.depotStartTime === 'string' && req.body.depotStartTime.includes(':')) {
+          const parts = req.body.depotStartTime.split(':');
+          currentMinutes = (parseInt(parts[0], 10) || 8) * 60 + (parseInt(parts[1], 10) || 0);
+        }
+        const serviceTimeMins = parseInt(req.body.serviceTimeMinutes || 10, 10);
+        let prevPos = { lat: DEPOT.lat, lng: DEPOT.lng };
+
         for (let orderIndex = 0; orderIndex < routeStops.length; orderIndex++) {
           const item = routeStops[orderIndex];
+
+          const distDeg = Math.hypot(item.lat - prevPos.lat, item.lng - prevPos.lng);
+          const distKm = distDeg * 111;
+          const travelMins = Math.max(3, Math.round((distKm / 35) * 60));
+          currentMinutes += travelMins;
+
+          const hh = String(Math.floor(currentMinutes / 60) % 24).padStart(2, '0');
+          const mm = String(currentMinutes % 60).padStart(2, '0');
+          const scheduledTimeStr = `${hh}:${mm}:00`;
+
           await query(
             `UPDATE list_store
              SET group_store_id = ?,
                  row_order = ?,
-                 status = 'planned'
+                 scheduled_time = ?,
+                 priority = COALESCE(priority, 'medium'),
+                 status = 'in_progress'
              WHERE list_id = ?`,
-            [newGroupId, orderIndex + 1, item.list_id]
+            [newGroupId, orderIndex + 1, scheduledTimeStr, item.list_id]
           );
+
+          currentMinutes += serviceTimeMins;
+          prevPos = { lat: item.lat, lng: item.lng };
         }
 
         createdRoutes.push({

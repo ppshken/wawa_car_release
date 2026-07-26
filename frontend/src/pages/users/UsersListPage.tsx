@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo } from "react";
-import api from "../../services/api";
+import api, { getImageUrl } from "../../services/api";
 import { useToast } from "../../context/ToastContext";
 import { useAuth } from "../../context/AuthContext";
 import { ConfirmModal } from "../../components/ConfirmModal";
@@ -79,8 +79,7 @@ export const UsersListPage: React.FC = () => {
 
   const getAvatarUrl = (img?: string) => {
     if (!img || typeof img !== "string" || img.trim() === "") return null;
-    if (img.startsWith("http") || img.startsWith("data:") || img.startsWith("blob:")) return img;
-    return `http://localhost:5000${img.startsWith("/") ? "" : "/"}${img}`;
+    return getImageUrl(img);
   };
 
   const isUserDirty = useMemo(() => {

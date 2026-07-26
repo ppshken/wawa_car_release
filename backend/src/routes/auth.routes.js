@@ -71,7 +71,7 @@ router.get('/me', authenticateToken, async (req, res) => {
   try {
     const users = await query(
       `SELECT u.user_id, u.username, u.name, u.phone_number_1, u.level_user_id,
-              COALESCE(u.user_image, u.image_profile) AS user_image, u.location_now,
+              u.user_image, u.location_now,
               IF(u.user_status = 'inactive' OR u.user_status = '0', 'inactive', 'active') AS user_status,
               l.level_user_name, l.setting_car_release, l.menu_permissions, a.access_id, a.access_name
        FROM user u
@@ -154,9 +154,10 @@ router.post('/users', authenticateToken, upload.single('user_image'), async (req
 
     let user_image = null;
     if (req.file) {
-      user_image = `/uploads/${req.file.filename}`;
+      const sub = req.file.subDir || 'user';
+      user_image = `/uploads/${sub}/${req.file.filename}`;
     } else if (req.body.user_image) {
-      user_image = saveBase64Image(req.body.user_image);
+      user_image = saveBase64Image(req.body.user_image, 'user');
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
@@ -179,9 +180,10 @@ router.put('/users/:id', authenticateToken, upload.single('user_image'), async (
 
     let user_image = undefined;
     if (req.file) {
-      user_image = `/uploads/${req.file.filename}`;
+      const sub = req.file.subDir || 'user';
+      user_image = `/uploads/${sub}/${req.file.filename}`;
     } else if (req.body.user_image !== undefined) {
-      user_image = saveBase64Image(req.body.user_image);
+      user_image = saveBase64Image(req.body.user_image, 'user');
     }
 
     if (password && password.trim() !== '') {

@@ -3,14 +3,29 @@ const path = require('path');
 const fs = require('fs');
 
 const uploadDir = path.join(__dirname, '../../uploads');
+const uploadUserDir = path.join(uploadDir, 'user');
+const uploadVehiclesDir = path.join(uploadDir, 'vehicles');
 
-if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir, { recursive: true });
-}
+if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
+if (!fs.existsSync(uploadUserDir)) fs.mkdirSync(uploadUserDir, { recursive: true });
+if (!fs.existsSync(uploadVehiclesDir)) fs.mkdirSync(uploadVehiclesDir, { recursive: true });
 
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
-    cb(null, uploadDir);
+    let subDir = '';
+    const fullUrl = req.originalUrl || req.baseUrl || req.path || '';
+    if (fullUrl.includes('user') || file.fieldname.includes('user')) {
+      subDir = 'user';
+    } else if (fullUrl.includes('vehicle') || fullUrl.includes('car') || file.fieldname.includes('car') || file.fieldname.includes('vehicle')) {
+      subDir = 'vehicles';
+    }
+
+    const targetDir = subDir ? path.join(uploadDir, subDir) : uploadDir;
+    if (!fs.existsSync(targetDir)) {
+      fs.mkdirSync(targetDir, { recursive: true });
+    }
+    file.subDir = subDir;
+    cb(null, targetDir);
   },
   filename: function (req, file, cb) {
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
@@ -35,7 +50,7 @@ const upload = multer({
 });
 
 // Helper function to save base64 data to file
-function saveBase64Image(base64Str) {
+function saveBase64Image(base64Str, subDir = '') {
   if (!base64Str) return null;
   if (!base64Str.startsWith('data:image')) {
     return base64Str; // Already a URL or filename
@@ -46,10 +61,15 @@ function saveBase64Image(base64Str) {
   const ext = matches[1] === 'jpeg' ? 'jpg' : matches[1];
   const data = Buffer.from(matches[2], 'base64');
   const filename = `img-${Date.now()}-${Math.round(Math.random() * 1e9)}.${ext}`;
-  const filePath = path.join(uploadDir, filename);
 
+  const targetDir = subDir ? path.join(uploadDir, subDir) : uploadDir;
+  if (!fs.existsSync(targetDir)) {
+    fs.mkdirSync(targetDir, { recursive: true });
+  }
+
+  const filePath = path.join(targetDir, filename);
   fs.writeFileSync(filePath, data);
-  return `/uploads/${filename}`;
+  return subDir ? `/uploads/${subDir}/${filename}` : `/uploads/${filename}`;
 }
 
 module.exports = {

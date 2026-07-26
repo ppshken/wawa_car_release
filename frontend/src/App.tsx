@@ -20,12 +20,13 @@ import { PaymentsPage } from './pages/master/PaymentsPage';
 import { VehiclesPage } from './pages/master/VehiclesPage';
 import { ParkingPage } from './pages/master/ParkingPage';
 import { AccountingStatusPage } from './pages/master/AccountingStatusPage';
+import { PositionProductPage } from './pages/master/PositionProductPage';
 
 import { UsersListPage } from './pages/users/UsersListPage';
 import { UserLevelsPage } from './pages/users/UserLevelsPage';
 import { PermissionsPage } from './pages/users/PermissionsPage';
 import { AccessPage } from './pages/users/AccessPage';
-import { OptimoRoutePage } from './pages/OptimoRoutePage';
+import { RoutePage } from './pages/RoutePage';
 import { ImportOptimoPage } from './pages/ImportOptimoPage';
 import { Reports } from './pages/Reports';
 
@@ -126,6 +127,7 @@ export const App: React.FC = () => {
           <Route path="/master/vehicles" element={<ProtectedLayout><VehiclesPage /></ProtectedLayout>} />
           <Route path="/master/parking" element={<ProtectedLayout><ParkingPage /></ProtectedLayout>} />
           <Route path="/master/accounting-status" element={<ProtectedLayout><AccountingStatusPage /></ProtectedLayout>} />
+          <Route path="/master/position-product" element={<ProtectedLayout><PositionProductPage /></ProtectedLayout>} />
 
           {/* User Management & Permissions Standalone Pages */}
           <Route path="/users" element={<ProtectedLayout><UsersListPage /></ProtectedLayout>} />
@@ -134,7 +136,8 @@ export const App: React.FC = () => {
           <Route path="/user-access" element={<ProtectedLayout><AccessPage /></ProtectedLayout>} />
 
           {/* OptimoRoute Map & Import */}
-          <Route path="/optimoroute" element={<ProtectedLayout><OptimoRoutePage /></ProtectedLayout>} />
+          <Route path="/route" element={<ProtectedLayout><RoutePage /></ProtectedLayout>} />
+          <Route path="/optimoroute" element={<Navigate to="/route" replace />} />
           <Route path="/import-optimo" element={<ProtectedLayout><ImportOptimoPage /></ProtectedLayout>} />
 
           <Route

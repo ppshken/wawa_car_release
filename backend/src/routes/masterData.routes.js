@@ -2,12 +2,38 @@ const express = require('express');
 const router = express.Router();
 const { query } = require('../config/db');
 const { authenticateToken } = require('../middleware/auth');
-const { upload } = require('../middleware/upload');
+const { upload, saveBase64Image } = require('../middleware/upload');
 const xlsx = require('xlsx');
+
+// Auto-migration for car and group_store tables
+(async () => {
+  try {
+    await query("ALTER TABLE car ADD COLUMN car_image LONGTEXT NULL");
+  } catch (err) {}
+  try {
+    await query("ALTER TABLE group_store MODIFY COLUMN car_id VARCHAR(100) NULL DEFAULT NULL");
+  } catch (err) {}
+  try {
+    await query("ALTER TABLE group_store MODIFY COLUMN load1 INT(11) NULL DEFAULT 0");
+  } catch (err) {}
+})();
 
 // =========================================================
 // 1. STORES (ตาราง: store)
 // =========================================================
+
+// Auto-migration for store opening and closing time columns
+(async () => {
+  try {
+    const cols = [
+      "ALTER TABLE store ADD COLUMN open_time VARCHAR(10) DEFAULT '08:00'",
+      "ALTER TABLE store ADD COLUMN close_time VARCHAR(10) DEFAULT '17:00'"
+    ];
+    for (const sql of cols) {
+      try { await query(sql); } catch (e) {}
+    }
+  } catch (err) {}
+})();
 
 // GET /api/master/stores (Supports server-side pagination & search: ?page=1&limit=10&search=xyz)
 router.get('/stores', authenticateToken, async (req, res) => {
@@ -59,15 +85,27 @@ router.get('/stores', authenticateToken, async (req, res) => {
 // POST /api/master/stores
 router.post('/stores', authenticateToken, async (req, res) => {
   try {
-    const { store_id, store_no, store_name, store_address, telephone_number, fax_number, email, url, customer_delivery_time, store_location } = req.body;
+    const { store_id, store_no, store_name, store_address, telephone_number, fax_number, email, url, customer_delivery_time, store_location, open_time, close_time } = req.body;
     const targetStoreId = store_id || store_no;
     if (!targetStoreId || !store_name) {
       return res.status(400).json({ success: false, message: 'กรุณากรอกรหัสร้านค้า (store_id) และชื่อร้านค้า' });
     }
     await query(
-      `INSERT INTO store (store_id, store_name, store_address, telephone_number, fax_number, email, url, customer_delivery_time, store_location) 
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [targetStoreId, store_name, store_address || null, telephone_number || null, fax_number || null, email || null, url || null, customer_delivery_time || null, store_location || null]
+      `INSERT INTO store (store_id, store_name, store_address, telephone_number, fax_number, email, url, customer_delivery_time, store_location, open_time, close_time) 
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        targetStoreId,
+        store_name,
+        store_address || null,
+        telephone_number || null,
+        fax_number || null,
+        email || null,
+        url || null,
+        customer_delivery_time || null,
+        store_location || null,
+        open_time || '08:00',
+        close_time || '17:00'
+      ]
     );
     res.json({ success: true, message: 'เพิ่มข้อมูลร้านค้าสำเร็จ', store_id: targetStoreId });
   } catch (err) {
@@ -79,14 +117,29 @@ router.post('/stores', authenticateToken, async (req, res) => {
 router.put('/stores/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
-    const { store_id, store_no, store_name, store_address, telephone_number, fax_number, email, url, customer_delivery_time, store_location } = req.body;
+    const { store_id, store_no, store_name, store_address, telephone_number, fax_number, email, url, customer_delivery_time, store_location, open_time, close_time } = req.body;
     const targetStoreId = store_id || store_no || id;
     if (!targetStoreId || !store_name) {
       return res.status(400).json({ success: false, message: 'กรุณากรอกรหัสร้านค้า (store_id) และชื่อร้านค้า' });
     }
     await query(
-      `UPDATE store SET store_id = ?, store_name = ?, store_address = ?, telephone_number = ?, fax_number = ?, email = ?, url = ?, customer_delivery_time = ?, store_location = ? WHERE store_id = ?`,
-      [targetStoreId, store_name, store_address || null, telephone_number || null, fax_number || null, email || null, url || null, customer_delivery_time || null, store_location || null, id]
+      `UPDATE store 
+       SET store_id = ?, store_name = ?, store_address = ?, telephone_number = ?, fax_number = ?, email = ?, url = ?, customer_delivery_time = ?, store_location = ?, open_time = ?, close_time = ? 
+       WHERE store_id = ?`,
+      [
+        targetStoreId,
+        store_name,
+        store_address || null,
+        telephone_number || null,
+        fax_number || null,
+        email || null,
+        url || null,
+        customer_delivery_time || null,
+        store_location || null,
+        open_time || '08:00',
+        close_time || '17:00',
+        id
+      ]
     );
     res.json({ success: true, message: 'อัปเดตข้อมูลร้านค้าเรียบร้อยแล้ว' });
   } catch (err) {
@@ -142,10 +195,12 @@ router.post('/stores/import', authenticateToken, upload.single('file'), async (r
       const email = row['อีเมล'] || row['email'] || row['Email'] || '';
       const url = row['เว็บไซต์'] || row['url'] || row['URL'] || row['Website'] || '';
       const store_location = row['พิกัด'] || row['lat_long'] || row['store_location'] || row['Location'] || row['GPS'] || '';
+      const open_time = row['เวลาเปิด'] || row['เวลาเปิดทำการ'] || row['open_time'] || row['Open Time'] || row['OpenTime'] || '08:00';
+      const close_time = row['เวลาปิด'] || row['เวลาปิดทำการ'] || row['close_time'] || row['Close Time'] || row['CloseTime'] || '17:00';
 
       const sql = `
-        INSERT INTO store (store_id, store_name, store_address, telephone_number, fax_number, email, url, store_location)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO store (store_id, store_name, store_address, telephone_number, fax_number, email, url, store_location, open_time, close_time)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON DUPLICATE KEY UPDATE
           store_name = VALUES(store_name),
           store_address = VALUES(store_address),
@@ -153,7 +208,9 @@ router.post('/stores/import', authenticateToken, upload.single('file'), async (r
           fax_number = VALUES(fax_number),
           email = VALUES(email),
           url = VALUES(url),
-          store_location = VALUES(store_location)
+          store_location = VALUES(store_location),
+          open_time = VALUES(open_time),
+          close_time = VALUES(close_time)
       `;
 
       const result = await query(sql, [
@@ -164,7 +221,9 @@ router.post('/stores/import', authenticateToken, upload.single('file'), async (r
         fax_number ? String(fax_number) : null,
         email ? String(email) : null,
         url ? String(url) : null,
-        store_location ? String(store_location) : null
+        store_location ? String(store_location) : null,
+        open_time || '08:00',
+        close_time || '17:00'
       ]);
 
       if (result.affectedRows === 1) {
@@ -208,6 +267,8 @@ router.get('/stores/export', authenticateToken, async (req, res) => {
       'ชื่อร้านค้า': s.store_name || '',
       'ที่อยู่': s.store_address || '',
       'เบอร์โทรศัพท์': s.telephone_number || '',
+      'เวลาเปิดทำการ': s.open_time || '08:00',
+      'เวลาปิดทำการ': s.close_time || '17:00',
       'แฟกซ์': s.fax_number || '',
       'อีเมล': s.email || '',
       'เว็บไซต์': s.url || '',
@@ -444,7 +505,7 @@ router.get('/vehicles', authenticateToken, async (req, res) => {
     
     // ดึงรถที่ถูกจัดสายแล้วในวันที่ระบุ
     const assignedRows = await query(
-      `SELECT car_id FROM group_store WHERE (DATE_FORMAT(date, '%Y-%m-%d') = ? OR DATE_FORMAT(created_at, '%Y-%m-%d') = ?) AND car_id IS NOT NULL AND car_id != ''`,
+      `SELECT car_id FROM group_store WHERE (DATE_FORMAT(date, '%Y-%m-%d') = ? OR (date IS NULL AND DATE_FORMAT(created_at, '%Y-%m-%d') = ?)) AND car_id IS NOT NULL AND car_id != ''`,
       [targetDate, targetDate]
     );
     const assignedCarIds = new Set((assignedRows || []).map((r) => String(r.car_id)));
@@ -454,19 +515,24 @@ router.get('/vehicles', authenticateToken, async (req, res) => {
       vehicles = await query('SELECT * FROM car ORDER BY car_id DESC');
     } catch (e1) {
       try {
-        vehicles = await query('SELECT car_id AS vehicle_id, car_id, license_plate, brand, model, sub_model, year FROM car ORDER BY car_id DESC');
+        vehicles = await query('SELECT car_id AS vehicle_id, car_id, license_plate, brand, model, sub_model, year, quantity FROM car ORDER BY car_id DESC');
       } catch (e2) {
         vehicles = await query('SELECT * FROM car');
       }
     }
 
-    const formattedVehicles = (vehicles || []).map((v) => ({
-      ...v,
-      vehicle_id: v.vehicle_id || v.car_id,
-      car_id: v.car_id || v.vehicle_id,
-      quantity: parseInt(v.quantity || v.max_load || v.car_load || 100, 10),
-      is_assigned_today: assignedCarIds.has(String(v.car_id || v.vehicle_id))
-    }));
+    const formattedVehicles = (vehicles || []).map((v) => {
+      const isAssigned = (v.car_id && assignedCarIds.has(String(v.car_id))) ||
+                         (v.vehicle_id && assignedCarIds.has(String(v.vehicle_id))) ||
+                         (v.license_plate && assignedCarIds.has(String(v.license_plate)));
+      return {
+        ...v,
+        vehicle_id: v.vehicle_id || v.car_id,
+        car_id: v.car_id || v.vehicle_id,
+        quantity: parseInt(v.quantity || v.max_load || v.car_load || 100, 10),
+        is_assigned_today: isAssigned
+      };
+    });
 
     res.json({ success: true, vehicles: formattedVehicles, assignedCarIds: Array.from(assignedCarIds) });
   } catch (err) {
@@ -478,9 +544,12 @@ router.get('/vehicles', authenticateToken, async (req, res) => {
 // POST /api/master/vehicles
 router.post('/vehicles', authenticateToken, async (req, res) => {
   try {
-    const { car_id, car_code, license_plate, brand, model, sub_model, year } = req.body;
+    const { car_id, car_code, license_plate, brand, model, sub_model, year, quantity, car_image } = req.body;
     if (!license_plate) {
       return res.status(400).json({ success: false, message: 'กรุณากรอกทะเบียนรถ' });
+    }
+    if (!car_image || String(car_image).trim() === '') {
+      return res.status(400).json({ success: false, message: 'กรุณาอัปโหลดรูปรถ (จำเป็นต้องใส่รูปรถ)' });
     }
 
     const crypto = require('crypto');
@@ -488,21 +557,26 @@ router.post('/vehicles', authenticateToken, async (req, res) => {
       ? String(car_id).trim()
       : crypto.randomUUID().toUpperCase();
 
+    const qtyNum = quantity !== undefined ? parseInt(quantity, 10) : 100;
+    const finalCarImage = (car_image && car_image.startsWith('data:image'))
+      ? saveBase64Image(car_image, 'vehicles')
+      : car_image;
+
     try {
       await query(
-        'INSERT INTO car (car_id, car_code, license_plate, brand, model, sub_model, year) VALUES (?, ?, ?, ?, ?, ?, ?)',
-        [finalCarId, car_code || null, license_plate, brand || null, model || null, sub_model || null, year ? parseInt(year, 10) : null]
+        'INSERT INTO car (car_id, car_code, license_plate, brand, model, sub_model, year, quantity, car_image) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        [finalCarId, car_code || null, license_plate, brand || null, model || null, sub_model || null, year ? parseInt(year, 10) : null, qtyNum, finalCarImage || null]
       );
     } catch (dbErr) {
       try {
         await query(
-          'INSERT INTO car (car_id, license_plate, brand, model, sub_model, year) VALUES (?, ?, ?, ?, ?, ?)',
-          [finalCarId, license_plate, brand || null, model || null, sub_model || null, year ? parseInt(year, 10) : null]
+          'INSERT INTO car (car_id, license_plate, brand, model, sub_model, year, quantity, car_image) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+          [finalCarId, license_plate, brand || null, model || null, sub_model || null, year ? parseInt(year, 10) : null, qtyNum, finalCarImage || null]
         );
       } catch (e2) {
         await query(
-          'INSERT INTO car (license_plate, brand, model, sub_model, year) VALUES (?, ?, ?, ?, ?)',
-          [license_plate, brand || null, model || null, sub_model || null, year ? parseInt(year, 10) : null]
+          'INSERT INTO car (license_plate, brand, model, sub_model, year, quantity, car_image) VALUES (?, ?, ?, ?, ?, ?, ?)',
+          [license_plate, brand || null, model || null, sub_model || null, year ? parseInt(year, 10) : null, qtyNum, finalCarImage || null]
         );
       }
     }
@@ -517,20 +591,28 @@ router.post('/vehicles', authenticateToken, async (req, res) => {
 router.put('/vehicles/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
-    const { car_code, license_plate, brand, model, sub_model, year } = req.body;
+    const { car_code, license_plate, brand, model, sub_model, year, quantity, car_image } = req.body;
     if (!license_plate) {
       return res.status(400).json({ success: false, message: 'กรุณากรอกทะเบียนรถ' });
     }
+    if (!car_image || String(car_image).trim() === '') {
+      return res.status(400).json({ success: false, message: 'กรุณาอัปโหลดรูปรถ (จำเป็นต้องใส่รูปรถ)' });
+    }
+
+    const qtyNum = quantity !== undefined ? parseInt(quantity, 10) : 100;
+    const finalCarImage = (car_image && car_image.startsWith('data:image'))
+      ? saveBase64Image(car_image, 'vehicles')
+      : car_image;
 
     try {
       await query(
-        'UPDATE car SET car_code = ?, license_plate = ?, brand = ?, model = ?, sub_model = ?, year = ? WHERE car_id = ?',
-        [car_code || null, license_plate, brand || null, model || null, sub_model || null, year ? parseInt(year, 10) : null, id]
+        'UPDATE car SET car_code = ?, license_plate = ?, brand = ?, model = ?, sub_model = ?, year = ?, quantity = ?, car_image = ? WHERE car_id = ?',
+        [car_code || null, license_plate, brand || null, model || null, sub_model || null, year ? parseInt(year, 10) : null, qtyNum, finalCarImage || null, id]
       );
     } catch (dbErr) {
       await query(
-        'UPDATE car SET license_plate = ?, brand = ?, model = ?, sub_model = ?, year = ? WHERE car_id = ?',
-        [license_plate, brand || null, model || null, sub_model || null, year ? parseInt(year, 10) : null, id]
+        'UPDATE car SET license_plate = ?, brand = ?, model = ?, sub_model = ?, year = ?, quantity = ?, car_image = ? WHERE car_id = ?',
+        [license_plate, brand || null, model || null, sub_model || null, year ? parseInt(year, 10) : null, qtyNum, finalCarImage || null, id]
       );
     }
 
@@ -556,14 +638,37 @@ router.delete('/vehicles/:id', authenticateToken, async (req, res) => {
 // 5.1 GROUP STORES (ตาราง: group_store)
 // =========================================================
 
-// GET /api/master/groups
-router.get('/groups', authenticateToken, async (req, res) => {
+// GET /api/master/groups or /api/master/group-stores
+router.get(['/groups', '/group-stores'], authenticateToken, async (req, res) => {
   try {
     let groups;
     try {
-      groups = await query('SELECT group_store_id, group_store_name, group_color, car_id, date, created_at FROM group_store ORDER BY group_store_id DESC');
+      groups = await query(`
+        SELECT 
+          gs.group_store_id, 
+          gs.group_store_name, 
+          gs.group_color, 
+          gs.car_id, 
+          gs.date, 
+          gs.created_at,
+          IF(gs.status = 1 OR (SELECT COUNT(*) FROM car_release cr WHERE cr.group_store_id = gs.group_store_id) > 0, 1, 0) AS status,
+          IF(gs.status = 1 OR (SELECT COUNT(*) FROM car_release cr WHERE cr.group_store_id = gs.group_store_id) > 0, true, false) AS is_released
+        FROM group_store gs 
+        ORDER BY gs.group_store_id DESC
+      `);
     } catch (e1) {
-      groups = await query('SELECT group_store_id, group_store_name, group_color, car_id, created_at FROM group_store ORDER BY group_store_id DESC');
+      groups = await query(`
+        SELECT 
+          gs.group_store_id, 
+          gs.group_store_name, 
+          gs.group_color, 
+          gs.car_id, 
+          gs.created_at,
+          IF(gs.status = 1 OR (SELECT COUNT(*) FROM car_release cr WHERE cr.group_store_id = gs.group_store_id) > 0, 1, 0) AS status,
+          IF(gs.status = 1 OR (SELECT COUNT(*) FROM car_release cr WHERE cr.group_store_id = gs.group_store_id) > 0, true, false) AS is_released
+        FROM group_store gs 
+        ORDER BY gs.group_store_id DESC
+      `);
     }
     res.json({ success: true, groups });
   } catch (err) {
@@ -580,7 +685,7 @@ router.post('/groups', authenticateToken, async (req, res) => {
     }
 
     const color = group_color || '#3b82f6';
-    const vehicleId = car_id || car || '';
+    const vehicleId = (car_id || car) ? String(car_id || car).trim() : null;
     const targetDate = date || group_date || new Date().toISOString().slice(0, 10);
 
     let result;
@@ -630,7 +735,7 @@ router.put('/groups/:id', authenticateToken, async (req, res) => {
     }
 
     const color = group_color || '#3b82f6';
-    const vehicleId = car_id || car || '';
+    const vehicleId = (car_id || car) ? String(car_id || car).trim() : null;
     const targetDate = date || group_date || null;
 
     try {
@@ -664,6 +769,24 @@ router.delete('/groups/:id', authenticateToken, async (req, res) => {
     const { id } = req.params;
     await query('DELETE FROM group_store WHERE group_store_id = ?', [id]);
     res.json({ success: true, message: 'ลบกลุ่มสายจัดส่งเรียบร้อยแล้ว' });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// GET /api/master/group-stores/:id/stores (ดึงรายการร้านค้าในสายจัดส่งตาม group_store_id)
+router.get(['/groups/:id/stores', '/group-stores/:id/stores'], authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const items = await query(
+      `SELECT ls.*, s.store_name, s.store_address, s.telephone_number, s.open_time, s.close_time
+       FROM list_store ls
+       LEFT JOIN store s ON ls.store_id = s.store_id
+       WHERE ls.group_store_id = ?
+       ORDER BY ls.row_order ASC, ls.list_id ASC`,
+      [id]
+    );
+    res.json({ success: true, items, stores: items });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
@@ -810,6 +933,115 @@ router.delete('/accounting-status/:id', authenticateToken, async (req, res) => {
     const { id } = req.params;
     await query('DELETE FROM accounting_status WHERE status_id = ?', [id]);
     res.json({ success: true, message: 'ลบสถานะทางบัญชีเรียบร้อยแล้ว' });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+
+// =========================================================
+// 8. POSITION PRODUCT (ตาราง: position_product & list_store columns)
+// =========================================================
+
+const ensurePositionProductTables = async () => {
+  try {
+    await query(`
+      CREATE TABLE IF NOT EXISTS position_product (
+        position_product_id INT AUTO_INCREMENT PRIMARY KEY,
+        position_product_name VARCHAR(255) NOT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    `);
+
+    const countRes = await query('SELECT COUNT(*) AS total FROM position_product');
+    if (countRes[0].total === 0) {
+      await query(`
+        INSERT INTO position_product (position_product_name) VALUES
+        ('E'),
+        ('A'),
+        ('R'),
+        ('B'),
+        ('C')
+      `);
+    }
+
+    const cols1 = await query("SHOW COLUMNS FROM list_store LIKE 'position_product_id'");
+    if (cols1.length === 0) {
+      await query("ALTER TABLE list_store ADD COLUMN position_product_id INT NULL AFTER store_name_result");
+    }
+    const cols2 = await query("SHOW COLUMNS FROM list_store LIKE 'position_production_order'");
+    if (cols2.length === 0) {
+      await query("ALTER TABLE list_store ADD COLUMN position_production_order INT NULL AFTER position_product_id");
+    }
+  } catch (err) {
+    console.warn("ensurePositionProductTables warning:", err.message);
+  }
+};
+ensurePositionProductTables();
+
+// GET /api/master/position-product & /position-products
+router.get('/position-product', authenticateToken, async (req, res) => {
+  try {
+    await ensurePositionProductTables();
+    const positions = await query('SELECT * FROM position_product ORDER BY position_product_id ASC');
+    res.json({ success: true, positions, items: positions });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+router.get('/position-products', authenticateToken, async (req, res) => {
+  try {
+    await ensurePositionProductTables();
+    const positions = await query('SELECT * FROM position_product ORDER BY position_product_id ASC');
+    res.json({ success: true, positions, items: positions });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// POST /api/master/position-product
+router.post('/position-product', authenticateToken, async (req, res) => {
+  try {
+    await ensurePositionProductTables();
+    const { position_product_name } = req.body;
+    if (!position_product_name) {
+      return res.status(400).json({ success: false, message: 'กรุณากรอกชื่อตำแหน่งวางสินค้า' });
+    }
+    const result = await query(
+      'INSERT INTO position_product (position_product_name) VALUES (?)',
+      [position_product_name]
+    );
+    res.json({ success: true, message: 'เพิ่มตำแหน่งวางสินค้าสำเร็จ', position_product_id: result.insertId });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// PUT /api/master/position-product/:id
+router.put('/position-product/:id', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { position_product_name } = req.body;
+    if (!position_product_name) {
+      return res.status(400).json({ success: false, message: 'กรุณากรอกชื่อตำแหน่งวางสินค้า' });
+    }
+    await query(
+      'UPDATE position_product SET position_product_name = ? WHERE position_product_id = ?',
+      [position_product_name, id]
+    );
+    res.json({ success: true, message: 'อัปเดตตำแหน่งวางสินค้าเรียบร้อยแล้ว' });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// DELETE /api/master/position-product/:id
+router.delete('/position-product/:id', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    await query('DELETE FROM position_product WHERE position_product_id = ?', [id]);
+    res.json({ success: true, message: 'ลบตำแหน่งวางสินค้าเรียบร้อยแล้ว' });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }

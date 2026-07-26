@@ -60,7 +60,24 @@ import {
   Check,
   CheckSquare,
   Sparkles,
+  Settings,
+  PanelLeftClose,
+  PanelLeftOpen,
 } from "lucide-react";
+
+interface DeliverySettings {
+  serviceTimePerStop: number;
+  priorityStrategy: "fastest_time" | "distance_first" | "max_load_first" | "order_fifo";
+  depotStartTime: string;
+  bufferTimePerRoute: number;
+}
+
+const DEFAULT_DELIVERY_SETTINGS: DeliverySettings = {
+  serviceTimePerStop: 10,
+  priorityStrategy: "fastest_time",
+  depotStartTime: "08:00",
+  bufferTimePerRoute: 15,
+};
 
 // ─── Types ───
 interface StopData {
@@ -80,7 +97,155 @@ interface StopData {
   departureTime?: string;
   status: string;
   type: string;
+  scheduled_time?: string;
+  start_service_time?: string;
+  end_service_time?: string;
+  priority?: "low" | "medium" | "high" | string;
+  pod_image?: string;
+  position_product_id?: number | string;
+  position_production_order?: number;
+  position_product_name?: string;
 }
+
+const getEarlyDelayBadge = (scheduledTime?: string, startServiceTime?: string) => {
+  if (!scheduledTime) return null;
+  const formattedScheduled = scheduledTime.slice(0, 5);
+
+  if (!startServiceTime) {
+    return {
+      scheduledText: formattedScheduled,
+      startText: null,
+      earlyDelayText: null,
+      isEarly: false,
+      isDelay: false,
+    };
+  }
+
+  let startHour = 0;
+  let startMin = 0;
+  let startTimeFormatted = "";
+
+  if (startServiceTime.includes("T") || startServiceTime.includes("-")) {
+    const d = new Date(startServiceTime);
+    if (!isNaN(d.getTime())) {
+      startHour = d.getHours();
+      startMin = d.getMinutes();
+      startTimeFormatted = `${String(startHour).padStart(2, "0")}:${String(startMin).padStart(2, "0")}`;
+    }
+  } else if (startServiceTime.includes(":")) {
+    const parts = startServiceTime.split(":");
+    startHour = parseInt(parts[0], 10) || 0;
+    startMin = parseInt(parts[1], 10) || 0;
+    startTimeFormatted = `${String(startHour).padStart(2, "0")}:${String(startMin).padStart(2, "0")}`;
+  }
+
+  if (!startTimeFormatted) {
+    return {
+      scheduledText: formattedScheduled,
+      startText: null,
+      earlyDelayText: null,
+      isEarly: false,
+      isDelay: false,
+    };
+  }
+
+  const schedParts = scheduledTime.split(":");
+  const schedMins = (parseInt(schedParts[0], 10) || 0) * 60 + (parseInt(schedParts[1], 10) || 0);
+  const actMins = startHour * 60 + startMin;
+  const diff = actMins - schedMins;
+
+  if (Math.abs(diff) <= 2) {
+    return {
+      scheduledText: formattedScheduled,
+      startText: startTimeFormatted,
+      earlyDelayText: "ตรงเวลา",
+      isEarly: true,
+      isDelay: false,
+    };
+  }
+
+  if (diff < 0) {
+    const abs = Math.abs(diff);
+    const h = Math.floor(abs / 60);
+    const m = abs % 60;
+    const txt = h > 0 ? `${h}h ${m}m early` : `${m}m early`;
+    return {
+      scheduledText: formattedScheduled,
+      startText: startTimeFormatted,
+      earlyDelayText: txt,
+      isEarly: true,
+      isDelay: false,
+    };
+  } else {
+    const h = Math.floor(diff / 60);
+    const m = diff % 60;
+    const txt = h > 0 ? `${h}h ${m}m delay` : `${m}m delay`;
+    return {
+      scheduledText: formattedScheduled,
+      startText: startTimeFormatted,
+      earlyDelayText: txt,
+      isEarly: false,
+      isDelay: true,
+    };
+  }
+};
+
+const getActualDurationText = (startStr?: string, endStr?: string) => {
+  if (!startStr || !endStr) return "-";
+  const start = new Date(startStr).getTime();
+  const end = new Date(endStr).getTime();
+  if (isNaN(start) || isNaN(end) || end < start) return "-";
+  const diffSec = Math.round((end - start) / 1000);
+  if (diffSec < 60) return `${diffSec}s`;
+  const mins = Math.floor(diffSec / 60);
+  const secs = diffSec % 60;
+  return `${mins}m ${secs}s`;
+};
+
+const getPriorityBadge = (p?: string) => {
+  const level = String(p || "medium").toLowerCase();
+  if (level === "high" || level === "สูง") {
+    return (
+      <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-rose-100 text-rose-700 border border-rose-200">
+        สูง
+      </span>
+    );
+  }
+  if (level === "low" || level === "ต่ำ") {
+    return (
+      <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-slate-100 text-slate-600 border border-slate-200">
+        ต่ำ
+      </span>
+    );
+  }
+  return (
+    <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200">
+      กลาง
+    </span>
+  );
+};
+
+const renderPositionBadge = (stop: any, positionProductsList: any[]) => {
+  const posId = stop.position_product_id || stop.positionProductId;
+  const posOrder = stop.position_production_order || stop.positionProductionOrder || 1;
+  let posName = stop.position_product_name || stop.positionProductName;
+
+  if (!posName && posId) {
+    const found = positionProductsList.find(
+      (p) => String(p.position_product_id) === String(posId)
+    );
+    if (found) posName = found.position_product_name;
+  }
+
+  if (!posName && !posId) return null;
+
+  const displayName = posName || posId;
+  return (
+    <span className="inline-flex items-center bg-amber-100 text-amber-900 border border-amber-300 font-mono font-extrabold text-[10px] px-1.5 py-0.2 rounded shadow-2xs shrink-0">
+      {displayName}/{posOrder}
+    </span>
+  );
+};
 
 interface RouteData {
   routeId: string;
@@ -94,6 +259,8 @@ interface RouteData {
   load1?: number;
   vehicleCapacity?: number;
   color: string;
+  status?: number;
+  is_released?: boolean;
   totalStops: number;
   stops: StopData[];
 }
@@ -342,7 +509,7 @@ async function fetchRoadGeometry(
     : stopsWithDepot.map((s) => [s.lat, s.lng]);
 }
 
-export const OptimoRoutePage: React.FC = () => {
+export const RoutePage: React.FC = () => {
   const { showSuccess, showError } = useToast();
   const [routes, setRoutes] = useState<RouteData[]>([]);
   const [routeGeometries, setRouteGeometries] = useState<
@@ -353,28 +520,23 @@ export const OptimoRoutePage: React.FC = () => {
     new Date().toISOString().slice(0, 10),
   );
   const [checkedRoutes, setCheckedRoutes] = useState<Set<string>>(new Set());
+  const [selectedRouteId, setSelectedRouteId] = useState<string | null>(null);
 
   const isRouteVisibleOnMap = useCallback(
-    (routeId: string) => {
-      if (checkedRoutes.size === 0) return true;
-      return checkedRoutes.has(routeId);
+    (routeId: string | number) => {
+      const rIdStr = String(routeId);
+      if (checkedRoutes.size > 0) {
+        return checkedRoutes.has(rIdStr);
+      }
+      if (selectedRouteId) {
+        return String(selectedRouteId) === rIdStr;
+      }
+      return true;
     },
-    [checkedRoutes],
+    [checkedRoutes, selectedRouteId],
   );
 
-  const toggleRouteVisibility = (routeId: string) => {
-    setCheckedRoutes((prev) => {
-      const next = new Set(prev);
-      if (next.has(routeId)) {
-        next.delete(routeId);
-      } else {
-        next.add(routeId);
-      }
-      return next;
-    });
-  };
-  const [source, setSource] = useState<string>("mock");
-  const [selectedRouteId, setSelectedRouteId] = useState<string | null>(null);
+  const [source, setSource] = useState<string>("database");
   const [searchRouteText, setSearchRouteText] = useState("");
   const [searchText, setSearchText] = useState("");
   const [bottomPanelOpen, setBottomPanelOpen] = useState(true);
@@ -382,6 +544,7 @@ export const OptimoRoutePage: React.FC = () => {
     "all" | "pending" | "completed" | "problem"
   >("all");
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
+  const [isLeftPanelCollapsed, setIsLeftPanelCollapsed] = useState(false);
 
   // Assigned vs Unassigned Tab state
   const [assignedTab, setAssignedTab] = useState<"assigned" | "unassigned">(
@@ -389,6 +552,17 @@ export const OptimoRoutePage: React.FC = () => {
   );
   const [unassignedStops, setUnassignedStops] = useState<any[]>([]);
   const [loadingUnassigned, setLoadingUnassigned] = useState(false);
+
+  // Master Position Products List State
+  const [positionProductsList, setPositionProductsList] = useState<{ position_product_id: number; position_product_name: string }[]>([]);
+
+  // Create Stop Drawer position state
+  const [formStopPositionProductId, setFormStopPositionProductId] = useState<string | number>("");
+  const [formStopPositionOrder, setFormStopPositionOrder] = useState<number>(1);
+
+  // Edit Stop Drawer position state
+  const [editFormPositionProductId, setEditFormPositionProductId] = useState<string | number>("");
+  const [editFormPositionOrder, setEditFormPositionOrder] = useState<number>(1);
 
   // Create Unassigned Stop Modal State
   const [isCreateUnassignedModalOpen, setIsCreateUnassignedModalOpen] =
@@ -399,7 +573,24 @@ export const OptimoRoutePage: React.FC = () => {
   const [unassignedQuantity, setUnassignedQuantity] = useState(1);
   const [unassignedLatLong, setUnassignedLatLong] = useState("");
   const [unassignedOrderNo, setUnassignedOrderNo] = useState("");
+  const [unassignedPriority, setUnassignedPriority] = useState<string>("medium");
+  const [unassignedPositionProductId, setUnassignedPositionProductId] = useState<string | number>("");
+  const [unassignedPositionOrder, setUnassignedPositionOrder] = useState<number>(1);
   const [creatingUnassigned, setCreatingUnassigned] = useState(false);
+
+  // Edit Unassigned Stop Modal State
+  const [isEditUnassignedModalOpen, setIsEditUnassignedModalOpen] = useState(false);
+  const [editingUnassignedStop, setEditingUnassignedStop] = useState<any | null>(null);
+  const [unassignedEditStoreId, setUnassignedEditStoreId] = useState("");
+  const [unassignedEditStoreName, setUnassignedEditStoreName] = useState("");
+  const [unassignedEditAddress, setUnassignedEditAddress] = useState("");
+  const [unassignedEditQuantity, setUnassignedEditQuantity] = useState(1);
+  const [unassignedEditLatLong, setUnassignedEditLatLong] = useState("");
+  const [unassignedEditOrderNo, setUnassignedEditOrderNo] = useState("");
+  const [unassignedEditPriority, setUnassignedEditPriority] = useState<string>("medium");
+  const [unassignedEditPositionProductId, setUnassignedEditPositionProductId] = useState<string | number>("");
+  const [unassignedEditPositionOrder, setUnassignedEditPositionOrder] = useState<number>(1);
+  const [updatingUnassigned, setUpdatingUnassigned] = useState(false);
 
   // Excel Import Preview Left Drawer State
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -407,6 +598,7 @@ export const OptimoRoutePage: React.FC = () => {
     useState(false);
   const [excelPreviewStops, setExcelPreviewStops] = useState<any[]>([]);
   const [importingExcelStops, setImportingExcelStops] = useState(false);
+  const [isParsingExcel, setIsParsingExcel] = useState(false);
 
   // Auto-Routing Calculation Drawer State
   const [isAutoRouteDrawerOpen, setIsAutoRouteDrawerOpen] = useState(false);
@@ -419,6 +611,36 @@ export const OptimoRoutePage: React.FC = () => {
     string[]
   >([]);
   const [calculatingAutoRoute, setCalculatingAutoRoute] = useState(false);
+
+  // Delivery Settings State
+  const [deliverySettings, setDeliverySettings] = useState<DeliverySettings>(() => {
+    try {
+      const saved = localStorage.getItem("wawa_delivery_settings");
+      if (saved) return JSON.parse(saved);
+    } catch (e) {}
+    return DEFAULT_DELIVERY_SETTINGS;
+  });
+  const [isDeliverySettingsDrawerOpen, setIsDeliverySettingsDrawerOpen] = useState(false);
+
+  const fetchDeliverySettings = useCallback(async () => {
+    try {
+      const res = await api.get("/optimoroute/delivery-settings");
+      if (res.data.success && res.data.settings) {
+        setDeliverySettings(res.data.settings);
+        localStorage.setItem("wawa_delivery_settings", JSON.stringify(res.data.settings));
+      }
+    } catch (err) {
+      console.error("Fetch delivery settings from DB error:", err);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchDeliverySettings();
+  }, [fetchDeliverySettings]);
+
+  // Clear Unassigned Stops State
+  const [isConfirmClearUnassignedModalOpen, setIsConfirmClearUnassignedModalOpen] = useState(false);
+  const [clearingUnassigned, setClearingUnassigned] = useState(false);
 
   // Resizable Bottom Panel State
   const [panelHeight, setPanelHeight] = useState<number>(260);
@@ -471,14 +693,36 @@ export const OptimoRoutePage: React.FC = () => {
   const [selectedMasterStoreId, setSelectedMasterStoreId] =
     useState<string>("");
 
+  const storesMap = useMemo(() => {
+    const map = new Map<string, StoreOption>();
+    storesList.forEach((s) => {
+      if (s.store_id) {
+        map.set(String(s.store_id).trim().toLowerCase(), s);
+      }
+    });
+    return map;
+  }, [storesList]);
+
+  const storeSelectOptions = useMemo(() => {
+    return storesList.map((s) => (
+      <option key={s.store_id} value={s.store_id}>
+        {s.store_id} - {s.store_name}
+      </option>
+    ));
+  }, [storesList]);
+
+  const masterStoreSearchableOptions = useMemo(() => {
+    return storesList.map((s) => ({
+      value: String(s.store_id),
+      label: `${s.store_id} - ${s.store_name}`,
+      badge: String(s.store_id),
+    }));
+  }, [storesList]);
+
   const selectedMasterStoreObj = useMemo(() => {
     if (!selectedMasterStoreId) return null;
-    return (
-      storesList.find(
-        (s) => String(s.store_id) === String(selectedMasterStoreId),
-      ) || null
-    );
-  }, [storesList, selectedMasterStoreId]);
+    return storesMap.get(String(selectedMasterStoreId).trim().toLowerCase()) || null;
+  }, [storesMap, selectedMasterStoreId]);
 
   // Group store dropdown state
   const [groupSearchText, setGroupSearchText] = useState("");
@@ -501,6 +745,22 @@ export const OptimoRoutePage: React.FC = () => {
   // Vehicles list for select dropdown
   const [vehiclesList, setVehiclesList] = useState<VehicleOption[]>([]);
   const [selectedCarId, setSelectedCarId] = useState<string>("");
+
+  const totalUnassignedBoxes = useMemo(() => {
+    return unassignedStops.reduce(
+      (sum, s) => sum + (s.sum_quantity || s.quantity || 0),
+      0,
+    );
+  }, [unassignedStops]);
+
+  const totalSelectedCapacity = useMemo(() => {
+    return autoRouteSelectedVehicles.reduce((sum, vId) => {
+      const found = vehiclesList.find(
+        (v) => String(v.car_id) === String(vId),
+      );
+      return sum + (found?.quantity || 100);
+    }, 0);
+  }, [autoRouteSelectedVehicles, vehiclesList]);
 
   // Create Group Modal State
   const [isCreateGroupModalOpen, setIsCreateGroupModalOpen] = useState(false);
@@ -566,9 +826,21 @@ export const OptimoRoutePage: React.FC = () => {
     }
   }, []);
 
+  const fetchPositionProducts = useCallback(async () => {
+    try {
+      const res = await api.get("/master/position-product");
+      if (res.data && res.data.success) {
+        setPositionProductsList(res.data.positions || res.data.items || []);
+      }
+    } catch (err) {
+      console.warn("Fetch position products warning:", err);
+    }
+  }, []);
+
   useEffect(() => {
     fetchUnassignedStops(selectedDate);
-  }, [fetchUnassignedStops, selectedDate]);
+    fetchPositionProducts();
+  }, [fetchUnassignedStops, fetchPositionProducts, selectedDate]);
 
   const handleDownloadSampleExcel = () => {
     try {
@@ -619,6 +891,7 @@ export const OptimoRoutePage: React.FC = () => {
     const file = e.target.files?.[0];
     if (!file) return;
 
+    setIsParsingExcel(true);
     const reader = new FileReader();
     reader.onload = (evt) => {
       try {
@@ -630,6 +903,7 @@ export const OptimoRoutePage: React.FC = () => {
 
         if (rawData.length === 0) {
           showError("ไฟล์ที่เลือกไม่มีข้อมูลรายการจัดส่ง");
+          setIsParsingExcel(false);
           return;
         }
 
@@ -709,14 +983,52 @@ export const OptimoRoutePage: React.FC = () => {
       } catch (err) {
         console.error("Excel parse error:", err);
         showError("ไม่สามารถอ่านไฟล์ Excel ได้ กรุณาตรวจสอบรูปแบบไฟล์");
+      } finally {
+        setIsParsingExcel(false);
       }
     };
+
+    reader.onerror = () => {
+      showError("ไม่สามารถอ่านไฟล์ Excel ได้");
+      setIsParsingExcel(false);
+    };
+
     reader.readAsBinaryString(file);
+  };
+
+  const handleAddEmptyExcelRow = () => {
+    const newRow = {
+      id: `preview-manual-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      store_id: "",
+      store_name: "",
+      address: "",
+      data_store_no: "",
+      sum_quantity: 1,
+      lat_long: "",
+      is_mapped_master: false,
+    };
+    setExcelPreviewStops((prev) => [...prev, newRow]);
   };
 
   const handleConfirmExcelImport = async () => {
     if (excelPreviewStops.length === 0) {
       showError("ไม่พบรายการที่ต้องนำเข้า");
+      return;
+    }
+
+    const missingStore = excelPreviewStops.find(
+      (s) => !s.store_id || !String(s.store_id).trim(),
+    );
+    if (missingStore) {
+      showError("กรุณาเลือกร้านค้าในแถวที่มีขอบสีแดงให้ครบทุกรายการก่อนกดบันทึก");
+      return;
+    }
+
+    const missingOrderNo = excelPreviewStops.find(
+      (s) => !s.data_store_no || !String(s.data_store_no).trim(),
+    );
+    if (missingOrderNo) {
+      showError("กรุณากรอกรหัสออเดอร์ในแถวที่มีขอบสีแดงให้ครบทุกรายการก่อนกดบันทึก");
       return;
     }
 
@@ -752,13 +1064,27 @@ export const OptimoRoutePage: React.FC = () => {
       return;
     }
 
+    if (autoRouteSelectedVehicles.length === 0) {
+      showError("กรุณาเลือกรถอย่างน้อย 1 คันสำหรับคำนวณจัดสาย");
+      return;
+    }
+
     setCalculatingAutoRoute(true);
     try {
+      // Auto-save delivery settings to DB & localStorage
+      try {
+        localStorage.setItem(
+          "wawa_delivery_settings",
+          JSON.stringify(deliverySettings),
+        );
+        await api.post("/optimoroute/delivery-settings", deliverySettings);
+      } catch (e) {}
+
       const res = await api.post("/optimoroute/auto-route", {
         date: selectedDate,
-        strategy: autoRouteStrategy,
-        maxLoadPerVehicle: autoRouteMaxLoad,
-        maxStopsPerVehicle: autoRouteMaxStops,
+        priorityStrategy: deliverySettings.priorityStrategy,
+        serviceTimeMinutes: deliverySettings.serviceTimePerStop,
+        depotStartTime: deliverySettings.depotStartTime,
         selectedVehicleIds: autoRouteSelectedVehicles,
       });
 
@@ -781,6 +1107,66 @@ export const OptimoRoutePage: React.FC = () => {
     }
   };
 
+  const handleAutoSelectVehicles = () => {
+    const availableVehicles = vehiclesList
+      .filter((v) => !v.is_assigned_today)
+      .map((v) => ({
+        car_id: String(v.car_id),
+        capacity: v.quantity ?? 100,
+      }))
+      .sort((a, b) => b.capacity - a.capacity);
+
+    if (availableVehicles.length === 0) {
+      showError("ไม่พบรถขนส่งที่พร้อมใช้งานในวันนี้");
+      return;
+    }
+
+    let currentCap = 0;
+    const selected: string[] = [];
+
+    for (const car of availableVehicles) {
+      selected.push(car.car_id);
+      currentCap += car.capacity;
+      if (currentCap >= totalUnassignedBoxes) {
+        break;
+      }
+    }
+
+    if (selected.length === 0 && availableVehicles.length > 0) {
+      selected.push(availableVehicles[0].car_id);
+    }
+
+    setAutoRouteSelectedVehicles(selected);
+    showSuccess(
+      `เลือกรถให้อัตโนมัติอย่างเหมาะสมแล้วจำนวน ${selected.length} คัน (ความจุรวม ${currentCap} ลัง)`,
+    );
+  };
+
+  const handleClearUnassignedStops = async () => {
+    setClearingUnassigned(true);
+    try {
+      const res = await api.delete(
+        `/optimoroute/unassigned/clear?date=${selectedDate}`,
+      );
+      if (res.data.success) {
+        showSuccess(
+          res.data.message ||
+            `ล้างรายการยังไม่จัดสายของวันที่ ${selectedDate} สำเร็จ!`,
+        );
+        await fetchUnassignedStops(selectedDate);
+      } else {
+        showError(res.data.message || "ไม่สามารถล้างข้อมูลได้");
+      }
+    } catch (err: any) {
+      showError(
+        err?.response?.data?.message || "เกิดข้อผิดพลาดในการล้างข้อมูล",
+      );
+    } finally {
+      setClearingUnassigned(false);
+      setIsConfirmClearUnassignedModalOpen(false);
+    }
+  };
+
   // GPS Live Tracking State
   const [gpsDevices, setGpsDevices] = useState<GpsDevice[]>([]);
   const [showGpsVehicles, setShowGpsVehicles] = useState(true);
@@ -789,7 +1175,7 @@ export const OptimoRoutePage: React.FC = () => {
 
   // Left Sidebar Collapsible Sections State
   const [isRoutesSectionOpen, setIsRoutesSectionOpen] = useState(true);
-  const [isGpsSectionOpen, setIsGpsSectionOpen] = useState(true);
+  const [isGpsSectionOpen, setIsGpsSectionOpen] = useState(false);
   const [activeGpsTarget, setActiveGpsTarget] = useState<{
     lat: number;
     lng: number;
@@ -901,6 +1287,9 @@ export const OptimoRoutePage: React.FC = () => {
   const [isCreateStopDrawerOpen, setIsCreateStopDrawerOpen] = useState(false);
   const [formStopGroupId, setFormStopGroupId] = useState<string | number>("");
   const [formStopStoreId, setFormStopStoreId] = useState("");
+  const [formStopOrderNo, setFormStopOrderNo] = useState("");
+  const [formStopScheduledTime, setFormStopScheduledTime] = useState("");
+  const [formStopPriority, setFormStopPriority] = useState<string>("medium");
   const [formStopStoreName, setFormStopStoreName] = useState("");
   const [formStopAddress, setFormStopAddress] = useState("");
   const [formStopRowOrder, setFormStopRowOrder] = useState<number>(1);
@@ -919,6 +1308,35 @@ export const OptimoRoutePage: React.FC = () => {
     );
   }, [routes, formStopGroupId]);
 
+  // Find previous stop in the same group to compare scheduled_time
+  const previousStopInGroup = useMemo(() => {
+    if (!formStopGroupId) return null;
+    const targetRoute = routes.find(
+      (r) =>
+        String(r.groupStoreId || r.routeId.replace("ROUTE-", "")) ===
+        String(formStopGroupId),
+    );
+    if (!targetRoute || !targetRoute.stops || targetRoute.stops.length === 0)
+      return null;
+
+    const validStops = targetRoute.stops
+      .filter((s) => s.type !== "depot")
+      .sort(
+        (a, b) =>
+          (a.rowOrder ?? a.row_order ?? 0) - (b.rowOrder ?? b.row_order ?? 0),
+      );
+
+    if (validStops.length === 0) return null;
+
+    // Find the stop prior to formStopRowOrder, or take the last stop in validStops
+    const prev =
+      validStops
+        .filter((s) => (s.rowOrder ?? s.row_order ?? 0) < formStopRowOrder)
+        .pop() || validStops[validStops.length - 1];
+
+    return prev || null;
+  }, [routes, formStopGroupId, formStopRowOrder]);
+
   const handleCreateStop = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formStopGroupId) {
@@ -930,17 +1348,53 @@ export const OptimoRoutePage: React.FC = () => {
       return;
     }
 
+    // Check scheduled_time condition vs previous stop in same group
+    if (
+      formStopScheduledTime &&
+      previousStopInGroup &&
+      previousStopInGroup.scheduled_time
+    ) {
+      const prevTimeStr = String(previousStopInGroup.scheduled_time).slice(
+        0,
+        5,
+      );
+      const toMins = (str: string) => {
+        const parts = str.split(":");
+        if (parts.length < 2) return null;
+        const h = parseInt(parts[0], 10);
+        const m = parseInt(parts[1], 10);
+        return isNaN(h) || isNaN(m) ? null : h * 60 + m;
+      };
+
+      const curMins = toMins(formStopScheduledTime);
+      const prevMins = toMins(prevTimeStr);
+
+      if (curMins !== null && prevMins !== null && curMins <= prevMins) {
+        showError(
+          `เวลาจัดส่งที่กำหนด (${formStopScheduledTime}) ต้องมากกว่าเวลาจุดจัดส่งก่อนหน้าในกรุ๊ปนี้ (${prevTimeStr} น.)`,
+        );
+        return;
+      }
+    }
+
     setCreatingStop(true);
     try {
       const res = await api.post("/optimoroute/stops", {
         group_store_id: formStopGroupId,
         store_id: formStopStoreId || undefined,
+        data_store_no: formStopOrderNo.trim() || undefined,
+        order_no: formStopOrderNo.trim() || undefined,
         store_name: formStopStoreName.trim(),
         address: formStopAddress.trim(),
         row_order: formStopRowOrder,
         sum_quantity: formStopQuantity,
         lat_long: formStopLatLong.trim(),
+        scheduled_time: formStopScheduledTime || undefined,
+        priority: formStopPriority,
+        status: "in_progress",
         date: selectedDate,
+        position_product_id: formStopPositionProductId || undefined,
+        position_production_order: formStopPositionOrder || 1,
       });
 
       if (res.data.success) {
@@ -948,9 +1402,14 @@ export const OptimoRoutePage: React.FC = () => {
         setIsCreateStopDrawerOpen(false);
         setSelectedMasterStoreId("");
         setFormStopStoreId("");
+        setFormStopOrderNo("");
+        setFormStopScheduledTime("");
+        setFormStopPriority("medium");
         setFormStopStoreName("");
         setFormStopAddress("");
         setFormStopLatLong("");
+        setFormStopPositionProductId("");
+        setFormStopPositionOrder(1);
         fetchRoutes(selectedDate);
       } else {
         showError(res.data.message || "เพิ่มรายการจัดส่งไม่สำเร็จ");
@@ -987,19 +1446,23 @@ export const OptimoRoutePage: React.FC = () => {
     setEditFormGroupId(
       stop.groupStoreId ||
         stop.group_store_id ||
-        stop.routeId?.replace("ROUTE-", "") ||
+        (stop.routeId ? String(stop.routeId).replace("ROUTE-", "") : "") ||
         "",
     );
     setEditFormStoreId(stop.locationNo || stop.store_id || "");
     setEditFormOrderNo(stop.data_store_no || stop.orderNo || "");
-    setEditFormStoreName(stop.storeName || "");
-    setEditFormAddress(stop.address || "");
+    setEditFormStoreName(
+      stop.storeName || stop.store_name || stop.store_name_result || "",
+    );
+    setEditFormAddress(stop.address || stop.store_address || "");
     setEditFormRowOrder(stop.rowOrder ?? stop.row_order ?? stop.stopId ?? 1);
-    setEditFormQuantity(stop.quantity ?? 1);
+    setEditFormQuantity(stop.quantity ?? stop.sum_quantity ?? 1);
     setEditFormLatLong(
       stop.lat_long || (stop.lat && stop.lng ? `${stop.lat},${stop.lng}` : ""),
     );
-    setEditFormStatus(stop.status || "pending");
+    setEditFormStatus(stop.status || "unassigned");
+    setEditFormPositionProductId(stop.position_product_id || stop.positionProductId || "");
+    setEditFormPositionOrder(stop.position_production_order || stop.positionProductionOrder || 1);
     setIsEditStopDrawerOpen(true);
   };
 
@@ -1030,7 +1493,7 @@ export const OptimoRoutePage: React.FC = () => {
     setUpdatingStop(true);
     try {
       const res = await api.put(`/optimoroute/stops/${targetListId}`, {
-        group_store_id: editFormGroupId,
+        group_store_id: editFormGroupId || null,
         store_id: editFormStoreId || undefined,
         data_store_no: editFormOrderNo || undefined,
         store_name: editFormStoreName.trim(),
@@ -1039,6 +1502,8 @@ export const OptimoRoutePage: React.FC = () => {
         sum_quantity: editFormQuantity,
         lat_long: editFormLatLong.trim(),
         status: editFormStatus,
+        position_product_id: editFormPositionProductId || null,
+        position_production_order: editFormPositionOrder || 1,
       });
 
       if (res.data.success) {
@@ -1046,6 +1511,7 @@ export const OptimoRoutePage: React.FC = () => {
         setIsEditStopDrawerOpen(false);
         setEditingStop(null);
         fetchRoutes(selectedDate);
+        fetchUnassignedStops(selectedDate);
       } else {
         showError(res.data.message || "อัปเดตรายการจัดส่งไม่สำเร็จ");
       }
@@ -1055,6 +1521,68 @@ export const OptimoRoutePage: React.FC = () => {
       );
     } finally {
       setUpdatingStop(false);
+    }
+  };
+
+  // Edit Unassigned Stop Handler
+  const handleOpenEditUnassignedStopDrawer = (stop: any) => {
+    setEditingUnassignedStop(stop);
+    setUnassignedEditStoreId(stop.store_id || stop.locationNo || "");
+    setUnassignedEditOrderNo(stop.data_store_no || stop.orderNo || "");
+    setUnassignedEditStoreName(
+      stop.storeName || stop.store_name || stop.store_name_result || ""
+    );
+    setUnassignedEditAddress(stop.address || stop.store_address || "");
+    setUnassignedEditQuantity(stop.sum_quantity ?? stop.quantity ?? 1);
+    setUnassignedEditLatLong(
+      stop.lat_long || (stop.lat && stop.lng ? `${stop.lat},${stop.lng}` : "")
+    );
+    setUnassignedEditPriority(stop.priority || "medium");
+    setUnassignedEditPositionProductId(stop.position_product_id || stop.positionProductId || "");
+    setUnassignedEditPositionOrder(stop.position_production_order || stop.positionProductionOrder || 1);
+    setIsEditUnassignedModalOpen(true);
+  };
+
+  const handleSaveEditUnassignedStop = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingUnassignedStop) return;
+    const targetListId =
+      editingUnassignedStop.stopId || editingUnassignedStop.list_id;
+    if (!targetListId) {
+      showError("ไม่พบรหัสรายการจุดจัดส่ง (list_id)");
+      return;
+    }
+
+    setUpdatingUnassigned(true);
+    try {
+      const res = await api.put(`/optimoroute/stops/${targetListId}`, {
+        group_store_id: null,
+        store_id: unassignedEditStoreId || undefined,
+        data_store_no: unassignedEditOrderNo.trim(),
+        store_name: unassignedEditStoreName.trim(),
+        address: unassignedEditAddress.trim(),
+        sum_quantity: unassignedEditQuantity,
+        lat_long: unassignedEditLatLong.trim(),
+        priority: unassignedEditPriority,
+        status: "unassigned",
+        position_product_id: unassignedEditPositionProductId || null,
+        position_production_order: unassignedEditPositionOrder || 1,
+      });
+
+      if (res.data.success) {
+        showSuccess(res.data.message || "อัปเดตข้อมูลรายการรอจัดสายสำเร็จ!");
+        setIsEditUnassignedModalOpen(false);
+        setEditingUnassignedStop(null);
+        fetchUnassignedStops(selectedDate);
+      } else {
+        showError(res.data.message || "อัปเดตรายการจัดส่งไม่สำเร็จ");
+      }
+    } catch (err: any) {
+      showError(
+        err?.response?.data?.message || "เกิดข้อผิดพลาดในการอัปเดตรายการจัดส่ง"
+      );
+    } finally {
+      setUpdatingUnassigned(false);
     }
   };
 
@@ -1071,7 +1599,13 @@ export const OptimoRoutePage: React.FC = () => {
       const res = await api.delete(`/optimoroute/stops/${targetListId}`);
       if (res.data.success) {
         showSuccess(res.data.message || "ลบรายการจุดจัดส่งเรียบร้อยแล้ว");
+        setUnassignedStops((prev) =>
+          prev.filter(
+            (s) => String(s.list_id || s.stopId) !== String(targetListId),
+          ),
+        );
         fetchRoutes(selectedDate);
+        fetchUnassignedStops(selectedDate);
       } else {
         showError(res.data.message || "ลบรายการจัดส่งไม่สำเร็จ");
       }
@@ -1306,7 +1840,7 @@ export const OptimoRoutePage: React.FC = () => {
   };
 
   const fetchRoutes = useCallback(
-    async (date: string) => {
+    async (date: string, preserveSelection: boolean = true) => {
       setLoading(true);
       try {
         const res = await api.get("/optimoroute/routes", { params: { date } });
@@ -1322,9 +1856,11 @@ export const OptimoRoutePage: React.FC = () => {
             }),
           );
           setRoutes(fetchedRoutes);
-          setSource(res.data.source || "mock");
-          setCheckedRoutes(new Set());
-          setSelectedRouteId(null);
+          setSource(res.data.source || "database");
+          if (!preserveSelection) {
+            setCheckedRoutes(new Set());
+            setSelectedRouteId(null);
+          }
         }
       } catch (err: any) {
         showError(
@@ -1338,7 +1874,7 @@ export const OptimoRoutePage: React.FC = () => {
   );
 
   useEffect(() => {
-    fetchRoutes(selectedDate);
+    fetchRoutes(selectedDate, false);
   }, [selectedDate, fetchRoutes]);
 
   // Stats
@@ -1378,16 +1914,39 @@ export const OptimoRoutePage: React.FC = () => {
     );
   }, [routes, searchRouteText]);
 
-  // Map bounds (Only compute when routes are loaded, starting from Depot)
+  // Map bounds (Only compute for visible routes on map)
   const mapBounds = useMemo(() => {
     const coords: [number, number][] = [[17.1266642, 102.9635667]];
     routes.forEach((r) => {
-      r.stops.forEach((s) => {
-        if (s.lat && s.lng) coords.push([s.lat, s.lng]);
-      });
+      if (isRouteVisibleOnMap(r.routeId)) {
+        r.stops.forEach((s) => {
+          if (s.lat && s.lng) coords.push([s.lat, s.lng]);
+        });
+      }
     });
     return coords.length > 1 ? L.latLngBounds(coords) : null;
-  }, [routes]);
+  }, [routes, isRouteVisibleOnMap]);
+
+  // Active Vehicle Plates for filtering GPS devices
+  const activeRouteVehicles = useMemo(() => {
+    const activeRouteIds = new Set<string>();
+    if (checkedRoutes.size > 0) {
+      checkedRoutes.forEach((id) => activeRouteIds.add(String(id)));
+    } else if (selectedRouteId) {
+      activeRouteIds.add(String(selectedRouteId));
+    }
+    if (activeRouteIds.size === 0) return null;
+
+    const plates = new Set<string>();
+    routes.forEach((r) => {
+      if (activeRouteIds.has(String(r.routeId))) {
+        if (r.vehiclePlate) plates.add(r.vehiclePlate.toLowerCase().trim());
+        if (r.car_id) plates.add(String(r.car_id).toLowerCase().trim());
+        if (r.groupStoreName) plates.add(r.groupStoreName.toLowerCase().trim());
+      }
+    });
+    return plates;
+  }, [checkedRoutes, selectedRouteId, routes]);
 
   // Scoped stops for active group/selection
   const scopeStops = useMemo(() => {
@@ -1546,9 +2105,9 @@ export const OptimoRoutePage: React.FC = () => {
 
         {/* Right — Date + Actions */}
         <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
-          {source === "mock" && (
-            <span className="text-[9px] bg-amber-100 text-amber-700 font-bold px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-full border border-amber-200">
-              MOCK
+          {source === "database" && (
+            <span className="text-[9px] bg-emerald-100 text-emerald-700 font-bold px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-md border border-emerald-200">
+              DATABASE
             </span>
           )}
           {source === "api" && (
@@ -1578,7 +2137,7 @@ export const OptimoRoutePage: React.FC = () => {
           <button
             onClick={() => {
               setNewGroupName(
-                `Optimo Routes-${String(routes.length + 1).padStart(3, "0")}`,
+                `PDA-${String(routes.length + 1).padStart(3, "0")}`,
               );
               setIsCreateGroupModalOpen(true);
             }}
@@ -1596,25 +2155,49 @@ export const OptimoRoutePage: React.FC = () => {
         <div
           className={`bg-white border-r border-slate-200 flex flex-col shrink-0 overflow-hidden transition-all duration-200 ${
             isMobileSidebarOpen
-              ? "w-full sm:w-64 h-64 sm:h-auto border-b sm:border-b-0"
-              : "hidden sm:flex sm:w-64"
+              ? "w-full sm:w-80 h-64 sm:h-auto border-b sm:border-b-0"
+              : isLeftPanelCollapsed
+                ? "hidden sm:flex sm:w-9"
+                : "hidden sm:flex sm:w-80"
           }`}
         >
           {/* Search Routes & GPS Devices */}
-          <div className="p-2 border-b border-slate-100 bg-slate-50/50">
-            <div className="relative">
-              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2 top-1.5" />
-              <input
-                type="text"
-                value={searchRouteText}
-                onChange={(e) => setSearchRouteText(e.target.value)}
-                placeholder="ค้นหาสายรถ / ทะเบียน / GPS..."
-                className="w-full bg-white border border-slate-200 rounded-md pl-7 pr-2 py-1 text-[11px] focus:outline-none focus:border-blue-400"
-              />
-            </div>
+          <div className="p-2 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between gap-1">
+            {!isLeftPanelCollapsed ? (
+              <>
+                <div className="relative flex-1">
+                  <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2 top-1.5" />
+                  <input
+                    type="text"
+                    value={searchRouteText}
+                    onChange={(e) => setSearchRouteText(e.target.value)}
+                    placeholder="ค้นหาสายรถ / ทะเบียน / GPS..."
+                    className="w-full bg-white border border-slate-200 rounded-md pl-7 pr-2 py-1 text-[11px] focus:outline-none focus:border-blue-400"
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsLeftPanelCollapsed(true)}
+                  className="p-1 text-slate-400 hover:text-slate-700 hover:bg-slate-200 rounded transition-colors shrink-0 ml-1"
+                  title="พับเก็บแผงกรุ๊ปสายจัดส่ง"
+                >
+                  <PanelLeftClose className="w-4 h-4" />
+                </button>
+              </>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setIsLeftPanelCollapsed(false)}
+                className="w-full py-1 text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded flex items-center justify-center transition-colors"
+                title="ขยายแผงกรุ๊ปสายจัดส่ง"
+              >
+                <PanelLeftOpen className="w-4 h-4 text-blue-600" />
+              </button>
+            )}
           </div>
 
-          <div className="flex-1 overflow-y-auto custom-scrollbar flex flex-col divide-y divide-slate-100">
+          {(!isLeftPanelCollapsed || isMobileSidebarOpen) && (
+            <div className="flex-1 overflow-y-auto custom-scrollbar flex flex-col divide-y divide-slate-100">
             {/* ── SECTION 1: กรุ๊ปสายจัดส่ง (Route Groups) ── */}
             <div className="flex flex-col">
               {/* Header */}
@@ -1678,144 +2261,169 @@ export const OptimoRoutePage: React.FC = () => {
                         key={route.routeId}
                         className={`border-b border-slate-100 cursor-pointer transition-colors ${isSelected ? "bg-blue-50/70" : "hover:bg-slate-50"}`}
                       >
-                        {/* Route Header Row */}
+                        {/* Compact Route Header Row */}
                         <div
-                          className="flex items-start gap-2 px-2.5 py-2.5"
+                          className="px-2 py-1.5"
                           onClick={() => {
-                            setSelectedRouteId(
-                              isSelected ? null : route.routeId,
-                            );
+                            if (isSelected) {
+                              setSelectedRouteId(null);
+                              setCheckedRoutes(new Set());
+                            } else {
+                              setSelectedRouteId(route.routeId);
+                              setCheckedRoutes(new Set([route.routeId]));
+                            }
                           }}
                         >
-                          {/* Checkbox + Color */}
-                          <div className="flex flex-col items-center gap-1.5 pt-0.5 shrink-0">
-                            <div
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                toggleRouteVisibility(route.routeId);
-                                setSelectedRouteId(route.routeId);
-                              }}
-                              className={`w-4 h-4 rounded border flex items-center justify-center cursor-pointer transition-all ${
-                                isChecked
-                                  ? "bg-blue-600 border-blue-600 text-white shadow-2xs"
-                                  : "bg-white border-slate-300 hover:border-blue-400 text-transparent"
-                              }`}
-                              title={
-                                isChecked
-                                  ? "แสดงเฉพาะสายนี้บนแผนที่"
-                                  : "แสดงบนแผนที่"
-                              }
-                            >
-                              <Check className="w-3 h-3 stroke-[3]" />
+                          {/* Line 1: Checkbox + Color + Name + Plate + Load + Actions */}
+                          <div className="flex items-center justify-between gap-1">
+                            <div className="flex items-center gap-1.5 min-w-0">
+                              <div
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (isChecked) {
+                                    setCheckedRoutes(new Set());
+                                    setSelectedRouteId(null);
+                                  } else {
+                                    setCheckedRoutes(new Set([route.routeId]));
+                                    setSelectedRouteId(route.routeId);
+                                  }
+                                }}
+                                className={`w-3.5 h-3.5 rounded border flex items-center justify-center cursor-pointer transition-all shrink-0 ${
+                                  isChecked
+                                    ? "bg-blue-600 border-blue-600 text-white shadow-2xs"
+                                    : "bg-white border-slate-300 hover:border-blue-400 text-transparent"
+                                }`}
+                                title={
+                                  isChecked
+                                    ? "แสดงเฉพาะสายนี้บนแผนที่"
+                                    : "แสดงบนแผนที่"
+                                }
+                              >
+                                <Check className="w-2.5 h-2.5 stroke-[3]" />
+                              </div>
+                              <div
+                                className="w-2.5 h-2.5 rounded-full border border-white shadow-2xs shrink-0"
+                                style={{ background: route.color }}
+                              />
+                              <span className="font-bold text-slate-900 text-[11px] truncate">
+                                {route.driverName}
+                              </span>
                             </div>
-                            <div
-                              className="w-3 h-3 rounded-full border border-white shadow-2xs shrink-0"
-                              style={{ background: route.color }}
-                            />
+
+                            {/* Action buttons */}
+                            <div className="flex items-center gap-0.5 shrink-0">
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleOpenEditGroupModal(route);
+                                }}
+                                className="p-0.5 rounded text-slate-400 hover:text-slate-900 hover:bg-slate-200/70 transition-colors"
+                                title="แก้ไขข้อมูลสายจัดส่ง"
+                              >
+                                <Edit2 className="w-3 h-3" />
+                              </button>
+
+                              {route.status === 0 && (
+                                <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setGroupToDelete(route);
+                                }}
+                                className="p-0.5 rounded text-slate-400 hover:text-rose-600 hover:bg-rose-100/70 transition-colors"
+                                title="ลบสายจัดส่ง"
+                              >
+                                <Trash2 className="w-3 h-3" />
+                              </button>
+                              )}    
+                            </div>
                           </div>
 
-                          {/* Route Info */}
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center justify-between gap-1">
-                              <div className="flex items-center gap-1.5 flex-wrap min-w-0">
-                                <span className="font-bold text-slate-900 text-xs truncate">
-                                  {route.driverName}
+                          {/* Line 2: Badges (Plate, Status, Crate Capacity) */}
+                          <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                            {route.vehiclePlate &&
+                              route.vehiclePlate !== "-" && (
+                                <span className="text-[9px] bg-slate-100 text-slate-700 font-mono font-bold px-1 py-0.2 rounded border border-slate-200 shrink-0">
+                                  {route.vehiclePlate}
                                 </span>
-                                {route.vehiclePlate &&
-                                  route.vehiclePlate !== "-" && (
-                                    <span className="text-[9px] bg-slate-100 text-slate-700 font-mono font-bold px-1.5 py-0.5 rounded border border-slate-200 shrink-0">
-                                      {route.vehiclePlate}
-                                    </span>
-                                  )}
-                                {(() => {
-                                  const totalBoxes =
-                                    route.stops && route.stops.length > 0
-                                      ? route.stops.reduce(
-                                          (sum, s) => sum + (s.quantity || 0),
-                                          0,
-                                        )
-                                      : route.load1 || 0;
+                              )}
 
-                                  const matchedVehicle = vehiclesList.find(
-                                    (v) =>
-                                      (route.car_id &&
-                                        String(v.car_id) ===
-                                          String(route.car_id)) ||
-                                      (route.vehiclePlate &&
-                                        v.license_plate ===
-                                          route.vehiclePlate),
-                                  );
-                                  const cap =
-                                    route.vehicleCapacity ||
-                                    matchedVehicle?.quantity ||
-                                    100;
+                            {/* Group Status Badge */}
+                            <span
+                              className={`text-[9px] font-bold px-1.5 py-0.2 rounded border shrink-0 ${
+                                route.status === 1 || route.is_released
+                                  ? "bg-emerald-50 text-emerald-800 border-emerald-300"
+                                  : "bg-red-50 text-red-800 border-red-300"
+                              }`}
+                            >
+                              {route.status === 1 || route.is_released
+                                ? "ปล่อยแล้ว"
+                                : "ยังไม่ปล่อย"}
+                            </span>
 
-                                  if (totalBoxes <= 0 && (!route.load1 || route.load1 <= 0)) return null;
+                            {(() => {
+                              const totalBoxes =
+                                route.stops && route.stops.length > 0
+                                  ? route.stops.reduce(
+                                      (sum, s) => sum + (s.quantity || 0),
+                                      0,
+                                    )
+                                  : route.load1 || 0;
 
-                                  return (
-                                    <span
-                                      className="text-[9px] bg-amber-50 text-amber-800 font-mono font-bold px-1.5 py-0.5 rounded border border-amber-200/80 shrink-0"
-                                      title={`จัดใส่รถแล้ว ${totalBoxes} ลัง / รถรับได้สูงสุด ${cap} ลัง`}
-                                    >
-                                      {totalBoxes}/{cap} ลัง
-                                    </span>
-                                  );
-                                })()}
-                              </div>
+                              const matchedVehicle = vehiclesList.find(
+                                (v) =>
+                                  (route.car_id &&
+                                    String(v.car_id) ===
+                                      String(route.car_id)) ||
+                                  (route.vehiclePlate &&
+                                    v.license_plate ===
+                                      route.vehiclePlate),
+                              );
+                              const cap =
+                                route.vehicleCapacity ||
+                                matchedVehicle?.quantity ||
+                                100;
 
-                              {/* Action buttons (Edit & Delete) */}
-                              <div className="flex items-center gap-0.5 shrink-0">
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleOpenEditGroupModal(route);
-                                  }}
-                                  className="p-1 rounded text-slate-400 hover:text-slate-900 hover:bg-slate-200/70 transition-colors"
-                                  title="แก้ไขข้อมูลสายจัดส่ง"
+                              if (totalBoxes <= 0 && (!route.load1 || route.load1 <= 0)) return null;
+
+                              return (
+                                <span
+                                  className="text-[9px] bg-amber-50 text-amber-800 font-mono font-bold px-1 py-0.2 rounded border border-amber-200/80 shrink-0"
+                                  title={`จัดใส่รถแล้ว ${totalBoxes} ลัง / รถรับได้สูงสุด ${cap} ลัง`}
                                 >
-                                  <Edit2 className="w-3.5 h-3.5" />
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setGroupToDelete(route);
-                                  }}
-                                  className="p-1 rounded text-slate-400 hover:text-rose-600 hover:bg-rose-100/70 transition-colors"
-                                  title="ลบสายจัดส่ง"
-                                >
-                                  <Trash2 className="w-3.5 h-3.5" />
-                                </button>
-                              </div>
-                            </div>
+                                  {totalBoxes}/{cap}ลัง
+                                </span>
+                              );
+                            })()}
+                          </div>
 
-                            <div className="flex items-center gap-1.5 mt-1 text-[10px] text-slate-500 font-medium">
+                          {/* Line 3: Stats & Progress Bar Inline */}
+                          <div className="flex items-center justify-between gap-1.5 mt-0.5 text-[10px] text-slate-500 font-medium">
+                            <div className="flex items-center gap-1 shrink-0">
                               <span className="flex items-center gap-0.5">
-                                <Clock className="w-3 h-3 text-slate-400" />
-                                {estimatedTime}
-                              </span>
-                              <span className="text-slate-300">·</span>
-                              <span className="flex items-center gap-0.5">
-                                <MapPin className="w-3 h-3 text-slate-400" />
+                                <MapPin className="w-2.5 h-2.5 text-slate-400" />
                                 {deliveryStops} จุด
                               </span>
                               <span className="text-slate-300">·</span>
-                              <span>{estimatedDist}</span>
+                              <span className="flex items-center gap-0.5">
+                                <Clock className="w-2.5 h-2.5 text-slate-400" />
+                                {estimatedTime}
+                              </span>
                             </div>
 
-                            {/* Progress Bar */}
-                            <div className="mt-1.5 flex items-center gap-2">
-                              <div className="flex-1 bg-slate-200/80 rounded-full h-1.5 overflow-hidden">
+                            {/* Progress Bar & Counter */}
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              <div className="w-20 bg-slate-200 rounded-full h-1 overflow-hidden">
                                 <div
-                                  className="h-1.5 rounded-full transition-all"
+                                  className="h-1 rounded-full transition-all"
                                   style={{
                                     width: `${deliveryStops > 0 ? (processedCount / deliveryStops) * 100 : 0}%`,
                                     background: route.color,
                                   }}
                                 />
                               </div>
-                              <span className="text-[9px] text-slate-500 font-mono font-bold shrink-0">
+                              <span className="text-[9px] text-slate-500 font-mono font-bold">
                                 {processedCount}/{deliveryStops}
                               </span>
                             </div>
@@ -1954,6 +2562,7 @@ export const OptimoRoutePage: React.FC = () => {
               )}
             </div>
           </div>
+        )}
         </div>
 
         {/* ─── MAP + BOTTOM PANEL ─── */}
@@ -2271,6 +2880,28 @@ export const OptimoRoutePage: React.FC = () => {
               {showGpsVehicles &&
                 gpsDevices.map((device) => {
                   if (!device.latitude || !device.longitude) return null;
+
+                  // If a route filter is active, only show the GPS device matching the selected vehicle!
+                  if (activeRouteVehicles && activeRouteVehicles.size > 0) {
+                    const devName = (device.name || "").toLowerCase().trim();
+                    const devNum = (device.number || "").toLowerCase().trim();
+                    const devDetail = (device.detail || "").toLowerCase().trim();
+                    const devId = String(device.id || "").toLowerCase().trim();
+
+                    const isMatch = Array.from(activeRouteVehicles).some((target) => {
+                      if (!target) return false;
+                      return (
+                        target === devName ||
+                        target === devNum ||
+                        target === devId ||
+                        devName.includes(target) ||
+                        target.includes(devName) ||
+                        devDetail.includes(target)
+                      );
+                    });
+
+                    if (!isMatch) return null;
+                  }
                   const isEngined = device.engined ?? false;
                   const speed = device.speed || 0;
                   const isMoving = isEngined && speed > 0;
@@ -2492,11 +3123,11 @@ export const OptimoRoutePage: React.FC = () => {
                 <div className="w-10 h-1 bg-slate-400 group-hover:bg-white rounded-full transition-colors" />
               </div>
 
-              {/* Tabs + Filter */}
-              <div className="flex items-center justify-between px-3 py-1 border-b border-slate-100 bg-slate-50/50 gap-2 shrink-0 flex-wrap">
-                <div className="flex items-center gap-1 flex-wrap">
-                  {/* Segmented Tab Switcher */}
-                  <div className="bg-slate-200/80 p-0.5 rounded-lg flex items-center gap-0.5 mr-2">
+              {/* Tabs + Filter Header */}
+              <div className="px-3 py-1.5 border-b border-slate-200 bg-slate-50/80 shrink-0 space-y-1.5">
+                {/* Row 1: Segmented Tab Switcher + Table Controls (Top Row) */}
+                <div className="flex items-center justify-between gap-2">
+                  <div className="bg-slate-200/90 p-0.5 rounded-lg flex items-center gap-0.5">
                     <button
                       type="button"
                       onClick={() => setAssignedTab("assigned")}
@@ -2523,133 +3154,225 @@ export const OptimoRoutePage: React.FC = () => {
                     </button>
                   </div>
 
-                  {assignedTab === "assigned" ? (
-                    <>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          if (routes.length > 0) {
-                            setFormStopGroupId(
-                              routes[0].groupStoreId ||
-                                routes[0].routeId.replace("ROUTE-", ""),
-                            );
-                          }
-                          setFormStopRowOrder(tableStops.length + 1);
-                          setIsCreateStopDrawerOpen(true);
-                        }}
-                        className="bg-green-500 hover:bg-green-600 text-white font-semibold text-xs px-2.5 py-1 rounded-md flex items-center gap-1 shadow-2xs transition-colors shrink-0 mr-1"
-                      >
-                        <Plus className="w-3.5 h-3.5" />
-                        <span>รายการจัดส่ง</span>
-                      </button>
+                  {/* Counter + Window Controls (Far Right) */}
+                  <div className="text-[11px] text-slate-500 flex items-center gap-2 shrink-0">
+                    <span className="flex items-center gap-1 font-semibold text-slate-600 bg-white px-2 py-0.5 rounded border border-slate-200 shadow-2xs">
+                      <LocateFixed className="w-3.5 h-3.5 text-blue-600" />
+                      แสดง{" "}
+                      <span className="font-bold text-slate-900">
+                        {assignedTab === "assigned"
+                          ? tableStops.length
+                          : unassignedStops.length}
+                      </span>{" "}
+                      รายการ
+                    </span>
+                    <div className="w-px h-4 bg-slate-300" />
+                    <button
+                      type="button"
+                      onClick={toggleMaximize}
+                      title={isMaximized ? "ย่อขนาดตาราง" : "ขยายตารางเต็มหน้าจอ"}
+                      className="p-1 rounded text-slate-500 hover:text-slate-900 hover:bg-slate-200 transition-colors"
+                    >
+                      {isMaximized ? (
+                        <Minimize2 className="w-4 h-4" />
+                      ) : (
+                        <Maximize2 className="w-4 h-4" />
+                      )}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setBottomPanelOpen(false)}
+                      title="ซ่อนตารางข้อมูล"
+                      className="p-1 rounded text-slate-500 hover:text-rose-600 hover:bg-rose-50 transition-colors"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
 
-                      <div className="w-px h-5 bg-slate-300 mx-1 shrink-0" />
+                {/* Row 2: Action Buttons & Filter (Bottom Row) */}
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    {assignedTab === "assigned" ? (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            let autoGroupId = "";
+                            if (selectedRouteId) {
+                              const matched = routes.find((r) => r.routeId === selectedRouteId);
+                              if (matched) autoGroupId = String(matched.groupStoreId || matched.routeId.replace("ROUTE-", ""));
+                            }
+                            if (!autoGroupId && checkedRoutes.size > 0) {
+                              const firstChecked = Array.from(checkedRoutes)[0];
+                              const matched = routes.find((r) => r.routeId === firstChecked);
+                              if (matched) autoGroupId = String(matched.groupStoreId || matched.routeId.replace("ROUTE-", ""));
+                            }
+                            if (!autoGroupId && routes.length > 0) {
+                              autoGroupId = String(routes[0].groupStoreId || routes[0].routeId.replace("ROUTE-", ""));
+                            }
+                            setFormStopGroupId(autoGroupId);
+                            setFormStopOrderNo("");
+                            setFormStopScheduledTime("");
+                            setFormStopPriority("medium");
+                            setFormStopRowOrder(tableStops.length + 1);
+                            setIsCreateStopDrawerOpen(true);
+                          }}
+                          className="bg-green-600 hover:bg-green-700 text-white font-semibold text-xs px-2.5 py-1 rounded-md flex items-center gap-1 shadow-2xs transition-colors shrink-0 mr-1"
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                          <span>รายการจัดส่ง</span>
+                        </button>
 
-                      <button
-                        type="button"
-                        onClick={() => setBottomTab("all")}
-                        className={`px-2.5 py-1 rounded-md text-[11px] font-semibold transition-colors ${
-                          bottomTab === "all"
-                            ? "bg-blue-600 text-white"
-                            : "text-slate-600 hover:bg-slate-100"
-                        }`}
-                      >
-                        ทั้งหมด ({scopeTotalCount})
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setBottomTab("pending")}
-                        className={`px-2.5 py-1 rounded-md text-[11px] font-semibold transition-colors ${
-                          bottomTab === "pending"
-                            ? "bg-yellow-500 text-white"
-                            : "text-slate-600 hover:bg-slate-100"
-                        }`}
-                      >
-                        รอดำเนินการ ({scopePendingCount})
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setBottomTab("completed")}
-                        className={`px-2.5 py-1 rounded-md text-[11px] font-semibold transition-colors ${
-                          bottomTab === "completed"
-                            ? "bg-emerald-600 text-white"
-                            : "text-slate-600 hover:bg-slate-100"
-                        }`}
-                      >
-                        สำเร็จ ({scopeCompletedCount})
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setBottomTab("problem")}
-                        className={`px-2.5 py-1 rounded-md text-[11px] font-semibold transition-colors ${
-                          bottomTab === "problem"
-                            ? "bg-rose-600 text-white"
-                            : "text-slate-600 hover:bg-slate-100"
-                        }`}
-                      >
-                        ติดปัญหา ({scopeProblemCount})
-                      </button>
-                    </>
-                  ) : (
-                    <>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setUnassignedStoreId("");
-                          setUnassignedStoreName("");
-                          setUnassignedAddress("");
-                          setUnassignedQuantity(1);
-                          setUnassignedLatLong("");
-                          setUnassignedOrderNo("");
-                          setIsCreateUnassignedModalOpen(true);
-                        }}
-                        className="bg-amber-600 hover:bg-amber-700 text-white font-semibold text-xs px-2.5 py-1 rounded-md flex items-center gap-1 shadow-2xs transition-colors shrink-0"
-                      >
-                        <Plus className="w-3.5 h-3.5" />
-                        <span>เพิ่มรายการรอจัดสาย</span>
-                      </button>
+                        <div className="w-px h-5 bg-slate-300 mx-1 shrink-0" />
 
-                      <label className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs px-2.5 py-1 rounded-md flex items-center gap-1 shadow-2xs transition-colors cursor-pointer shrink-0">
-                        <Upload className="w-3.5 h-3.5" />
-                        <span>Import Excel</span>
-                        <input
-                          ref={fileInputRef}
-                          type="file"
-                          accept=".xlsx, .xls, .csv"
-                          onChange={handleExcelFileUpload}
-                          className="hidden"
-                        />
-                      </label>
+                        <button
+                          type="button"
+                          onClick={() => setBottomTab("all")}
+                          className={`px-2.5 py-1 rounded-md text-[11px] font-semibold transition-colors ${
+                            bottomTab === "all"
+                              ? "bg-blue-600 text-white"
+                              : "text-slate-600 hover:bg-slate-100"
+                          }`}
+                        >
+                          ทั้งหมด ({scopeTotalCount})
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setBottomTab("pending")}
+                          className={`px-2.5 py-1 rounded-md text-[11px] font-semibold transition-colors ${
+                            bottomTab === "pending"
+                              ? "bg-yellow-500 text-white"
+                              : "text-slate-600 hover:bg-slate-100"
+                          }`}
+                        >
+                          รอดำเนินการ ({scopePendingCount})
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setBottomTab("completed")}
+                          className={`px-2.5 py-1 rounded-md text-[11px] font-semibold transition-colors ${
+                            bottomTab === "completed"
+                              ? "bg-emerald-600 text-white"
+                              : "text-slate-600 hover:bg-slate-100"
+                          }`}
+                        >
+                          สำเร็จ ({scopeCompletedCount})
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setBottomTab("problem")}
+                          className={`px-2.5 py-1 rounded-md text-[11px] font-semibold transition-colors ${
+                            bottomTab === "problem"
+                              ? "bg-rose-600 text-white"
+                              : "text-slate-600 hover:bg-slate-100"
+                          }`}
+                        >
+                          ติดปัญหา ({scopeProblemCount})
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setUnassignedStoreId("");
+                            setUnassignedStoreName("");
+                            setUnassignedAddress("");
+                            setUnassignedQuantity(1);
+                            setUnassignedLatLong("");
+                            setUnassignedOrderNo("");
+                            setIsCreateUnassignedModalOpen(true);
+                          }}
+                          className="bg-amber-600 hover:bg-amber-700 text-white font-semibold text-xs px-2.5 py-1 rounded-md flex items-center gap-1 shadow-2xs transition-colors shrink-0"
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                          <span>เพิ่มรายการรอจัดสาย</span>
+                        </button>
 
-                      <button
-                        type="button"
-                        onClick={handleDownloadSampleExcel}
-                        className="bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs px-2.5 py-1 rounded-md flex items-center gap-1 border border-slate-300 transition-colors shrink-0 cursor-pointer"
-                        title="ดาวน์โหลดตัวอย่างไฟล์ Excel (.xlsx)"
-                      >
-                        <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
-                        <span>ดาวน์โหลดตัวอย่างไฟล์</span>
-                      </button>
+                        <label className={`bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs px-2.5 py-1 rounded-md flex items-center gap-1 shadow-2xs transition-colors shrink-0 ${
+                          isParsingExcel || importingExcelStops ? "opacity-70 cursor-not-allowed pointer-events-none" : "cursor-pointer"
+                        }`}>
+                          {isParsingExcel || importingExcelStops ? (
+                            <>
+                              <RefreshCw className="w-3.5 h-3.5 animate-spin text-white" />
+                              <span>กำลังนำเข้า...</span>
+                            </>
+                          ) : (
+                            <>
+                              <Upload className="w-3.5 h-3.5" />
+                              <span>Import Excel</span>
+                            </>
+                          )}
+                          <input
+                            ref={fileInputRef}
+                            type="file"
+                            accept=".xlsx, .xls, .csv"
+                            disabled={isParsingExcel || importingExcelStops}
+                            onChange={handleExcelFileUpload}
+                            className="hidden"
+                          />
+                        </label>
 
-                      <button
-                        type="button"
-                        onClick={() => {
-                          if (unassignedStops.length === 0) {
-                            showError("ไม่พบรายการรอจัดสายเพื่อคำนวณเส้นทาง");
-                            return;
-                          }
-                          setIsAutoRouteDrawerOpen(true);
-                        }}
-                        className="bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs px-3 py-1 rounded-md flex items-center gap-1.5 shadow-2xs transition-all hover:scale-105 shrink-0"
-                      >
-                        <Cpu className="w-3.5 h-3.5 text-amber-300 animate-pulse" />
-                        <span>⚡ คำนวณเส้นทาง</span>
-                      </button>
-                    </>
-                  )}
+                        <button
+                          type="button"
+                          onClick={handleDownloadSampleExcel}
+                          className="bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs px-2.5 py-1 rounded-md flex items-center gap-1 border border-slate-300 transition-colors shrink-0 cursor-pointer"
+                          title="ดาวน์โหลดตัวอย่างไฟล์ Excel (.xlsx)"
+                        >
+                          <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
+                          <span>ดาวน์โหลดตัวอย่างไฟล์</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => setIsDeliverySettingsDrawerOpen(true)}
+                          className="bg-white hover:bg-slate-50 text-slate-700 font-semibold text-xs px-2.5 py-1 rounded-md flex items-center gap-1.5 border border-slate-300 shadow-2xs transition-colors shrink-0 cursor-pointer"
+                          title="ตั้งค่าระยะเวลาส่งต่อรอบ และลำดับความสำคัญ"
+                        >
+                          <Settings className="w-3.5 h-3.5 text-slate-600" />
+                          <span>ตั้งค่าจัดส่ง</span>
+                          <span className="bg-slate-100 text-slate-700 text-[10px] font-bold px-1.5 py-0.2 rounded-full border border-slate-200">
+                            {deliverySettings.serviceTimePerStop}น./จุด
+                          </span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (unassignedStops.length === 0) {
+                              showError("ไม่พบรายการรอจัดสายเพื่อคำนวณเส้นทาง");
+                              return;
+                            }
+                            setIsAutoRouteDrawerOpen(true);
+                          }}
+                          className="bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs px-3 py-1 rounded-md flex items-center gap-1.5 shadow-2xs transition-all hover:scale-105 shrink-0"
+                        >
+                          <Cpu className="w-3.5 h-3.5 text-amber-300 animate-pulse" />
+                          <span>คำนวณเส้นทาง</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (unassignedStops.length === 0) {
+                              showError("ไม่มีรายการยังไม่จัดสายในวันที่เลือกเพื่อล้างข้อมูล");
+                              return;
+                            }
+                            setIsConfirmClearUnassignedModalOpen(true);
+                          }}
+                          className="bg-rose-50 hover:bg-rose-100 text-rose-700 font-semibold text-xs px-2.5 py-1 rounded-md flex items-center gap-1 border border-rose-200 shadow-2xs transition-colors shrink-0 cursor-pointer ml-1"
+                          title={`ล้างรายการสินค้ายังไม่จัดสายของวันที่ ${selectedDate} ทั้งหมด`}
+                        >
+                          <Trash2 className="w-3.5 h-3.5 text-rose-600" />
+                          <span>ล้างข้อมูล ({unassignedStops.length})</span>
+                        </button>
+                      </>
+                    )}
+                  </div>
 
                   {/* Search Store in Table */}
-                  <div className="relative ml-2 w-44 sm:w-56">
+                  <div className="relative w-44 sm:w-56">
                     <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2 top-1.5" />
                     <input
                       type="text"
@@ -2660,57 +3383,25 @@ export const OptimoRoutePage: React.FC = () => {
                     />
                   </div>
                 </div>
-
-                {/* Counter + Controls */}
-                <div className="text-[10px] text-slate-500 flex items-center gap-2 shrink-0">
-                  <span className="flex items-center gap-1">
-                    <LocateFixed className="w-3 h-3" />
-                    แสดง{" "}
-                    {assignedTab === "assigned"
-                      ? tableStops.length
-                      : unassignedStops.length}{" "}
-                    รายการ
-                  </span>
-                  <div className="w-px h-3.5 bg-slate-200" />
-                  <button
-                    type="button"
-                    onClick={toggleMaximize}
-                    title={isMaximized ? "ย่อขนาดตาราง" : "ขยายตารางเต็มหน้าจอ"}
-                    className="p-1 rounded text-slate-500 hover:text-slate-900 hover:bg-slate-200 transition-colors"
-                  >
-                    {isMaximized ? (
-                      <Minimize2 className="w-3.5 h-3.5" />
-                    ) : (
-                      <Maximize2 className="w-3.5 h-3.5" />
-                    )}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setBottomPanelOpen(false)}
-                    title="ซ่อนตารางข้อมูล"
-                    className="p-1 rounded text-slate-500 hover:text-rose-600 hover:bg-rose-50 transition-colors"
-                  >
-                    <X className="w-3.5 h-3.5" />
-                  </button>
-                </div>
               </div>
 
               {/* Table */}
               <div className="flex-1 overflow-auto custom-scrollbar">
                 {assignedTab === "unassigned" ? (
-                  <table className="w-full text-[11px] text-slate-700 border-collapse">
+                  <table className="w-full text-[11px] text-slate-700 border-collapse whitespace-nowrap min-w-[900px]">
                     <thead className="sticky top-0 bg-slate-100/90 backdrop-blur-xs font-bold text-slate-700 border-b border-slate-200 shadow-2xs z-10">
                       <tr>
-                        <th className="px-2.5 py-1.5 text-center w-12">#</th>
-                        <th className="px-2.5 py-1.5 w-28">รหัสร้านค้า</th>
-                        <th className="px-2.5 py-1.5">ชื่อลูกค้า / ร้านค้า</th>
-                        <th className="px-2.5 py-1.5">ที่อยู่จัดส่ง</th>
-                        <th className="px-2.5 py-1.5 text-right w-24">
+                        <th className="px-2.5 py-1 text-center w-12">#</th>
+                        <th className="px-2.5 py-1 w-28">รหัสร้านค้า</th>
+                        <th className="px-2.5 py-1 min-w-[180px]">ชื่อลูกค้า / ร้านค้า</th>
+                        <th className="px-2.5 py-1 text-center w-24">จุดวาง</th>
+                        <th className="px-2.5 py-1 min-w-[200px]">ที่อยู่จัดส่ง</th>
+                        <th className="px-2.5 py-1 text-right w-24">
                           จำนวน (ลัง)
                         </th>
-                        <th className="px-2.5 py-1.5 w-32">รหัสออเดอร์</th>
-                        <th className="px-2.5 py-1.5 w-32">พิกัด GPS</th>
-                        <th className="px-2.5 py-1.5 text-right w-20">
+                        <th className="px-2.5 py-1 w-32">รหัสออเดอร์</th>
+                        <th className="px-2.5 py-1 w-32">พิกัด GPS</th>
+                        <th className="px-2.5 py-1 text-right w-20">
                           จัดการ
                         </th>
                       </tr>
@@ -2719,10 +3410,10 @@ export const OptimoRoutePage: React.FC = () => {
                       {unassignedStops.length === 0 ? (
                         <tr>
                           <td
-                            colSpan={8}
-                            className="text-center py-8 text-slate-400"
+                            colSpan={9}
+                            className="text-center py-6 text-slate-400"
                           >
-                            <Package className="w-8 h-8 mx-auto mb-1 text-slate-300" />
+                            <Package className="w-7 h-7 mx-auto mb-1 text-slate-300" />
                             <div>ไม่มีรายการรอจัดสาย</div>
                           </td>
                         </tr>
@@ -2747,38 +3438,53 @@ export const OptimoRoutePage: React.FC = () => {
                           .map((stop, idx) => (
                             <tr
                               key={stop.list_id}
-                              className="hover:bg-amber-50/50 transition-colors"
+                              className="hover:bg-amber-50/50 transition-colors whitespace-nowrap"
                             >
-                              <td className="px-2.5 py-1.5 text-center font-bold text-slate-500">
+                              <td className="px-2.5 py-1 text-center font-bold text-slate-500">
                                 {idx + 1}
                               </td>
-                              <td className="px-2.5 py-1.5 font-mono font-bold text-slate-900">
+                              <td className="px-2.5 py-1 font-mono font-bold text-slate-900">
                                 {stop.store_id}
                               </td>
-                              <td className="px-2.5 py-1.5 font-semibold text-slate-800">
+                              <td className="px-2.5 py-1 font-semibold text-slate-800">
                                 {stop.storeName}
                               </td>
-                              <td className="px-2.5 py-1.5 text-slate-600 line-clamp-1">
+                              <td className="px-2.5 py-1 text-center">
+                                {renderPositionBadge(stop, positionProductsList) || (
+                                  <span className="text-slate-400 font-normal">-</span>
+                                )}
+                              </td>
+                              <td className="px-2.5 py-1 text-slate-600 truncate max-w-[300px]">
                                 {stop.address}
                               </td>
-                              <td className="px-2.5 py-1.5 text-right font-bold text-amber-700">
-                                {stop.sum_quantity}
+                              <td className="px-2.5 py-1 text-right font-bold text-amber-700 font-mono">
+                                {stop.sum_quantity ?? stop.quantity ?? 0}
                               </td>
-                              <td className="px-2.5 py-1.5 font-mono text-slate-600">
+                              <td className="px-2.5 py-1 font-mono text-slate-600">
                                 {stop.orderNo}
                               </td>
-                              <td className="px-2.5 py-1.5 font-mono text-[10px] text-slate-500">
+                              <td className="px-2.5 py-1 font-mono text-[10px] text-slate-500">
                                 {stop.lat_long || "-"}
                               </td>
-                              <td className="px-2.5 py-1.5 text-right">
-                                <button
-                                  type="button"
-                                  onClick={() => setStopToDelete(stop)}
-                                  className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded transition-colors"
-                                  title="ลบรายการ"
-                                >
-                                  <Trash2 className="w-3.5 h-3.5" />
-                                </button>
+                              <td className="px-2.5 py-1 text-right">
+                                <div className="flex items-center justify-end gap-1">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleOpenEditUnassignedStopDrawer(stop)}
+                                    className="p-0.5 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded transition-colors"
+                                    title="แก้ไขรายการ"
+                                  >
+                                    <Edit2 className="w-3.5 h-3.5" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => setStopToDelete(stop)}
+                                    className="p-0.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded transition-colors"
+                                    title="ลบรายการ"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
                               </td>
                             </tr>
                           ))
@@ -2786,101 +3492,205 @@ export const OptimoRoutePage: React.FC = () => {
                     </tbody>
                   </table>
                 ) : (
-                  <table className="w-full text-[11px] min-w-[750px]">
-                    <thead className="sticky top-0 bg-slate-100 font-bold text-slate-700 border-b border-slate-200">
+                  <table className="w-full text-[11px] min-w-[1300px] border-collapse whitespace-nowrap">
+                    <thead className="sticky top-0 bg-slate-100/95 font-bold text-slate-700 border-b border-slate-200 shadow-2xs z-10">
                       <tr className="text-left text-[11px] text-slate-700 font-semibold uppercase tracking-wider">
-                        <th className="px-2 py-1.5 w-6"></th>
-                        <th className="px-2 py-1.5 w-8">#</th>
-                        <th className="px-2 py-1.5 w-40">รหัสออเดอร์</th>
-                        <th className="px-2 py-1.5 w-24">รหัสร้านค้า</th>
-                        <th className="px-2 py-1.5">ชื่อลูกค้า/ร้านค้า</th>
-                        <th className="px-2 py-1.5">ที่อยู่จัดส่ง</th>
-                        <th className="px-2 py-1.5 w-30">สถานะ</th>
-                        <th className="px-2 py-1.5">สายรถ</th>
-                        <th className="px-2 py-1.5 w-20">ทะเบียน</th>
-                        <th className="px-2 py-1.5 w-16 text-center">ลำดับ</th>
-                        <th className="px-2 py-1.5 text-right w-20">จัดการ</th>
+                        <th className="px-2.5 py-1 w-28">สถานะ</th>
+                        <th className="px-2.5 py-1 w-28">รหัสออเดอร์</th>
+                        <th className="px-2.5 py-1 text-right w-24">จำนวน (ลัง)</th>
+                        <th className="px-2.5 py-1 text-center w-24">จุดวาง</th>
+                        <th className="px-2.5 py-1 w-24 text-center">หลักฐานการส่ง</th>
+                        <th className="px-2.5 py-1 w-24">กำหนดเวลาไว้ที่</th>
+                        <th className="px-2.5 py-1 w-36">เริ่มบริการ</th>
+                        <th className="px-2.5 py-1 w-36">สิ้นสุดบริการ</th>
+                        <th className="px-2.5 py-1 w-24">ระยะเวลาจริง</th>
+                        <th className="px-2.5 py-1 w-20">ลำดับความสำคัญ</th>
+                        <th className="px-2.5 py-1 min-w-[200px]">ที่ตั้ง / ร้านค้า</th>
+                        <th className="px-2.5 py-1 w-32">สายรถ / ทะเบียน</th>
+                        <th className="px-2.5 py-1 text-right w-16">จัดการ</th>
                       </tr>
                     </thead>
-                    <tbody>
+                    <tbody className="divide-y divide-slate-100">
                       {tableStops.map((stop, idx) => {
                         const sc = getStatusColor(stop.status);
                         const isDepot = stop.type === "depot";
+                        const ed = getEarlyDelayBadge(stop.scheduled_time, stop.start_service_time);
+                        const edEnd = getEarlyDelayBadge(stop.scheduled_time, stop.end_service_time);
+                        const actualDur = getActualDurationText(stop.start_service_time, stop.end_service_time);
+
                         return (
                           <tr
                             key={`tablestop-${stop.stopId}-${idx}`}
                             onClick={() => handleSelectStopRow(stop)}
-                            className="border-b border-slate-100 hover:bg-blue-50/50 cursor-pointer transition-colors"
+                            className="hover:bg-blue-50/50 cursor-pointer transition-colors whitespace-nowrap"
                           >
-                            <td className="px-2 py-1.5">
-                              <div
-                                className="w-3.5 h-3.5 rounded-full text-white text-[8px] font-bold flex items-center justify-center shrink-0"
-                                style={{ background: stop.routeColor }}
-                              >
-                                {isDepot
-                                  ? "★"
-                                  : (stop.rowOrder ??
-                                    stop.row_order ??
-                                    stop.stopId)}
+                            {/* 1. สถานะ */}
+                            <td className="px-2.5 py-1">
+                              <div className="flex items-center gap-1.5 shrink-0">
+                                <div
+                                  className="w-3.5 h-3.5 rounded-full text-white text-[8px] font-bold flex items-center justify-center shrink-0 shadow-2xs"
+                                  style={{ background: stop.routeColor }}
+                                >
+                                  {isDepot ? "★" : (stop.rowOrder ?? stop.row_order ?? idx + 1)}
+                                </div>
+                                <span
+                                  className="text-[10px] font-bold px-2 py-0.2 rounded-full inline-block"
+                                  style={{ background: sc.bg, color: sc.text }}
+                                >
+                                  {getStatusLabel(stop.status)}
+                                </span>
                               </div>
                             </td>
-                            <td className="px-2 py-1.5 font-mono text-slate-400">
-                              {idx + 1}
+
+                            {/* 2. รหัสออเดอร์ */}
+                            <td className="px-2.5 py-1 font-mono font-bold text-slate-800">
+                              {stop.orderNo || stop.locationNo || "-"}
                             </td>
-                            <td className="px-2 py-1.5 font-mono font-medium text-slate-800">
-                              {stop.orderNo}
-                            </td>
-                            <td className="px-2 py-1.5 font-mono text-slate-500">
-                              {stop.locationNo}
-                            </td>
-                            <td className="px-2 py-1.5 font-medium text-slate-900">
-                              {stop.storeName}
-                            </td>
-                            <td className="px-2 py-1.5 text-slate-500 truncate max-w-[200px]">
-                              {stop.address}
-                            </td>
-                            <td className="px-2 py-1.5">
-                              <span
-                                className="text-[10px] font-bold px-2 py-0.5 rounded-full"
-                                style={{ background: sc.bg, color: sc.text }}
-                              >
-                                {getStatusLabel(stop.status)}
-                              </span>
-                            </td>
-                            <td className="px-2 py-1.5 text-slate-600 font-medium">
-                              {stop.routeDriverName}
-                            </td>
-                            <td className="px-2 py-1.5 font-mono text-slate-500">
-                              {stop.routeVehicle}
-                            </td>
-                            <td className="px-2 py-1.5 text-center font-bold text-slate-700">
+
+                            {/* 3. จำนวน (ลัง) */}
+                            <td className="px-2.5 py-1 text-right font-mono font-bold text-amber-800">
                               {isDepot
-                                ? "ศูนย์"
-                                : (stop.rowOrder ?? stop.row_order ?? "-")}
+                                ? "-"
+                                : `${stop.quantity ?? stop.sum_quantity ?? 1} ลัง`}
                             </td>
-                            <td className="px-2 py-1.5 text-right">
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleOpenEditStopDrawer(stop);
-                                }}
-                                className="p-1 rounded text-slate-400 hover:text-slate-900 hover:bg-slate-200 transition-colors mr-0.5"
-                                title="แก้ไขจุดจัดส่ง"
-                              >
-                                <Edit2 className="w-3.5 h-3.5" />
-                              </button>
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setStopToDelete(stop);
-                                }}
-                                className="p-1 rounded text-slate-400 hover:text-rose-600 hover:bg-rose-100 transition-colors"
-                                title="ลบจุดจัดส่ง"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
+
+                            {/* 3.1 จุดวาง */}
+                            <td className="px-2.5 py-1 text-center font-mono font-bold">
+                              {renderPositionBadge(stop, positionProductsList) || (
+                                <span className="text-slate-400 font-normal">-</span>
+                              )}
+                            </td>
+
+                            {/* 3. หลักฐานการส่ง (POD) */}
+                            <td className="px-2.5 py-1 text-center">
+                              {stop.pod_image ? (
+                                <a
+                                  href={stop.pod_image}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  onClick={(e) => e.stopPropagation()}
+                                  className="inline-block"
+                                >
+                                  <img
+                                    src={stop.pod_image}
+                                    alt="POD"
+                                    className="w-5 h-5 object-cover rounded border border-slate-300 hover:scale-110 transition-transform"
+                                  />
+                                </a>
+                              ) : (
+                                <span className="text-slate-400 font-mono">-</span>
+                              )}
+                            </td>
+
+                            {/* 4. กำหนดเวลาไว้ที่ (Scheduled ETA) */}
+                            <td className="px-2.5 py-1 font-mono font-bold text-slate-700">
+                              {ed?.scheduledText || stop.scheduled_time?.slice(0, 5) || "-"}
+                            </td>
+
+                            {/* 5. เริ่มบริการ (Start Service + Early/Delay) */}
+                            <td className="px-2.5 py-1 font-mono">
+                              {ed?.startText ? (
+                                <div className="flex items-center gap-1">
+                                  <span className="font-bold text-slate-800">{ed.startText}</span>
+                                  {ed.earlyDelayText && (
+                                    <span
+                                      className={`text-[10px] font-bold px-1.5 py-0.2 rounded ${
+                                        ed.isEarly
+                                          ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                                          : "bg-amber-50 text-amber-700 border border-amber-200"
+                                      }`}
+                                    >
+                                      {ed.earlyDelayText}
+                                    </span>
+                                  )}
+                                </div>
+                              ) : (
+                                <span className="text-slate-400">-</span>
+                              )}
+                            </td>
+
+                            {/* 6. สิ้นสุดบริการ (End Service + Early/Delay) */}
+                            <td className="px-2.5 py-1 font-mono">
+                              {edEnd?.startText ? (
+                                <div className="flex items-center gap-1">
+                                  <span className="font-bold text-slate-800">{edEnd.startText}</span>
+                                  {edEnd.earlyDelayText && (
+                                    <span
+                                      className={`text-[10px] font-bold px-1.5 py-0.2 rounded ${
+                                        edEnd.isEarly
+                                          ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                                          : "bg-amber-50 text-amber-700 border border-amber-200"
+                                      }`}
+                                    >
+                                      {edEnd.earlyDelayText}
+                                    </span>
+                                  )}
+                                </div>
+                              ) : (
+                                <span className="text-slate-400">-</span>
+                              )}
+                            </td>
+
+                            {/* 7. ระยะเวลาจริง */}
+                            <td className="px-2.5 py-1 font-mono text-slate-700 font-bold">
+                              {actualDur}
+                            </td>
+
+                            {/* 8. ลำดับความสำคัญ */}
+                            <td className="px-2.5 py-1">
+                              {getPriorityBadge(stop.priority)}
+                            </td>
+
+                            {/* 9. ที่ตั้ง / ร้านค้า */}
+                            <td className="px-2.5 py-1">
+                              <span className="font-semibold text-slate-900">
+                                {stop.storeName}
+                              </span>
+                              {stop.address && (
+                                <span className="text-[10px] text-slate-500 font-normal ml-1">
+                                  ({stop.address})
+                                </span>
+                              )}
+                            </td>
+
+                            {/* 10. สายรถ / ทะเบียน */}
+                            <td className="px-2.5 py-1">
+                              <span className="font-medium text-slate-800 text-[11px]">
+                                {stop.routeDriverName}
+                              </span>
+                              {stop.routeVehicle && (
+                                <span className="text-[10px] font-mono text-slate-500 ml-1">
+                                  [{stop.routeVehicle}]
+                                </span>
+                              )}
+                            </td>
+
+                            {/* 11. จัดการ */}
+                            <td className="px-2.5 py-1 text-right">
+                              <div className="flex items-center justify-end gap-1">
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleOpenEditStopDrawer(stop);
+                                  }}
+                                  className="p-0.5 rounded text-slate-400 hover:text-amber-600 hover:bg-amber-50 transition-colors"
+                                  title="แก้ไขรายการ"
+                                >
+                                  <Edit2 className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setStopToDelete(stop);
+                                  }}
+                                  className="p-0.5 rounded text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
+                                  title="ลบรายการ"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
                             </td>
                           </tr>
                         );
@@ -2889,10 +3699,10 @@ export const OptimoRoutePage: React.FC = () => {
                         <tr>
                           <td
                             colSpan={11}
-                            className="text-center py-8 text-slate-400"
+                            className="text-center py-6 text-slate-400"
                           >
                             <Package className="w-5 h-5 mx-auto mb-1 text-slate-300" />
-                            ไม่พบรายการ
+                            ไม่พบรายการจัดส่ง
                           </td>
                         </tr>
                       )}
@@ -3028,7 +3838,7 @@ export const OptimoRoutePage: React.FC = () => {
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-slate-700 font-semibold mb-1">
-                ลำดับจัดส่ง
+                ลำดับจัดส่ง <span className="text-rose-500">*</span>
               </label>
               <input
                 type="number"
@@ -3038,11 +3848,12 @@ export const OptimoRoutePage: React.FC = () => {
                   setFormStopRowOrder(parseInt(e.target.value, 10) || 1)
                 }
                 className="w-full border border-slate-200 rounded-lg p-2.5 text-slate-800 bg-slate-50 focus:bg-white focus:outline-none focus:border-slate-400 font-semibold"
+                required
               />
             </div>
             <div>
               <label className="block text-slate-700 font-semibold mb-1">
-                จำนวนสินค้า (กล่อง/ชิ้น)
+                จำนวนสินค้า (กล่อง/ชิ้น) <span className="text-rose-500">*</span>
               </label>
               <input
                 type="number"
@@ -3052,12 +3863,105 @@ export const OptimoRoutePage: React.FC = () => {
                   setFormStopQuantity(parseInt(e.target.value, 10) || 1)
                 }
                 className="w-full border border-slate-200 rounded-lg p-2.5 text-slate-800 bg-slate-50 focus:bg-white focus:outline-none focus:border-slate-400 font-semibold"
+                required
               />
             </div>
           </div>
 
+          {/* ตำแหน่งวางสินค้า & แถวที่ 1-10 */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-slate-700 font-semibold mb-1">
+                ตำแหน่งวางสินค้า
+              </label>
+              <select
+                value={formStopPositionProductId}
+                onChange={(e) => setFormStopPositionProductId(e.target.value)}
+                className="w-full border border-slate-200 rounded-lg p-2.5 text-slate-800 bg-slate-50 focus:bg-white focus:outline-none focus:border-slate-400 font-semibold"
+              >
+                <option value="">-- เลือกตำแหน่งวาง --</option>
+                {positionProductsList.map((pos) => (
+                  <option key={pos.position_product_id} value={pos.position_product_id}>
+                    {pos.position_product_name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-slate-700 font-semibold mb-1">
+                แถวที่ (1-10)
+              </label>
+              <select
+                value={formStopPositionOrder}
+                onChange={(e) => setFormStopPositionOrder(parseInt(e.target.value, 10) || 1)}
+                className="w-full border border-slate-200 rounded-lg p-2.5 text-slate-800 bg-slate-50 focus:bg-white focus:outline-none focus:border-slate-400 font-semibold font-mono"
+              >
+                {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((num) => (
+                  <option key={num} value={num}>
+                    แถว {num}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-slate-700 font-semibold mb-1">
+              รหัสออเดอร์ <span className="text-rose-500">*</span>
+            </label>
+            <input
+              type="text"
+              value={formStopOrderNo}
+              onChange={(e) => setFormStopOrderNo(e.target.value)}
+              placeholder="เช่น ORD-2026-001"
+              className="w-full border border-slate-200 rounded-lg p-2.5 text-slate-800 bg-slate-50 focus:bg-white focus:outline-none focus:border-slate-400 font-mono font-bold"
+              required
+            />
+          </div>
+
+          <div>
+            <label className="block text-slate-700 font-semibold mb-1 flex items-center justify-between">
+              <span>เวลาจัดส่งที่กำหนด</span>
+              {previousStopInGroup?.scheduled_time && (
+                <span className="text-[10px] text-blue-700 font-bold bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
+                  จุดก่อนหน้า: {String(previousStopInGroup.scheduled_time).slice(0, 5)} น.
+                </span>
+              )}
+            </label>
+            <input
+              type="time"
+              value={formStopScheduledTime}
+              onChange={(e) => setFormStopScheduledTime(e.target.value)}
+              className="w-full border border-slate-200 rounded-lg p-2.5 text-slate-800 bg-slate-50 focus:bg-white focus:outline-none focus:border-slate-400 font-mono font-bold"
+              required
+            />
+            {previousStopInGroup?.scheduled_time ? (
+              <p className="text-[10px] text-amber-600 mt-1 font-medium">
+                ⚠️ *เงื่อนไข:* เวลาที่กรอกต้องมากกว่าเวลาจุดจัดส่งก่อนหน้าในกรุ๊ปนี้ ({String(previousStopInGroup.scheduled_time).slice(0, 5)} น.)
+              </p>
+            ) : (
+              <p className="text-[10px] text-slate-500 mt-1">
+                ระบุเวลาจัดส่งที่ต้องการ (เช่น 09:30)
+              </p>
+            )}
+          </div>
+
           <SearchableSelect
-            label="เลือกร้านค้าจากมาสเตอร์ (store)"
+            label="ลำดับความสำคัญ (Priority) *"
+            value={formStopPriority}
+            onChange={(val) => setFormStopPriority(String(val))}
+            placeholder="-- เลือกลำดับความสำคัญ --"
+            options={[
+              { value: "high", label: "🔴 สูง (High Priority)", badge: "ด่วนที่สุด" },
+              { value: "medium", label: "🔵 กลาง (Medium Priority)", badge: "ปกติ" },
+              { value: "low", label: "⚪ ต่ำ (Low Priority)", badge: "ไม่รีบ" },
+            ]}
+            required
+          />
+
+          <SearchableSelect
+            label="เลือกร้านค้าจากมาสเตอร์"
             value={selectedMasterStoreId}
             onChange={(val) => handleSelectMasterStore(String(val))}
             placeholder="-- เลือกร้านค้าจากมาสเตอร์ --"
@@ -3067,11 +3971,12 @@ export const OptimoRoutePage: React.FC = () => {
               label: s.store_name,
               badge: String(s.store_id),
             }))}
+            required
           />
 
           <div>
             <label className="block text-slate-700 font-semibold mb-1">
-              รหัสลูกค้า / ร้านค้า (store_id)
+              รหัสลูกค้า / ร้านค้า <span className="text-rose-500">*</span>
             </label>
             <input
               type="text"
@@ -3079,6 +3984,7 @@ export const OptimoRoutePage: React.FC = () => {
               onChange={(e) => setFormStopStoreId(e.target.value)}
               placeholder="เช่น ST-0001 (เว้นว่างไว้ถ้าระบบสร้างให้อัตโนมัติ)"
               className="w-full border border-slate-200 rounded-lg p-2.5 text-slate-800 bg-slate-50 focus:bg-white focus:outline-none focus:border-slate-400 font-mono"
+              required
             />
           </div>
 
@@ -3111,7 +4017,7 @@ export const OptimoRoutePage: React.FC = () => {
 
           <div>
             <label className="block text-slate-700 font-semibold mb-1">
-              พิกัด GPS (ละติจูด, ลองจิจูด)
+              พิกัด GPS (ละติจูด, ลองจิจูด) <span className="text-rose-500">*</span>
             </label>
             <input
               type="text"
@@ -3119,6 +4025,7 @@ export const OptimoRoutePage: React.FC = () => {
               onChange={(e) => setFormStopLatLong(e.target.value)}
               placeholder="เช่น 13.7563, 100.5018"
               className="w-full border border-slate-200 rounded-lg p-2.5 text-slate-800 bg-slate-50 focus:bg-white focus:outline-none focus:border-slate-400 font-mono"
+              required
             />
           </div>
         </div>
@@ -3136,26 +4043,28 @@ export const OptimoRoutePage: React.FC = () => {
         <div className="space-y-4 text-xs">
           <SearchableSelect
             label="เลือกสายจัดส่ง"
-            required
             value={editFormGroupId}
             onChange={(val) => setEditFormGroupId(val)}
-            placeholder="-- เลือกสายจัดส่ง --"
+            placeholder="-- ยังไม่จัดสาย --"
             searchPlaceholder="พิมพ์ค้นหาสายรถ (ชื่อ / ทะเบียน / ID)..."
-            options={routes.map((r) => ({
-              value: r.groupStoreId || r.routeId.replace("ROUTE-", ""),
-              label: r.driverName,
-              badge:
-                r.vehiclePlate && r.vehiclePlate !== "-"
-                  ? r.vehiclePlate
-                  : undefined,
-              colorDot: r.color,
-            }))}
+            options={[
+              { value: "", label: "-- ยังไม่จัดสาย --" },
+              ...routes.map((r) => ({
+                value: r.groupStoreId || r.routeId.replace("ROUTE-", ""),
+                label: r.driverName,
+                badge:
+                  r.vehiclePlate && r.vehiclePlate !== "-"
+                    ? r.vehiclePlate
+                    : undefined,
+                colorDot: r.color,
+              })),
+            ]}
           />
 
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-slate-700 font-semibold mb-1">
-                ลำดับจัดส่ง
+                ลำดับจัดส่ง <span className="text-rose-500">*</span>
               </label>
               <input
                 type="number"
@@ -3165,11 +4074,12 @@ export const OptimoRoutePage: React.FC = () => {
                   setEditFormRowOrder(parseInt(e.target.value, 10) || 1)
                 }
                 className="w-full border border-slate-200 rounded-lg p-2.5 text-slate-800 bg-slate-50 focus:bg-white focus:outline-none focus:border-slate-400 font-semibold"
+                required
               />
             </div>
             <div>
               <label className="block text-slate-700 font-semibold mb-1">
-                จำนวนสินค้า (ลัง)
+                จำนวนสินค้า (ลัง) <span className="text-rose-500">*</span>
               </label>
               <input
                 type="number"
@@ -3179,13 +4089,52 @@ export const OptimoRoutePage: React.FC = () => {
                   setEditFormQuantity(parseInt(e.target.value, 10) || 1)
                 }
                 className="w-full border border-slate-200 rounded-lg p-2.5 text-slate-800 bg-slate-50 focus:bg-white focus:outline-none focus:border-slate-400 font-semibold"
+                required
               />
+            </div>
+          </div>
+
+          {/* ตำแหน่งวางสินค้า & แถวที่ 1-10 */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-slate-700 font-semibold mb-1">
+                ตำแหน่งวางสินค้า
+              </label>
+              <select
+                value={editFormPositionProductId}
+                onChange={(e) => setEditFormPositionProductId(e.target.value)}
+                className="w-full border border-slate-200 rounded-lg p-2.5 text-slate-800 bg-slate-50 focus:bg-white focus:outline-none focus:border-slate-400 font-semibold"
+              >
+                <option value="">-- เลือกตำแหน่งวาง --</option>
+                {positionProductsList.map((pos) => (
+                  <option key={pos.position_product_id} value={pos.position_product_id}>
+                    {pos.position_product_name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-slate-700 font-semibold mb-1">
+                แถวที่ (1-10)
+              </label>
+              <select
+                value={editFormPositionOrder}
+                onChange={(e) => setEditFormPositionOrder(parseInt(e.target.value, 10) || 1)}
+                className="w-full border border-slate-200 rounded-lg p-2.5 text-slate-800 bg-slate-50 focus:bg-white focus:outline-none focus:border-slate-400 font-semibold font-mono"
+              >
+                {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((num) => (
+                  <option key={num} value={num}>
+                    แถว {num}
+                  </option>
+                ))}
+              </select>
             </div>
           </div>
 
           <div>
             <label className="block text-slate-700 font-semibold mb-1">
-              รหัสออเดอร์
+              รหัสออเดอร์ <span className="text-rose-500">*</span>
             </label>
             <input
               type="text"
@@ -3193,6 +4142,7 @@ export const OptimoRoutePage: React.FC = () => {
               onChange={(e) => setEditFormOrderNo(e.target.value)}
               placeholder="เช่น ORD-2026-001"
               className="w-full border border-slate-200 rounded-lg p-2.5 text-slate-800 bg-slate-50 focus:bg-white focus:outline-none focus:border-slate-400 font-mono font-bold"
+              required
             />
           </div>
 
@@ -3207,6 +4157,7 @@ export const OptimoRoutePage: React.FC = () => {
               label: s.store_name,
               badge: String(s.store_id),
             }))}
+            required
           />
 
           <div>
@@ -3251,7 +4202,7 @@ export const OptimoRoutePage: React.FC = () => {
 
           <div>
             <label className="block text-slate-700 font-semibold mb-1">
-              พิกัด GPS (ละติจูด, ลองจิจูด)
+              พิกัด GPS (ละติจูด, ลองจิจูด) <span className="text-rose-500">*</span>
             </label>
             <input
               type="text"
@@ -3259,6 +4210,7 @@ export const OptimoRoutePage: React.FC = () => {
               onChange={(e) => setEditFormLatLong(e.target.value)}
               placeholder="เช่น 13.7563, 100.5018"
               className="w-full border border-slate-200 rounded-lg p-2.5 text-slate-800 bg-slate-50 focus:bg-white focus:outline-none focus:border-slate-400 font-mono"
+              required
             />
           </div>
 
@@ -3268,11 +4220,11 @@ export const OptimoRoutePage: React.FC = () => {
             onChange={(val) => setEditFormStatus(String(val))}
             placeholder="-- เลือกสถานะจุดจัดส่ง --"
             options={[
-              { value: "pending", label: "รอดำเนินการ", colorDot: "#94a3b8" },
-              { value: "in_progress", label: "กำลังส่ง", colorDot: "#eab308" },
+              { value: "unassigned", label: "ยังไม่จัดสาย", colorDot: "#94a3b8" },
+              { value: "in_progress", label: "รอดำเนินการ", colorDot: "#eab308" },
               {
                 value: "completed",
-                label: "สำเร็จ (ส่งสำเร็จ)",
+                label: "สำเร็จ",
                 colorDot: "#22c55e",
               },
               { value: "problem", label: "ติดปัญหา", colorDot: "#f43f5e" },
@@ -3399,10 +4351,15 @@ export const OptimoRoutePage: React.FC = () => {
               sum_quantity: unassignedQuantity,
               lat_long: unassignedLatLong,
               data_store_no: unassignedOrderNo,
+              priority: unassignedPriority,
+              position_product_id: unassignedPositionProductId || undefined,
+              position_production_order: unassignedPositionOrder || 1,
             });
             if (res.data.success) {
               showSuccess(res.data.message || "สร้างรายการรอจัดสายสำเร็จ!");
               setIsCreateUnassignedModalOpen(false);
+              setUnassignedPositionProductId("");
+              setUnassignedPositionOrder(1);
               fetchUnassignedStops(selectedDate);
             } else {
               showError(res.data.message || "สร้างรายการไม่สำเร็จ");
@@ -3420,6 +4377,19 @@ export const OptimoRoutePage: React.FC = () => {
         }
       >
         <div className="space-y-4 text-xs">
+          <SearchableSelect
+            label="ลำดับความสำคัญ (Priority) *"
+            value={unassignedPriority}
+            onChange={(val) => setUnassignedPriority(String(val))}
+            placeholder="-- เลือกลำดับความสำคัญ --"
+            options={[
+              { value: "high", label: "🔴 สูง (High Priority)", badge: "ด่วนที่สุด" },
+              { value: "medium", label: "🔵 กลาง (Medium Priority)", badge: "ปกติ" },
+              { value: "low", label: "⚪ ต่ำ (Low Priority)", badge: "ไม่รีบ" },
+            ]}
+            required
+          />
+
           <SearchableSelect
             label="เลือกร้านค้า (มาสเตอร์)"
             value={unassignedStoreId}
@@ -3463,7 +4433,7 @@ export const OptimoRoutePage: React.FC = () => {
 
             <div>
               <label className="block text-slate-700 font-semibold mb-1">
-                รหัสออเดอร์
+                รหัสออเดอร์ <span className="text-rose-500">*</span>
               </label>
               <input
                 type="text"
@@ -3471,13 +4441,52 @@ export const OptimoRoutePage: React.FC = () => {
                 onChange={(e) => setUnassignedOrderNo(e.target.value)}
                 placeholder="เช่น ORD-2026-001"
                 className="w-full border border-slate-200 rounded-lg p-2.5 text-slate-800 bg-slate-50 focus:bg-white focus:outline-none focus:border-slate-400 font-mono"
+                required
               />
+            </div>
+          </div>
+
+          {/* ตำแหน่งวางสินค้า & แถวที่ 1-10 */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-slate-700 font-semibold mb-1">
+                ตำแหน่งวางสินค้า
+              </label>
+              <select
+                value={unassignedPositionProductId}
+                onChange={(e) => setUnassignedPositionProductId(e.target.value)}
+                className="w-full border border-slate-200 rounded-lg p-2.5 text-slate-800 bg-slate-50 focus:bg-white focus:outline-none focus:border-slate-400 font-semibold"
+              >
+                <option value="">-- เลือกตำแหน่งวาง --</option>
+                {positionProductsList.map((pos) => (
+                  <option key={pos.position_product_id} value={pos.position_product_id}>
+                    {pos.position_product_name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-slate-700 font-semibold mb-1">
+                แถวที่ (1-10)
+              </label>
+              <select
+                value={unassignedPositionOrder}
+                onChange={(e) => setUnassignedPositionOrder(parseInt(e.target.value, 10) || 1)}
+                className="w-full border border-slate-200 rounded-lg p-2.5 text-slate-800 bg-slate-50 focus:bg-white focus:outline-none focus:border-slate-400 font-semibold font-mono"
+              >
+                {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((num) => (
+                  <option key={num} value={num}>
+                    แถว {num}
+                  </option>
+                ))}
+              </select>
             </div>
           </div>
 
           <div>
             <label className="block text-slate-700 font-semibold mb-1">
-              ชื่อร้านค้า
+              ชื่อร้านค้า <span className="text-rose-500">*</span>
             </label>
             <input
               type="text"
@@ -3485,6 +4494,7 @@ export const OptimoRoutePage: React.FC = () => {
               onChange={(e) => setUnassignedStoreName(e.target.value)}
               placeholder="ระบุชื่อร้านค้า"
               className="w-full border border-slate-200 rounded-lg p-2.5 text-slate-800 bg-slate-50 focus:bg-white focus:outline-none focus:border-slate-400 font-semibold"
+              required
             />
           </div>
 
@@ -3503,7 +4513,7 @@ export const OptimoRoutePage: React.FC = () => {
 
           <div>
             <label className="block text-slate-700 font-semibold mb-1">
-              พิกัด GPS (ละติจูด, ลองจิจูด)
+              พิกัด GPS (ละติจูด, ลองจิจูด) <span className="text-rose-500">*</span>
             </label>
             <input
               type="text"
@@ -3511,6 +4521,169 @@ export const OptimoRoutePage: React.FC = () => {
               onChange={(e) => setUnassignedLatLong(e.target.value)}
               placeholder="เช่น 13.7563, 100.5018"
               className="w-full border border-slate-200 rounded-lg p-2.5 text-slate-800 bg-slate-50 focus:bg-white focus:outline-none focus:border-slate-400 font-mono"
+              required
+            />
+          </div>
+        </div>
+      </AnimatedDrawer>
+
+      {/* ─── EDIT UNASSIGNED STOP MODAL ─── */}
+      <AnimatedDrawer
+        isOpen={isEditUnassignedModalOpen}
+        onClose={() => setIsEditUnassignedModalOpen(false)}
+        title="แก้ไขรายการจัดส่ง (รอจัดสาย)"
+        formId="edit-unassigned-stop-form"
+        onSubmit={handleSaveEditUnassignedStop}
+        submitLabel={
+          updatingUnassigned ? "กำลังบันทึก..." : "บันทึกการแก้ไข"
+        }
+      >
+        <div className="space-y-4 text-xs">
+          <SearchableSelect
+            label="ลำดับความสำคัญ (Priority) *"
+            value={unassignedEditPriority}
+            onChange={(val) => setUnassignedEditPriority(String(val))}
+            placeholder="-- เลือกลำดับความสำคัญ --"
+            options={[
+              { value: "high", label: "🔴 สูง (High Priority)", badge: "ด่วนที่สุด" },
+              { value: "medium", label: "🔵 กลาง (Medium Priority)", badge: "ปกติ" },
+              { value: "low", label: "⚪ ต่ำ (Low Priority)", badge: "ไม่รีบ" },
+            ]}
+            required
+          />
+
+          <SearchableSelect
+            label="เลือกร้านค้า (มาสเตอร์)"
+            value={unassignedEditStoreId}
+            onChange={(val) => {
+              const storeId = String(val);
+              setUnassignedEditStoreId(storeId);
+              const found = storesList.find(
+                (s) => String(s.store_id) === storeId,
+              );
+              if (found) {
+                setUnassignedEditStoreName(found.store_name);
+                setUnassignedEditAddress(found.store_address || "");
+                setUnassignedEditLatLong(found.store_location || "");
+              }
+            }}
+            placeholder="-- ค้นหาร้านค้าจากมาสเตอร์ --"
+            searchPlaceholder="พิมพ์รหัส หรือ ชื่อร้านค้า..."
+            options={storesList.map((s) => ({
+              value: String(s.store_id),
+              label: `${s.store_name} (${s.store_id})`,
+              badge: s.store_id,
+            }))}
+          />
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-slate-700 font-semibold mb-1">
+                จำนวนสินค้า (ลัง) <span className="text-rose-500">*</span>
+              </label>
+              <input
+                type="number"
+                min={1}
+                value={unassignedEditQuantity}
+                onChange={(e) =>
+                  setUnassignedEditQuantity(parseInt(e.target.value, 10) || 1)
+                }
+                className="w-full border border-slate-200 rounded-lg p-2.5 text-slate-800 bg-slate-50 focus:bg-white focus:outline-none focus:border-slate-400 font-bold"
+                required
+              />
+            </div>
+
+            <div>
+              <label className="block text-slate-700 font-semibold mb-1">
+                รหัสออเดอร์ <span className="text-rose-500">*</span>
+              </label>
+              <input
+                type="text"
+                value={unassignedEditOrderNo}
+                onChange={(e) => setUnassignedEditOrderNo(e.target.value)}
+                placeholder="เช่น ORD-2026-001"
+                className="w-full border border-slate-200 rounded-lg p-2.5 text-slate-800 bg-slate-50 focus:bg-white focus:outline-none focus:border-slate-400 font-mono"
+                required
+              />
+            </div>
+          </div>
+
+          {/* ตำแหน่งวางสินค้า & แถวที่ 1-10 */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-slate-700 font-semibold mb-1">
+                ตำแหน่งวางสินค้า
+              </label>
+              <select
+                value={unassignedEditPositionProductId}
+                onChange={(e) => setUnassignedEditPositionProductId(e.target.value)}
+                className="w-full border border-slate-200 rounded-lg p-2.5 text-slate-800 bg-slate-50 focus:bg-white focus:outline-none focus:border-slate-400 font-semibold"
+              >
+                <option value="">-- เลือกตำแหน่งวาง --</option>
+                {positionProductsList.map((pos) => (
+                  <option key={pos.position_product_id} value={pos.position_product_id}>
+                    {pos.position_product_name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-slate-700 font-semibold mb-1">
+                แถวที่ (1-10)
+              </label>
+              <select
+                value={unassignedEditPositionOrder}
+                onChange={(e) => setUnassignedEditPositionOrder(parseInt(e.target.value, 10) || 1)}
+                className="w-full border border-slate-200 rounded-lg p-2.5 text-slate-800 bg-slate-50 focus:bg-white focus:outline-none focus:border-slate-400 font-semibold font-mono"
+              >
+                {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((num) => (
+                  <option key={num} value={num}>
+                    แถว {num}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-slate-700 font-semibold mb-1">
+              ชื่อร้านค้า <span className="text-rose-500">*</span>
+            </label>
+            <input
+              type="text"
+              value={unassignedEditStoreName}
+              onChange={(e) => setUnassignedEditStoreName(e.target.value)}
+              placeholder="ระบุชื่อร้านค้า"
+              className="w-full border border-slate-200 rounded-lg p-2.5 text-slate-800 bg-slate-50 focus:bg-white focus:outline-none focus:border-slate-400 font-semibold"
+              required
+            />
+          </div>
+
+          <div>
+            <label className="block text-slate-700 font-semibold mb-1">
+              ที่อยู่จัดส่ง
+            </label>
+            <input
+              type="text"
+              value={unassignedEditAddress}
+              onChange={(e) => setUnassignedEditAddress(e.target.value)}
+              placeholder="ระบุที่อยู่ร้านค้า"
+              className="w-full border border-slate-200 rounded-lg p-2.5 text-slate-800 bg-slate-50 focus:bg-white focus:outline-none focus:border-slate-400"
+            />
+          </div>
+
+          <div>
+            <label className="block text-slate-700 font-semibold mb-1">
+              พิกัด GPS (ละติจูด, ลองจิจูด) <span className="text-rose-500">*</span>
+            </label>
+            <input
+              type="text"
+              value={unassignedEditLatLong}
+              onChange={(e) => setUnassignedEditLatLong(e.target.value)}
+              placeholder="เช่น 13.7563, 100.5018"
+              className="w-full border border-slate-200 rounded-lg p-2.5 text-slate-800 bg-slate-50 focus:bg-white focus:outline-none focus:border-slate-400 font-mono"
+              required
             />
           </div>
         </div>
@@ -3534,21 +4707,36 @@ export const OptimoRoutePage: React.FC = () => {
         maxWidthClass="max-w-4xl sm:max-w-6xl"
       >
         <div className="space-y-3 text-xs">
+          {importingExcelStops && (
+            <div className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white p-3.5 rounded-xl flex items-center justify-between shadow-lg animate-pulse">
+              <div className="flex items-center gap-3">
+                <RefreshCw className="w-5 h-5 animate-spin text-white" />
+                <div>
+                  <div className="font-extrabold text-sm">กำลังบันทึกลำดับจัดส่งจากไฟล์ Excel เข้าสู่ฐานข้อมูล...</div>
+                  <div className="text-[11px] text-blue-100 font-medium">กรุณารอสักครู่ ระบบกำลังนำเข้า {excelPreviewStops.length} รายการลงในส่วนยังไม่จัดสายรถ</div>
+                </div>
+              </div>
+              <span className="text-xs font-mono font-bold bg-white/20 px-3 py-1 rounded-lg backdrop-blur-xs">
+                Processing...
+              </span>
+            </div>
+          )}
+
           <div className="text-[11px] text-slate-700 bg-emerald-50 p-2.5 rounded-lg border border-emerald-200 leading-relaxed">
             💡 <strong>ไฟล์นำเข้าใช้ 3 ฟิลด์หลัก</strong> (<code>รหัสร้านค้า</code>, <code>จำนวนสินค้า</code>, <code>รหัสออเดอร์</code>) โดยระบบดึง <strong>ชื่อร้านค้า</strong>, <strong>ที่อยู่จัดส่ง</strong> และ <strong>พิกัด GPS</strong> จากฐานข้อมูลมาสเตอร์ร้านค้าให้อัตโนมัติ! (สามารถตรวจสอบและแก้ไขข้อมูลก่อนกดบันทึกได้ครับ)
           </div>
 
-          <div className="max-h-[60vh] overflow-auto border border-slate-200 rounded-lg">
+          <div className="max-h-[75vh] min-h-[480px] overflow-auto border border-slate-200 rounded-lg shadow-inner bg-white">
             <table className="w-full text-[11px] text-slate-700 border-collapse">
-              <thead className="sticky top-0 bg-slate-100 font-bold text-slate-700 border-b border-slate-200">
+              <thead className="sticky top-0 bg-slate-100 font-bold text-slate-700 border-b border-slate-200 z-10 shadow-2xs">
                 <tr>
                   <th className="p-2 text-center w-8">#</th>
-                  <th className="p-2 w-24">รหัสร้านค้า</th>
+                  <th className="p-2 w-20">รหัสร้านค้า</th>
                   <th className="p-2 w-36">ชื่อร้านค้า</th>
-                  <th className="p-2 min-w-[150px]">ที่อยู่</th>
+                  <th className="p-2 min-w-[200px]">ที่อยู่</th>
                   <th className="p-2 w-20 text-center">จำนวน (ลัง)</th>
-                  <th className="p-2 w-28">รหัสออเดอร์</th>
-                  <th className="p-2 w-28">พิกัด GPS</th>
+                  <th className="p-2 w-32">รหัสออเดอร์</th>
+                  <th className="p-2 w-32">พิกัด GPS</th>
                   <th className="p-2 text-center w-10">ลบ</th>
                 </tr>
               </thead>
@@ -3558,21 +4746,18 @@ export const OptimoRoutePage: React.FC = () => {
                     <td className="p-1.5 text-center font-bold text-slate-400">
                       {idx + 1}
                     </td>
-                    <td className="p-1">
-                      <input
-                        type="text"
+                    <td className="p-1 min-w-[160px]">
+                      <SearchableSelect
                         value={item.store_id}
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          const found = storesList.find(
-                            (s) => String(s.store_id).trim().toLowerCase() === val.trim().toLowerCase(),
-                          );
+                        onChange={(val) => {
+                          const selectedVal = String(val);
+                          const found = storesMap.get(selectedVal.trim().toLowerCase());
                           setExcelPreviewStops((prev) =>
                             prev.map((row) =>
                               row.id === item.id
                                 ? {
                                     ...row,
-                                    store_id: val,
+                                    store_id: selectedVal,
                                     store_name: found ? found.store_name : row.store_name,
                                     address: found ? found.store_address || "" : row.address,
                                     lat_long: found ? found.store_location || "" : row.lat_long,
@@ -3582,41 +4767,50 @@ export const OptimoRoutePage: React.FC = () => {
                             ),
                           );
                         }}
-                        className="w-full border border-slate-200 rounded px-1.5 py-1 text-xs font-mono font-bold text-slate-900"
+                        placeholder="-- เลือกร้านค้า --"
+                        searchPlaceholder="พิมพ์ค้นหาร้านค้า (รหัส / ชื่อ)..."
+                        hasError={!item.store_id || !String(item.store_id).trim()}
+                        buttonClassName="px-1.5 py-1 text-xs font-mono font-bold bg-white rounded-md"
+                        dropdownClassName="w-[360px] sm:w-[420px] max-w-xl shadow-2xl"
+                        renderSelected={(opt) => (
+                          <span className="font-bold truncate text-slate-800 font-mono">
+                            {opt.value}
+                          </span>
+                        )}
+                        options={
+                          !item.store_id || storesMap.has(String(item.store_id).trim().toLowerCase())
+                            ? masterStoreSearchableOptions
+                            : [
+                                {
+                                  value: String(item.store_id),
+                                  label: `${item.store_id} - ${item.store_name || "ไม่อยู่ในมาสเตอร์"}`,
+                                  badge: "ไม่อยู่ในมาสเตอร์",
+                                },
+                                ...masterStoreSearchableOptions,
+                              ]
+                        }
                       />
                     </td>
                     <td className="p-1">
                       <input
                         type="text"
-                        value={item.store_name}
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          setExcelPreviewStops((prev) =>
-                            prev.map((row) =>
-                              row.id === item.id
-                                ? { ...row, store_name: val }
-                                : row,
-                            ),
-                          );
-                        }}
-                        className="w-full border border-slate-200 rounded px-1.5 py-1 text-xs font-semibold"
+                        value={item.store_name || "-"}
+                        readOnly
+                        disabled
+                        tabIndex={-1}
+                        className="w-full border border-slate-200 rounded px-1.5 py-1 text-xs font-semibold text-slate-500 bg-slate-100/90 cursor-not-allowed"
+                        title="ดึงข้อมูลอัตโนมัติจากมาสเตอร์ร้านค้า (แก้ไขไม่ได้)"
                       />
                     </td>
                     <td className="p-1">
                       <input
                         type="text"
-                        value={item.address}
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          setExcelPreviewStops((prev) =>
-                            prev.map((row) =>
-                              row.id === item.id
-                                ? { ...row, address: val }
-                                : row,
-                            ),
-                          );
-                        }}
-                        className="w-full border border-slate-200 rounded px-1.5 py-1 text-xs"
+                        value={item.address || "-"}
+                        readOnly
+                        disabled
+                        tabIndex={-1}
+                        className="w-full border border-slate-200 rounded px-1.5 py-1 text-xs text-slate-500 bg-slate-100/90 cursor-not-allowed"
+                        title="ดึงข้อมูลอัตโนมัติจากมาสเตอร์ร้านค้า (แก้ไขไม่ได้)"
                       />
                     </td>
                     <td className="p-1">
@@ -3651,13 +4845,20 @@ export const OptimoRoutePage: React.FC = () => {
                             ),
                           );
                         }}
-                        className="w-full border border-slate-200 rounded px-1.5 py-1 text-xs font-mono"
+                        placeholder="กรอกรหัสออเดอร์ *"
+                        className={`w-full border rounded px-1.5 py-1 text-xs font-mono font-bold transition-all ${
+                          !item.data_store_no || !String(item.data_store_no).trim()
+                            ? "border-2 border-rose-500 bg-rose-50/70 text-rose-900 focus:border-rose-600 shadow-2xs"
+                            : "border-slate-200 text-slate-800 focus:border-blue-400"
+                        }`}
                       />
                     </td>
                     <td className="p-1">
                       <input
                         type="text"
                         value={item.lat_long}
+                        readOnly
+                        disabled
                         onChange={(e) => {
                           const val = e.target.value;
                           setExcelPreviewStops((prev) =>
@@ -3668,7 +4869,7 @@ export const OptimoRoutePage: React.FC = () => {
                             ),
                           );
                         }}
-                        className="w-full border border-slate-200 rounded px-1.5 py-1 text-[10px] font-mono"
+                        className="w-full border border-slate-200 rounded px-1.5 py-1 text-xs text-slate-500 bg-slate-100/90 cursor-not-allowed"
                         placeholder="lat,lng"
                       />
                     </td>
@@ -3687,6 +4888,20 @@ export const OptimoRoutePage: React.FC = () => {
                     </td>
                   </tr>
                 ))}
+
+                {/* Row for adding a new empty item at the end of the table */}
+                <tr className="bg-slate-50/80 hover:bg-blue-50/50 transition-colors border-t-2 border-dashed border-slate-200">
+                  <td colSpan={8} className="p-2 text-center">
+                    <button
+                      type="button"
+                      onClick={handleAddEmptyExcelRow}
+                      className="w-full py-2 bg-white hover:bg-blue-50 text-blue-700 font-bold text-xs rounded-lg border border-blue-200 hover:border-blue-400 flex items-center justify-center gap-1.5 transition-all shadow-2xs group cursor-pointer"
+                    >
+                      <Plus className="w-4 h-4 text-blue-600 group-hover:scale-125 transition-transform" />
+                      <span>เพิ่มแถวจัดส่งใหม่</span>
+                    </button>
+                  </td>
+                </tr>
               </tbody>
             </table>
           </div>
@@ -3718,82 +4933,217 @@ export const OptimoRoutePage: React.FC = () => {
             และสร้างสายรถประจำกลุ่มให้อัตโนมัติ
           </div>
 
+          {/* Strategy & Service Time Settings (Synced with Delivery Settings) */}
+          <div className="space-y-3 bg-slate-50 border border-slate-200/80 p-3 rounded-xl">
+            {/* 1. Strategy */}
+            <div>
+              <label className="block text-slate-800 font-bold mb-1.5 flex items-center justify-between">
+                <span>🎯 กลยุทธ์การคำนวณจัดสาย (ซิงก์กับการตั้งค่าระบบ)</span>
+                <span className="text-[10px] text-blue-600 font-semibold bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
+                  ซิงก์ฐานข้อมูลแล้ว
+                </span>
+              </label>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                {[
+                  {
+                    id: "fastest_time",
+                    label: "เวลาเร็วที่สุด",
+                    icon: "⚡",
+                    desc: "จัดส่งถึงไวที่สุด",
+                  },
+                  {
+                    id: "distance_first",
+                    label: "ระยะทางสั้นสุด",
+                    icon: "📐",
+                    desc: "เน้นระยะทางรวมสั้นสุด",
+                  },
+                  {
+                    id: "max_load_first",
+                    label: "บรรทุกแน่นสุด",
+                    icon: "📦",
+                    desc: "เน้นความจุรถใหญ่ก่อน",
+                  },
+                  {
+                    id: "order_fifo",
+                    label: "ตามลำดับออเดอร์",
+                    icon: "📋",
+                    desc: "เข้าก่อน-ออกก่อน",
+                  },
+                ].map((opt) => (
+                  <button
+                    key={opt.id}
+                    type="button"
+                    onClick={() => {
+                      setDeliverySettings((prev) => ({
+                        ...prev,
+                        priorityStrategy: opt.id as any,
+                      }));
+                    }}
+                    className={`p-2 rounded-lg border text-left flex flex-col justify-between transition-all cursor-pointer ${
+                      deliverySettings.priorityStrategy === opt.id
+                        ? "border-blue-600 bg-blue-50/90 text-blue-950 font-bold shadow-2xs"
+                        : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                    }`}
+                  >
+                    <div className="flex items-center gap-1.5 text-xs">
+                      <span>{opt.icon}</span>
+                      <span className="font-bold">{opt.label}</span>
+                    </div>
+                    <span className="text-[10px] text-slate-500 font-normal mt-1">
+                      {opt.desc}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* 2. Service Time & Unlimited Stops Info */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1 border-t border-slate-200/60">
+              <div>
+                <label className="block text-slate-700 font-semibold mb-1">
+                  ⏱️ ระยะเวลาลงสินค้าต่อสถานที่ (นาที/จุด)
+                </label>
+                <div className="relative">
+                  <input
+                    type="number"
+                    min={1}
+                    max={120}
+                    value={deliverySettings.serviceTimePerStop || 10}
+                    onChange={(e) => {
+                      const val = parseInt(e.target.value || "10", 10);
+                      setDeliverySettings((prev) => ({
+                        ...prev,
+                        serviceTimePerStop: val,
+                      }));
+                    }}
+                    className="w-full bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-xs font-bold text-slate-800 focus:outline-none focus:border-blue-500"
+                  />
+                  <span className="absolute right-3 top-1.5 text-[11px] text-slate-400 font-medium pointer-events-none">
+                    นาที / จุด
+                  </span>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-slate-700 font-semibold mb-1">
+                  📌 จำนวนจุดรับสินค้าต่อคัน
+                </label>
+                <div className="bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-[11px] font-semibold text-slate-700 flex items-center justify-between h-[34px]">
+                  <span>ไม่จำกัดจำนวนจุด (อิงความจุลังรถ)</span>
+                  <span className="text-emerald-700 font-bold bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200 text-[10px]">
+                    ตามความจุรถ
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Capacity Summary Card */}
+          <div className="bg-slate-50 border border-slate-200 rounded-xl p-3.5 space-y-2">
+            <div className="flex items-center justify-between text-xs">
+              <span className="font-semibold text-slate-700">
+                สรุปความจุการบรรจุสินค้า (รวมรถที่เลือก):
+              </span>
+              <span className="font-bold font-mono text-sm text-slate-900">
+                {totalUnassignedBoxes} / {totalSelectedCapacity} ลัง
+              </span>
+            </div>
+
+            {/* Capacity Progress Bar */}
+            <div className="w-full bg-slate-200 h-2.5 rounded-full overflow-hidden">
+              <div
+                className={`h-full transition-all duration-300 ${
+                  totalSelectedCapacity === 0
+                    ? "bg-slate-300 w-0"
+                    : totalSelectedCapacity >= totalUnassignedBoxes
+                    ? "bg-emerald-500"
+                    : "bg-amber-500"
+                }`}
+                style={{
+                  width: `${
+                    totalSelectedCapacity === 0
+                      ? 0
+                      : Math.min(
+                          100,
+                          (totalUnassignedBoxes / totalSelectedCapacity) * 100,
+                        )
+                  }%`,
+                }}
+              />
+            </div>
+
+            <div className="flex items-center justify-between text-[11px]">
+              <span className="text-slate-500">
+                สินค้ารอจัดสาย:{" "}
+                <strong className="text-slate-700">
+                  {unassignedStops.length} รายการ
+                </strong>{" "}
+                ({totalUnassignedBoxes} ลัง)
+              </span>
+              <span className="text-slate-500">
+                รถที่เลือก:{" "}
+                <strong className="text-slate-700">
+                  {autoRouteSelectedVehicles.length} คัน
+                </strong>{" "}
+                (รับได้รวม {totalSelectedCapacity} ลัง)
+              </span>
+            </div>
+
+            {autoRouteSelectedVehicles.length > 0 && (
+              <div className="pt-1">
+                {totalSelectedCapacity >= totalUnassignedBoxes ? (
+                  <div className="text-[11px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 p-2 rounded-lg flex items-center gap-1.5">
+                    <span>🟢</span> ความจุของรถที่เลือกเพียงพอสำหรับสินค้าทั้งหมด ({totalUnassignedBoxes} / {totalSelectedCapacity} ลัง)
+                  </div>
+                ) : (
+                  <div className="text-[11px] font-bold text-amber-800 bg-amber-50 border border-amber-200 p-2 rounded-lg flex items-center gap-1.5">
+                    <span>⚠️</span> ความจุรถไม่เพียงพอ! ต้องการอีก {totalUnassignedBoxes - totalSelectedCapacity} ลัง (กรุณาเลือกรถเพิ่ม)
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
           <div>
-            <label className="block text-slate-700 font-semibold mb-2">
-              กลยุทธ์การคำนวณจัดสาย
-            </label>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-              {[
-                {
-                  id: "shortest_distance",
-                  label: "ระยะทางใกล้สุด",
-                  icon: "📐",
-                },
-                {
-                  id: "lowest_fuel",
-                  label: "ใช้น้ำมัน/เวลาน้อยสุด",
-                  icon: "⛽",
-                },
-                {
-                  id: "avoid_tolls",
-                  label: "เลี่ยงทางด่วน/ทางหลวง",
-                  icon: "🛣️",
-                },
-              ].map((opt) => (
+            <div className="flex items-center justify-between mb-2">
+              <label className="text-slate-700 font-semibold">
+                เลือกรถที่ต้องการนำมาจัดสาย ({autoRouteSelectedVehicles.length}{" "}
+                คันที่เลือก)
+              </label>
+              <div className="flex items-center gap-2 text-[11px]">
                 <button
-                  key={opt.id}
                   type="button"
-                  onClick={() => setAutoRouteStrategy(opt.id as any)}
-                  className={`p-2.5 rounded-lg border text-left flex items-center gap-2 transition-all ${
-                    autoRouteStrategy === opt.id
-                      ? "border-blue-600 bg-blue-50/80 text-blue-900 font-bold shadow-2xs"
-                      : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
-                  }`}
+                  onClick={handleAutoSelectVehicles}
+                  className="bg-blue-600 hover:bg-blue-700 text-white font-bold px-2 py-0.5 rounded shadow-2xs transition-all flex items-center gap-1 cursor-pointer hover:scale-105 active:scale-95"
+                  title="คำนวณและเลือกรถที่เหมาะสมพอดีกับจำนวนลังสินค้ารอจัดสายโดยให้อัตโนมัติ"
                 >
-                  <span className="text-base">{opt.icon}</span>
-                  <span>{opt.label}</span>
+                  <Sparkles className="w-3 h-3 text-amber-300 fill-amber-300" />
+                  <span>เลือกรถออโต้</span>
                 </button>
-              ))}
+                <span className="text-slate-300">|</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const availableIds = vehiclesList
+                      .filter((v) => !v.is_assigned_today)
+                      .map((v) => String(v.car_id));
+                    setAutoRouteSelectedVehicles(availableIds);
+                  }}
+                  className="text-blue-600 hover:underline font-semibold"
+                >
+                  เลือกทั้งหมด (ว่าง)
+                </button>
+                <span className="text-slate-300">|</span>
+                <button
+                  type="button"
+                  onClick={() => setAutoRouteSelectedVehicles([])}
+                  className="text-slate-500 hover:underline"
+                >
+                  ยกเลิกทั้งหมด
+                </button>
+              </div>
             </div>
-          </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-slate-700 font-semibold mb-1">
-                จำนวนสินค้าสูงสุดต่อคัน (ลัง)
-              </label>
-              <input
-                type="number"
-                min={10}
-                value={autoRouteMaxLoad}
-                onChange={(e) =>
-                  setAutoRouteMaxLoad(parseInt(e.target.value, 10) || 100)
-                }
-                className="w-full border border-slate-200 rounded-lg p-2.5 font-bold text-slate-800 bg-slate-50 focus:bg-white focus:outline-none focus:border-slate-400"
-              />
-            </div>
-
-            <div>
-              <label className="block text-slate-700 font-semibold mb-1">
-                จำนวนจุดส่งสูงสุดต่อคัน (จุด)
-              </label>
-              <input
-                type="number"
-                min={1}
-                value={autoRouteMaxStops}
-                onChange={(e) =>
-                  setAutoRouteMaxStops(parseInt(e.target.value, 10) || 15)
-                }
-                className="w-full border border-slate-200 rounded-lg p-2.5 font-bold text-slate-800 bg-slate-50 focus:bg-white focus:outline-none focus:border-slate-400"
-              />
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-slate-700 font-semibold mb-2">
-              เลือกรถที่ต้องการนำมาจัดสาย ({autoRouteSelectedVehicles.length}{" "}
-              คันที่เลือก)
-            </label>
             <div className="max-h-80 overflow-y-auto border border-slate-200 rounded-lg divide-y divide-slate-100 p-1.5 bg-slate-50/50 custom-scrollbar">
               {vehiclesList.map((v) => {
                 const vId = String(v.car_id);
@@ -3868,8 +5218,216 @@ export const OptimoRoutePage: React.FC = () => {
         onConfirm={handleConfirmDeleteGroup}
         onCancel={() => setGroupToDelete(null)}
       />
+
+      {/* ─── DELIVERY SETTINGS DRAWER ─── */}
+      <AnimatedDrawer
+        isOpen={isDeliverySettingsDrawerOpen}
+        onClose={() => setIsDeliverySettingsDrawerOpen(false)}
+        title="⚙️ ตั้งค่าเงื่อนไขและหลักการจัดส่ง (Delivery Settings)"
+        formId="delivery-settings-form"
+        onSubmit={async (e) => {
+          e.preventDefault();
+          try {
+            localStorage.setItem(
+              "wawa_delivery_settings",
+              JSON.stringify(deliverySettings),
+            );
+            await api.post("/optimoroute/delivery-settings", deliverySettings);
+            showSuccess("บันทึกการตั้งค่าจัดส่งลงฐานข้อมูลเรียบร้อยแล้ว (ทุกเครื่องจะเห็นข้อมูลตรงกัน)");
+          } catch (err: any) {
+            showError("เกิดข้อผิดพลาดในการบันทึกการตั้งค่าลงฐานข้อมูล");
+          }
+          setIsDeliverySettingsDrawerOpen(false);
+        }}
+        submitLabel="บันทึกการตั้งค่า"
+        maxWidthClass="max-w-lg sm:max-w-xl"
+      >
+        <div className="space-y-5 text-xs">
+          {/* Banner Info */}
+          <div className="bg-blue-50 border border-blue-200 p-3 rounded-xl text-slate-700 leading-relaxed flex items-start gap-2.5">
+            <span className="text-lg">⏱️</span>
+            <div>
+              <strong className="text-blue-950 font-bold block mb-0.5">
+                การตั้งค่าระยะเวลา & ลำดับความสำคัญ
+              </strong>
+              กำหนดระยะเวลาที่ใช้ส่งสินค้าต่อรอบ/จุด และหลักการคำนวณ เพื่อให้ระบบประเมินเวลาเดินทาง (ETA) และจัดสายรถได้อย่างแม่นยำยิ่งขึ้น
+            </div>
+          </div>
+
+          {/* Section 1: Service Time Per Stop */}
+          <div className="space-y-2">
+            <label className="block text-slate-800 font-bold">
+              1. ระยะเวลาส่งสินค้าต่อรอบ / ต่อจุดส่ง (Service Duration)
+            </label>
+            <p className="text-[11px] text-slate-500">
+              เวลาเฉลี่ยในการขนถ่ายสินค้าและส่งมอบ ณ แต่ละจุดส่ง
+            </p>
+            <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
+              {[5, 10, 15, 20, 30].map((mins) => (
+                <button
+                  key={mins}
+                  type="button"
+                  onClick={() =>
+                    setDeliverySettings((prev) => ({
+                      ...prev,
+                      serviceTimePerStop: mins,
+                    }))
+                  }
+                  className={`py-2 px-3 rounded-lg border text-center font-bold transition-all ${
+                    deliverySettings.serviceTimePerStop === mins
+                      ? "border-blue-600 bg-blue-50 text-blue-900 shadow-2xs ring-1 ring-blue-500"
+                      : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                  }`}
+                >
+                  {mins} นาที
+                </button>
+              ))}
+            </div>
+            <div className="pt-1 flex items-center gap-2 text-slate-600">
+              <span>หรือระบุเวลาเอง:</span>
+              <input
+                type="number"
+                min={1}
+                max={120}
+                value={deliverySettings.serviceTimePerStop}
+                onChange={(e) =>
+                  setDeliverySettings((prev) => ({
+                    ...prev,
+                    serviceTimePerStop: parseInt(e.target.value, 10) || 10,
+                  }))
+                }
+                className="w-20 border border-slate-300 rounded px-2 py-1 font-bold text-center text-slate-900 bg-white focus:outline-none focus:border-blue-500"
+              />
+              <span>นาที / จุด</span>
+            </div>
+          </div>
+
+          <hr className="border-slate-100" />
+
+          {/* Section 2: Priority Strategy */}
+          <div className="space-y-2">
+            <label className="block text-slate-800 font-bold">
+              2. ลำดับความสำคัญในการจัดสายรถ (Optimization Priority)
+            </label>
+            <div className="space-y-2">
+              {[
+                {
+                  id: "fastest_time",
+                  title: "⚡ ประหยัดเวลา & ค่าน้ำมัน (Fastest & Fuel Efficient)",
+                  desc: "เน้นคำนวณเส้นทางที่ใช้เวลาน้อยที่สุด และหลีกเลี่ยงการจราจรติดขัด",
+                  tag: "แนะนำ",
+                },
+                {
+                  id: "distance_first",
+                  title: "📐 ระยะทางสั้นที่สุด (Shortest Distance)",
+                  desc: "เน้นวิ่งระยะทางรวมสั้นที่สุด โดยรวมกลุ่มร้านค้าที่ตั้งอยู่ใกล้กันที่สุดก่อน",
+                },
+                {
+                  id: "max_load_first",
+                  title: "📦 บรรจุสินค้าเต็มคันก่อน (Max Capacity Utilization)",
+                  desc: "เน้นเลือกรถความจุสูงและจัดสินค้าใส่ให้เต็มคันก่อน แล้วค่อยจัดคันถัดไป",
+                },
+                {
+                  id: "order_fifo",
+                  title: "📋 ตามลำดับคิวออเดอร์ (First-In First-Out: FIFO)",
+                  desc: "จัดสายส่งเรียงตามลำดับเวลาที่ออเดอร์เปิดเข้ามาในระบบก่อน-หลัง",
+                },
+              ].map((strat) => (
+                <label
+                  key={strat.id}
+                  className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-all ${
+                    deliverySettings.priorityStrategy === strat.id
+                      ? "border-blue-600 bg-blue-50/70 text-blue-900 ring-1 ring-blue-500"
+                      : "border-slate-200 bg-white hover:bg-slate-50 text-slate-700"
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="priorityStrategy"
+                    checked={deliverySettings.priorityStrategy === strat.id}
+                    onChange={() =>
+                      setDeliverySettings((prev) => ({
+                        ...prev,
+                        priorityStrategy: strat.id as any,
+                      }))
+                    }
+                    className="mt-0.5 text-blue-600 accent-blue-600"
+                  />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="font-bold text-xs">{strat.title}</span>
+                      {strat.tag && (
+                        <span className="bg-emerald-100 text-emerald-800 text-[10px] font-bold px-2 py-0.2 rounded-full">
+                          {strat.tag}
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-[11px] text-slate-500 mt-0.5">
+                      {strat.desc}
+                    </p>
+                  </div>
+                </label>
+              ))}
+            </div>
+          </div>
+
+          <hr className="border-slate-100" />
+
+          {/* Section 3: Additional Parameters */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-slate-700 font-bold mb-1">
+                เวลาเริ่มออกเดินทางจากคลัง
+              </label>
+              <input
+                type="time"
+                value={deliverySettings.depotStartTime}
+                onChange={(e) =>
+                  setDeliverySettings((prev) => ({
+                    ...prev,
+                    depotStartTime: e.target.value,
+                  }))
+                }
+                className="w-full border border-slate-300 rounded-lg p-2 font-mono font-bold text-slate-800 bg-white focus:outline-none focus:border-blue-500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-slate-700 font-bold mb-1">
+                เวลาพัก/สำรองต่อเที่ยว (นาที)
+              </label>
+              <select
+                value={deliverySettings.bufferTimePerRoute}
+                onChange={(e) =>
+                  setDeliverySettings((prev) => ({
+                    ...prev,
+                    bufferTimePerRoute: parseInt(e.target.value, 10) || 0,
+                  }))
+                }
+                className="w-full border border-slate-300 rounded-lg p-2 font-bold text-slate-800 bg-white focus:outline-none focus:border-blue-500"
+              >
+                <option value={0}>0 นาที (ไม่มีพัก)</option>
+                <option value={15}>15 นาที</option>
+                <option value={30}>30 นาที</option>
+                <option value={45}>45 นาที</option>
+              </select>
+            </div>
+          </div>
+        </div>
+      </AnimatedDrawer>
+
+      {/* ─── CLEAR UNASSIGNED CONFIRM MODAL ─── */}
+      <ConfirmModal
+        isOpen={isConfirmClearUnassignedModalOpen}
+        title="ยืนยันการล้างข้อมูลยังไม่จัดสาย"
+        message={`คุณแน่ใจหรือไม่ว่าต้องการล้างรายการสินค้าที่ยังไม่ได้จัดสายของวันที่ ${selectedDate} ทั้งหมด (${unassignedStops.length} รายการ)? ข้อมูลนี้จะถูกลบออกจากระบบ`}
+        confirmText={clearingUnassigned ? "กำลังล้างข้อมูล..." : "ล้างข้อมูลทั้งหมด"}
+        cancelText="ยกเลิก"
+        onConfirm={handleClearUnassignedStops}
+        onCancel={() => setIsConfirmClearUnassignedModalOpen(false)}
+      />
     </div>
   );
 };
 
-export default OptimoRoutePage;
+export default RoutePage;

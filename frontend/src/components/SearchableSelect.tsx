@@ -20,7 +20,11 @@ export interface SearchableSelectProps {
   required?: boolean;
   disabled?: boolean;
   className?: string;
+  buttonClassName?: string;
+  dropdownClassName?: string;
   emptyText?: string;
+  hasError?: boolean;
+  renderSelected?: (option: SearchableSelectOption) => React.ReactNode;
 }
 
 export const SearchableSelect: React.FC<SearchableSelectProps> = ({
@@ -33,7 +37,11 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
   required = false,
   disabled = false,
   className = "",
+  buttonClassName = "",
+  dropdownClassName = "",
   emptyText = "ไม่พบรายการที่ตรงกัน",
+  hasError = false,
+  renderSelected,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState("");
@@ -88,7 +96,7 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
   };
 
   return (
-    <div className={`relative space-y-1 ${className}`} ref={containerRef}>
+    <div className={`relative ${isOpen ? "z-30" : ""} ${label ? "space-y-1" : ""} ${className}`} ref={containerRef}>
       {label && (
         <label className="block text-slate-700 font-semibold mb-1 flex items-center justify-between">
           <span>
@@ -103,35 +111,43 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
       {/* Select Trigger Button */}
       <div
         onClick={() => !disabled && setIsOpen(!isOpen)}
-        className={`w-full bg-slate-50 border rounded-lg px-3 py-2 text-xs flex items-center justify-between transition-all ${
+        className={`w-full border text-xs flex items-center justify-between transition-all ${
+          buttonClassName ? buttonClassName : "px-3 py-2 rounded-lg"
+        } ${
           disabled
-            ? "opacity-60 cursor-not-allowed border-slate-200"
+            ? "opacity-60 cursor-not-allowed border-slate-200 bg-slate-50"
             : isOpen
             ? "border-blue-500 ring-2 ring-blue-200 shadow-sm bg-white cursor-pointer"
-            : "border-slate-200 hover:border-slate-300 cursor-pointer"
+            : hasError
+            ? "border-2 border-rose-500 bg-rose-50/70 text-rose-900 shadow-xs cursor-pointer"
+            : "border-slate-200 hover:border-slate-300 bg-slate-50 cursor-pointer"
         }`}
       >
         {selectedOption ? (
           <div className="flex items-center justify-between w-full min-w-0 pr-1">
-            <div className="truncate font-semibold text-slate-800 flex items-center gap-1.5">
-              {selectedOption.colorDot && (
-                <div
-                  className="w-2.5 h-2.5 rounded-full shrink-0"
-                  style={{ background: selectedOption.colorDot }}
-                />
-              )}
-              <span className="font-bold truncate">{selectedOption.label}</span>
-              {selectedOption.badge && (
-                <span className="bg-slate-100 text-slate-700 text-[10px] font-mono px-1.5 py-0.5 rounded border border-slate-200 shrink-0">
-                  {selectedOption.badge}
-                </span>
-              )}
-              {selectedOption.subLabel && (
-                <span className="text-[10px] text-slate-400 font-normal truncate">
-                  ({selectedOption.subLabel})
-                </span>
-              )}
-            </div>
+            {renderSelected ? (
+              renderSelected(selectedOption)
+            ) : (
+              <div className="truncate font-semibold text-slate-800 flex items-center gap-1.5">
+                {selectedOption.colorDot && (
+                  <div
+                    className="w-2.5 h-2.5 rounded-full shrink-0"
+                    style={{ background: selectedOption.colorDot }}
+                  />
+                )}
+                <span className="font-bold truncate">{selectedOption.label}</span>
+                {selectedOption.badge && (
+                  <span className="bg-slate-100 text-slate-700 text-[10px] font-mono px-1.5 py-0.5 rounded border border-slate-200 shrink-0">
+                    {selectedOption.badge}
+                  </span>
+                )}
+                {selectedOption.subLabel && (
+                  <span className="text-[10px] text-slate-400 font-normal truncate">
+                    ({selectedOption.subLabel})
+                  </span>
+                )}
+              </div>
+            )}
             {!disabled && (
               <button
                 type="button"
@@ -155,7 +171,11 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
 
       {/* Custom Floating Dropdown Menu */}
       {isOpen && !disabled && (
-        <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-xl shadow-xl z-50 overflow-hidden flex flex-col max-h-64 animate-in fade-in duration-100">
+        <div
+          className={`absolute left-0 top-full mt-1 bg-white border border-slate-200 rounded-xl shadow-2xl z-50 overflow-hidden flex flex-col max-h-72 animate-in fade-in duration-100 ${
+            dropdownClassName ? dropdownClassName : "min-w-full min-w-[300px] max-w-md"
+          }`}
+        >
           {/* Sticky Search Header */}
           <div className="p-2 border-b border-slate-100 bg-slate-50 sticky top-0 z-10">
             <div className="relative">

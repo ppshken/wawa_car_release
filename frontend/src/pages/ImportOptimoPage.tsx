@@ -301,7 +301,7 @@ export const ImportOptimoPage: React.FC = () => {
 
             <div className="pt-2 flex justify-end">
               <button
-                onClick={() => navigate("/optimoroute")}
+                onClick={() => navigate("/route")}
                 className="bg-emerald-700 hover:bg-emerald-800 text-white font-semibold px-4 py-2 rounded-lg text-xs flex items-center gap-2 shadow-xs transition-colors"
               >
                 ดูเส้นทางบนแผนที่ (OptimoRoute Map)

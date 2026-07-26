@@ -17,6 +17,7 @@ import {
   Download,
   ExternalLink,
   MapPin,
+  Clock,
 } from "lucide-react";
 
 interface StoreData {
@@ -29,6 +30,8 @@ interface StoreData {
   url?: string;
   customer_delivery_time?: string;
   store_location?: string;
+  open_time?: string;
+  close_time?: string;
 }
 
 export const StoresPage: React.FC = () => {
@@ -54,6 +57,8 @@ export const StoresPage: React.FC = () => {
   const [formEmail, setFormEmail] = useState("");
   const [formUrl, setFormUrl] = useState("");
   const [formStoreLocation, setFormStoreLocation] = useState("");
+  const [formOpenTime, setFormOpenTime] = useState("08:00");
+  const [formCloseTime, setFormCloseTime] = useState("17:00");
 
   // Excel Import & Export
   const [importFile, setImportFile] = useState<File | null>(null);
@@ -96,7 +101,9 @@ export const StoresPage: React.FC = () => {
       formFaxNumber !== (editingStore.fax_number || "") ||
       formEmail !== (editingStore.email || "") ||
       formUrl !== (editingStore.url || "") ||
-      formStoreLocation !== (editingStore.store_location || "")
+      formStoreLocation !== (editingStore.store_location || "") ||
+      formOpenTime !== (editingStore.open_time || "08:00") ||
+      formCloseTime !== (editingStore.close_time || "17:00")
     );
   }, [
     editingStore,
@@ -108,6 +115,8 @@ export const StoresPage: React.FC = () => {
     formEmail,
     formUrl,
     formStoreLocation,
+    formOpenTime,
+    formCloseTime,
   ]);
 
   const fetchStores = useCallback(async () => {
@@ -149,6 +158,8 @@ export const StoresPage: React.FC = () => {
     setFormEmail("");
     setFormUrl("");
     setFormStoreLocation("");
+    setFormOpenTime("08:00");
+    setFormCloseTime("17:00");
     setIsDrawerOpen(true);
   };
 
@@ -162,6 +173,8 @@ export const StoresPage: React.FC = () => {
     setFormEmail(store.email || "");
     setFormUrl(store.url || "");
     setFormStoreLocation(store.store_location || "");
+    setFormOpenTime(store.open_time || "08:00");
+    setFormCloseTime(store.close_time || "17:00");
     setIsDrawerOpen(true);
   };
 
@@ -182,6 +195,8 @@ export const StoresPage: React.FC = () => {
         email: formEmail,
         url: formUrl,
         store_location: formStoreLocation,
+        open_time: formOpenTime || "08:00",
+        close_time: formCloseTime || "17:00",
       };
 
       if (editingStore) {
@@ -309,14 +324,6 @@ export const StoresPage: React.FC = () => {
             <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
             นำเข้าและส่งออกข้อมูลร้านค้า (Excel / CSV)
           </h3>
-          <button
-            onClick={handleExportExcel}
-            disabled={exporting}
-            className="hidden sm:flex items-center gap-1 text-[11px] font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 px-2.5 py-1 rounded-md transition-colors"
-          >
-            <Download className="w-3 h-3 text-emerald-600" />
-            <span>ส่งออกไฟล์ Excel</span>
-          </button>
         </div>
         <form onSubmit={handleImportExcel} className="flex flex-col sm:flex-row items-center gap-2 text-xs">
           <input
@@ -358,9 +365,10 @@ export const StoresPage: React.FC = () => {
               <tr className="bg-slate-100/90 border-b border-slate-200 text-slate-700 font-bold uppercase text-[10px] tracking-wider whitespace-nowrap">
                 <th className="py-2.5 px-4 text-center w-28">รหัสร้านค้า (store_id)</th>
                 <th className="py-2.5 px-4">ชื่อร้านค้า</th>
+                <th className="py-2.5 px-4">เวลาเปิด-ปิดทำการ</th>
                 <th className="py-2.5 px-4">ที่อยู่ร้านค้า</th>
                 <th className="py-2.5 px-4">เบอร์โทรศัพท์ / แฟกซ์</th>
-                <th className="py-2.5 px-4">อีเมล / เว็บไซต์</th>
+                <th className="py-2.5 px-4">อีเมล</th>
                 <th className="py-2.5 px-4">พิกัด GPS</th>
                 <th className="py-2.5 px-4 text-right">จัดการ</th>
               </tr>
@@ -368,33 +376,26 @@ export const StoresPage: React.FC = () => {
             <tbody className="divide-y divide-slate-200/60 text-slate-800 whitespace-nowrap">
               {stores.map((s) => (
                 <tr key={s.store_id} className="hover:bg-slate-50/80 transition-colors">
-                  <td className="py-2.5 px-4 text-center">
+                  <td className="py-2 px-4 text-center">
                     <span className="font-mono font-bold bg-slate-100 border border-slate-200 text-slate-700 px-2 py-0.5 rounded text-[11px]">
                       {s.store_id}
                     </span>
                   </td>
-                  <td className="py-2.5 px-4 font-bold text-slate-900">{s.store_name}</td>
-                  <td className="py-2.5 px-4 text-slate-600 max-w-[200px] truncate">{s.store_address || "-"}</td>
-                  <td className="py-2.5 px-4 text-slate-600">
+                  <td className="py-2 px-4 font-bold text-slate-900">{s.store_name}</td>
+                  <td className="py-2 px-4 text-slate-700">
+                    <span className="inline-flex items-center gap-1 bg-blue-50 text-blue-800 border border-blue-200 px-2 py-0.5 rounded text-[10px] font-bold font-mono">
+                      <Clock className="w-3 h-3 text-blue-600 shrink-0" />
+                      {s.open_time || "08:00"} - {s.close_time || "17:00"}
+                    </span>
+                  </td>
+                  <td className="py-2 px-4 text-slate-600 max-w-[200px] truncate">{s.store_address || "-"}</td>
+                  <td className="py-2 px-4 text-slate-600">
                     <div>{s.telephone_number || "-"}</div>
-                    {s.fax_number && <div className="text-[10px] text-slate-400">Fax: {s.fax_number}</div>}
                   </td>
-                  <td className="py-2.5 px-4 text-slate-600">
+                  <td className="py-2 px-4 text-slate-600">
                     <div>{s.email || "-"}</div>
-                    {s.url ? (
-                      <a
-                        href={s.url.startsWith("http") ? s.url : `https://${s.url}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1 text-[10px] text-blue-600 hover:text-blue-800 hover:underline max-w-[150px] truncate group font-medium"
-                        title={`เปิดเว็บไซต์: ${s.url}`}
-                      >
-                        <ExternalLink className="w-3 h-3 shrink-0 text-blue-500 group-hover:text-blue-700" />
-                        <span className="truncate">{s.url}</span>
-                      </a>
-                    ) : null}
                   </td>
-                  <td className="py-2.5 px-4 text-slate-600">
+                  <td className="py-2 px-4 text-slate-600">
                     {s.store_location ? (
                       <a
                         href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(s.store_location)}`}
@@ -410,7 +411,7 @@ export const StoresPage: React.FC = () => {
                       "-"
                     )}
                   </td>
-                  <td className="py-2.5 px-4 text-right space-x-1">
+                  <td className="py-2 px-4 text-right space-x-1">
                     <button onClick={() => handleOpenEditStore(s)} className="p-1 rounded-md text-slate-600 hover:text-slate-900 hover:bg-slate-100" title="แก้ไข">
                       <Edit2 className="w-3.5 h-3.5" />
                     </button>
@@ -421,7 +422,7 @@ export const StoresPage: React.FC = () => {
                 </tr>
               ))}
               {stores.length === 0 && (
-                <tr><td colSpan={7} className="py-8 text-center text-slate-400">ยังไม่มีข้อมูลร้านค้า</td></tr>
+                <tr><td colSpan={8} className="py-8 text-center text-slate-400">ยังไม่มีข้อมูลร้านค้า</td></tr>
               )}
             </tbody>
           </table>
@@ -461,6 +462,24 @@ export const StoresPage: React.FC = () => {
         {renderField("ชื่อร้านค้า", true,
           <input type="text" value={formStoreName} onChange={(e) => setFormStoreName(e.target.value)} placeholder="เช่น ร้านวาวาการค้า สาขา 1" className={inputCls} required />
         )}
+        <div className="grid grid-cols-2 gap-3">
+          {renderField("เวลาเปิดทำการ", false,
+            <input
+              type="time"
+              value={formOpenTime}
+              onChange={(e) => setFormOpenTime(e.target.value)}
+              className={inputCls}
+            />
+          )}
+          {renderField("เวลาปิดทำการ", false,
+            <input
+              type="time"
+              value={formCloseTime}
+              onChange={(e) => setFormCloseTime(e.target.value)}
+              className={inputCls}
+            />
+          )}
+        </div>
         {renderField("ที่อยู่ร้านค้า", true,
           <textarea value={formStoreAddress} onChange={(e) => setFormStoreAddress(e.target.value)} placeholder="ที่อยู่..." rows={3} className={`${inputCls} resize-none`} required />
         )}

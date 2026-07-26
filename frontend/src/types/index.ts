@@ -111,6 +111,9 @@ export interface ListStore {
   store_name_result?: string;
   bypass: number;
   off_site: number;
+  position_product_id?: number;
+  position_production_order?: number;
+  position_product_name?: string;
   created_by?: number;
   created_at?: string;
   // Joined fields

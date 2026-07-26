@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 const api = axios.create({
-  baseURL: '/api',
+  baseURL: 'http://localhost:5001/api',
   headers: {
     'Content-Type': 'application/json',
   },
@@ -33,5 +33,15 @@ api.interceptors.response.use(
     return Promise.reject(error);
   }
 );
+
+export const getImageUrl = (path?: string) => {
+  if (!path) return "";
+  if (path.startsWith("data:image")) return path;
+  if (path.startsWith("http://") || path.startsWith("https://")) {
+    return path.replace("http://localhost:5000", "http://localhost:5001");
+  }
+  const cleanPath = path.startsWith("/") ? path : `/${path}`;
+  return `http://localhost:5001${cleanPath}`;
+};
 
 export default api;

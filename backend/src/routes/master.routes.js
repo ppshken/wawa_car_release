@@ -137,7 +137,14 @@ router.post('/stores/import', authenticateToken, upload.single('file'), async (r
 // ---------------- Group Stores ----------------
 router.get('/group-stores', authenticateToken, async (req, res) => {
   try {
-    const groups = await query('SELECT * FROM group_store ORDER BY group_store_id ASC');
+    const groups = await query(`
+      SELECT 
+        gs.*, 
+        IF(gs.status = 1 OR (SELECT COUNT(*) FROM car_release cr WHERE cr.group_store_id = gs.group_store_id) > 0, 1, 0) AS status,
+        IF(gs.status = 1 OR (SELECT COUNT(*) FROM car_release cr WHERE cr.group_store_id = gs.group_store_id) > 0, true, false) AS is_released
+      FROM group_store gs 
+      ORDER BY gs.group_store_id ASC
+    `);
     res.json({ success: true, groups });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
