@@ -21,7 +21,19 @@ async function query(sql, params) {
   return results;
 }
 
+// Helper to check column existence dynamically
+async function hasColumn(tableName, columnName) {
+  try {
+    const [rows] = await pool.query(`SHOW COLUMNS FROM \`${tableName}\` LIKE ?`, [columnName]);
+    return rows.length > 0;
+  } catch (err) {
+    return false;
+  }
+}
+
 module.exports = {
   pool,
-  query
+  query,
+  hasColumn
 };
+

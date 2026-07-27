@@ -1,5 +1,4 @@
 import React, { useEffect, useState, useCallback, useMemo } from "react";
-import { Link } from "react-router-dom";
 import api, { getImageUrl } from "../services/api";
 import { useToast } from "../context/ToastContext";
 import { QuickActionModal } from "../components/QuickActionModal";
@@ -7,6 +6,7 @@ import { ConfirmModal } from "../components/ConfirmModal";
 import { PaginationControl } from "../components/PaginationControl";
 import { AnimatedDrawer } from "../components/AnimatedDrawer";
 import { SearchableSelect } from "../components/SearchableSelect";
+import { ReleaseGpsMapTab } from "../components/ReleaseGpsMapTab";
 import {
   Plus,
   Filter,
@@ -26,20 +26,99 @@ import {
   Truck,
   Search,
   Eye,
-  ChevronRight,
-  RefreshCw,
-  Box,
   Calendar,
-  User,
-  CheckSquare,
-  Users,
-  Check,
+  AlertTriangle,
+  Clock,
 } from "lucide-react";
+
+interface CarReleaseData {
+  car_release_id: number;
+  car_release_no: string;
+  car_id: number;
+  group_store_id: number;
+  group_store_name: string;
+  group_color: string;
+  user_id: number;
+  driver_name: string;
+  driver_phone: string;
+  follower_name: string;
+  followers: number[];
+  controlled_type: string;
+  car_img: string;
+  license_plate: string;
+  brand_model: string;
+  is_returned: boolean;
+  completed_stores: number;
+  total_stores: number;
+  allowance: string;
+  allowance_paid: string;
+  accounting_status: string;
+  accounting_status_id: number;
+  mileage: number;
+  user_image: string;
+  pda_device: string;
+  description: string;
+  image_mileage: string;
+  image_front: string;
+  image_around_1: string;
+  image_around_2: string;
+  image_around_3: string;
+  image_around_4: string;
+  image_around_5: string;
+  image_pda: string;
+  car_release_type_id: number;
+  created_at: string;
+}
+
+const getRouteStopStatus = (store: any) => {
+  if (store.problem_id || store.status === "problem") return "problem";
+  if (store.check_out_id || store.status === "completed") return "completed";
+  if (store.check_in_id || store.status === "in_progress") return "in_progress";
+  return store.status || "unassigned";
+};
+
+const getRouteStatusStyle = (status: string) => {
+  if (status === "completed") return { bg: "#dcfce7", text: "#166534" };
+  if (status === "problem" || status === "failed")
+    return { bg: "#fee2e2", text: "#991b1b" };
+  if (status === "in_progress") return { bg: "#fef9c3", text: "#854d0e" };
+  return { bg: "#f1f5f9", text: "#475569" };
+};
+
+const getRouteStatusLabel = (status: string) => {
+  if (status === "completed") return "สำเร็จ";
+  if (status === "problem" || status === "failed") return "ติดปัญหา";
+  if (status === "in_progress") return "รอดำเนินการ";
+  return "ยังไม่จัดสาย";
+};
+
+const formatRouteServiceTime = (value?: string) => {
+  if (!value) return "-";
+  if (!value.includes("T") && !value.includes("-")) return value.slice(0, 5);
+  const date = new Date(value);
+  return Number.isNaN(date.getTime())
+    ? "-"
+    : date.toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" });
+};
+
+const getRouteDuration = (start?: string, end?: string) => {
+  if (!start || !end) return "-";
+  const duration = new Date(end).getTime() - new Date(start).getTime();
+  if (Number.isNaN(duration) || duration < 0) return "-";
+  const seconds = Math.round(duration / 1000);
+  return seconds < 60
+    ? `${seconds}s`
+    : `${Math.floor(seconds / 60)}m ${seconds % 60}s`;
+};
 
 export const CarReleaseList: React.FC = () => {
   const { showSuccess, showError } = useToast();
   const [releases, setReleases] = useState<any[]>([]);
   const [selectedRelease, setSelectedRelease] = useState<any | null>(null);
+  const [activeDetailTab, setActiveDetailTab] = useState<"info" | "gps">(
+    "info",
+  );
+  const [selectedStoreItem, setSelectedStoreItem] = useState<any | null>(null);
   const [isDrawerOpen, setIsDrawerOpen] = useState<boolean>(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [search, setSearch] = useState<string>("");
@@ -69,7 +148,9 @@ export const CarReleaseList: React.FC = () => {
   const [formCarId, setFormCarId] = useState<string | number>("");
   const [formUserId, setFormUserId] = useState<string | number>("");
   const [formGroupStoreId, setFormGroupStoreId] = useState<string | number>("");
-  const [formReleaseTypeId, setFormReleaseTypeId] = useState<string | number>("1");
+  const [formReleaseTypeId, setFormReleaseTypeId] = useState<string | number>(
+    "1",
+  );
   const [formPlateText, setFormPlateText] = useState<string>("");
   const [formCarBrandModel, setFormCarBrandModel] = useState<string>("");
   const [formDriverName, setFormDriverName] = useState<string>("");
@@ -78,7 +159,9 @@ export const CarReleaseList: React.FC = () => {
   const [formMileage, setFormMileage] = useState<number>(0);
   const [formAllowance, setFormAllowance] = useState<string>("");
   const [formPda, setFormPda] = useState<string>("");
-  const [formAccountingStatus, setFormAccountingStatus] = useState<string | number>("");
+  const [formAccountingStatus, setFormAccountingStatus] = useState<
+    string | number
+  >("");
   const [formControlledType, setFormControlledType] = useState<string>("กระบะ");
   const [formDescription, setFormDescription] = useState<string>("");
 
@@ -94,7 +177,7 @@ export const CarReleaseList: React.FC = () => {
 
   const handleImageChange = (
     e: React.ChangeEvent<HTMLInputElement>,
-    setter: (val: string) => void
+    setter: (val: string) => void,
   ) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -108,13 +191,19 @@ export const CarReleaseList: React.FC = () => {
 
   const handleGroupChange = (gid: string) => {
     setFormGroupStoreId(gid);
-    const group = groupStores.find((g) => String(g.group_store_id) === String(gid));
+    const group = groupStores.find(
+      (g) => String(g.group_store_id) === String(gid),
+    );
     if (group && group.car_id) {
-      const matchedVeh = vehicles.find((v) => String(v.car_id) === String(group.car_id));
+      const matchedVeh = vehicles.find(
+        (v) => String(v.car_id) === String(group.car_id),
+      );
       if (matchedVeh) {
         setFormCarId(matchedVeh.car_id);
         setFormPlateText(matchedVeh.license_plate);
-        setFormCarBrandModel(`${matchedVeh.brand || ""} ${matchedVeh.model || ""}`.trim());
+        setFormCarBrandModel(
+          `${matchedVeh.brand || ""} ${matchedVeh.model || ""}`.trim(),
+        );
       } else {
         setFormCarId(group.car_id);
         setFormPlateText(group.car_id);
@@ -141,7 +230,10 @@ export const CarReleaseList: React.FC = () => {
       .get(`/master/group-stores/${formGroupStoreId}/stores`)
       .then((res) => {
         if (isMounted) {
-          if (res.data.success && Array.isArray(res.data.items || res.data.stores)) {
+          if (
+            res.data.success &&
+            Array.isArray(res.data.items || res.data.stores)
+          ) {
             setGroupStoresPreview(res.data.items || res.data.stores);
           } else {
             setGroupStoresPreview([]);
@@ -188,7 +280,7 @@ export const CarReleaseList: React.FC = () => {
         (aRes.value.data.statuses || aRes.value.data.accounting_statuses)
       ) {
         setAccountingStatuses(
-          aRes.value.data.statuses || aRes.value.data.accounting_statuses
+          aRes.value.data.statuses || aRes.value.data.accounting_statuses,
         );
       }
     } catch (err) {
@@ -214,9 +306,11 @@ export const CarReleaseList: React.FC = () => {
     // Get group_store_ids already used in car releases
     const usedGroupIds = new Set(
       releases
-        .filter((r) => !editingId || String(r.car_release_id) !== String(editingId))
+        .filter(
+          (r) => !editingId || String(r.car_release_id) !== String(editingId),
+        )
         .map((r) => String(r.group_store_id))
-        .filter(Boolean)
+        .filter(Boolean),
     );
 
     // 1. Filter groupStores matching today / selected date if date is specified
@@ -233,29 +327,47 @@ export const CarReleaseList: React.FC = () => {
 
     // 2. Filter out groups that have ALREADY been selected/released
     const availableGroups = dateMatchedGroups.filter((g) => {
-      if (formGroupStoreId && String(g.group_store_id) === String(formGroupStoreId)) {
+      if (
+        formGroupStoreId &&
+        String(g.group_store_id) === String(formGroupStoreId)
+      ) {
         return true;
       }
       return !usedGroupIds.has(String(g.group_store_id));
     });
 
-    const finalGroups = availableGroups.length > 0 ? availableGroups : dateMatchedGroups;
+    const finalGroups =
+      availableGroups.length > 0 ? availableGroups : dateMatchedGroups;
 
     return finalGroups.map((g) => {
       const veh = vehicles.find((v) => String(v.car_id) === String(g.car_id));
       const plate = veh ? veh.license_plate : g.license_plate || "";
-      const isReleased = g.status === 1 || g.status === true || !!g.is_released || usedGroupIds.has(String(g.group_store_id));
+      const isReleased =
+        g.status === 1 ||
+        g.status === true ||
+        !!g.is_released ||
+        usedGroupIds.has(String(g.group_store_id));
       return {
         value: g.group_store_id,
         label: g.group_store_name,
-        subLabel: plate,
       };
     });
-  }, [groupStores, vehicles, releases, selectedDate, formGroupStoreId, editingId]);
+  }, [
+    groupStores,
+    vehicles,
+    releases,
+    selectedDate,
+    formGroupStoreId,
+    editingId,
+  ]);
 
   const selectedGroupObj = useMemo(() => {
     if (!formGroupStoreId) return null;
-    return groupStores.find((g) => String(g.group_store_id) === String(formGroupStoreId)) || null;
+    return (
+      groupStores.find(
+        (g) => String(g.group_store_id) === String(formGroupStoreId),
+      ) || null
+    );
   }, [groupStores, formGroupStoreId]);
 
   const driverOptions = useMemo(() => {
@@ -300,40 +412,41 @@ export const CarReleaseList: React.FC = () => {
         },
       });
       if (res.data.success && Array.isArray(res.data.releases)) {
-        const formatted = res.data.releases.map((r: any) => ({
+        const formatted = res.data.releases.map((r: CarReleaseData) => ({
           car_release_id: r.car_release_id,
           car_release_no: r.car_release_no,
           car_id: r.car_id,
           user_id: r.user_id,
           group_store_id: r.group_store_id,
           group_store_name: r.group_store_name || "-",
-          car_release_type_id: r.car_release_type_id || 1,
+          group_color: r.group_color || "-",
+          car_release_type_id: r.car_release_type_id || "-",
           car_img:
-            r.car_image || r.car_img || "https://images.unsplash.com/photo-1533473359331-0135ef1b58bf?w=100&q=80",
+            r.car_img ||
+            "https://images.unsplash.com/photo-1533473359331-0135ef1b58bf?w=100&q=80",
           license_plate: r.license_plate || "-",
-          brand_model: `${r.brand || ""} ${r.model || ""}`.trim() || "-",
+          brand_model: `${r.brand_model}`.trim() || "-",
           is_returned: !!r.is_returned,
           completedStores: r.completed_stores || 0,
           totalStores: r.total_stores || 0,
           allowance: r.allowance || "-",
           allowance_paid: r.allowance_paid || "-",
-          accounting_status: r.accounting_status_name || r.accounting_status || "-",
+          accounting_status_name: r.accounting_status || "-",
           accounting_status_id: r.accounting_status_id || r.accounting_status,
           mileage: r.mileage || 0,
-          driver_avatar:
-            r.user_image || r.driver_avatar || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&q=80",
+          driver_avatar: r.user_image || "https://cdn-icons-png.flaticon.com/512/9055/9055398.png",
           driver_name: r.driver_name || "ไม่ระบุ",
           driver_phone: r.driver_phone || "-",
           follower_name: r.follower_name || "-",
           followers: r.followers || [],
           controlled_type: "กระบะ",
-          cart_count: 0,
-          pallet_count: 0,
-          dateGroup: new Date(r.created_at || Date.now()).toLocaleDateString("th-TH"),
+          dateGroup: new Date(r.created_at || Date.now()).toLocaleDateString(
+            "th-TH",
+          ),
           dateCount: 5,
           issuer: "ระบบ",
           pda_device: r.pda_device || "-",
-          description: r.description || "",
+          description: r.description || "-",
           image_mileage: r.image_mileage || "",
           image_front: r.image_front || "",
           image_around_1: r.image_around_1 || "",
@@ -344,7 +457,9 @@ export const CarReleaseList: React.FC = () => {
           image_pda: r.image_pda || "",
         }));
         setReleases(formatted);
-        setTotalItems(res.data.total ?? res.data.pagination?.total ?? formatted.length);
+        setTotalItems(
+          res.data.total ?? res.data.pagination?.total ?? formatted.length,
+        );
       }
     } catch (err) {
       console.error("Fetch car release error:", err);
@@ -379,7 +494,9 @@ export const CarReleaseList: React.FC = () => {
     } else if (vehicles.length > 0) {
       setFormCarId(vehicles[0].car_id);
       setFormPlateText(vehicles[0].license_plate);
-      setFormCarBrandModel(`${vehicles[0].brand || ""} ${vehicles[0].model || ""}`.trim());
+      setFormCarBrandModel(
+        `${vehicles[0].brand || ""} ${vehicles[0].model || ""}`.trim(),
+      );
     }
 
     // Clear Images
@@ -471,7 +588,9 @@ export const CarReleaseList: React.FC = () => {
         allowance: formAllowance || null,
         pda_device: formPda,
         accounting_status: formAccountingStatus,
-        description: formDescription || `ปล่อยรถ ทะเบียน ${formPlateText} คนขับ ${formDriverName}`,
+        description:
+          formDescription ||
+          `ปล่อยรถ ทะเบียน ${formPlateText} คนขับ ${formDriverName}`,
         followers: formFollowers,
         image_mileage: imgMileage,
         image_front: imgFront,
@@ -495,7 +614,9 @@ export const CarReleaseList: React.FC = () => {
       } else {
         const res = await api.post("/car-release", payload);
         if (res.data.success) {
-          showSuccess(`สร้างใบปล่อยรถใหม่สำเร็จ! (${res.data.car_release_no || ""})`);
+          showSuccess(
+            `สร้างใบปล่อยรถใหม่สำเร็จ! (${res.data.car_release_no || ""})`,
+          );
           setIsDrawerOpen(false);
           fetchReleases();
         } else {
@@ -503,7 +624,9 @@ export const CarReleaseList: React.FC = () => {
         }
       }
     } catch (err: any) {
-      showError(err?.response?.data?.message || "เกิดข้อผิดพลาดในการบันทึกข้อมูล");
+      showError(
+        err?.response?.data?.message || "เกิดข้อผิดพลาดในการบันทึกข้อมูล",
+      );
     } finally {
       setIsDrawerOpen(false);
     }
@@ -512,15 +635,21 @@ export const CarReleaseList: React.FC = () => {
   const handleConfirmDelete = async () => {
     if (!releaseToDelete) return;
     try {
-      const res = await api.delete(`/car-release/${releaseToDelete.car_release_id}`);
+      const res = await api.delete(
+        `/car-release/${releaseToDelete.car_release_id}`,
+      );
       if (res.data.success) {
-        showSuccess(`ลบใบปล่อยรถ (${releaseToDelete.car_release_no}) เรียบร้อยแล้ว!`);
+        showSuccess(
+          `ลบใบปล่อยรถ (${releaseToDelete.car_release_no}) เรียบร้อยแล้ว!`,
+        );
         fetchReleases();
       } else {
         showError(res.data.message || "ไม่สามารถลบใบปล่อยรถได้");
       }
     } catch (err: any) {
-      showError(err?.response?.data?.message || "เกิดข้อผิดพลาดในการลบใบปล่อยรถ");
+      showError(
+        err?.response?.data?.message || "เกิดข้อผิดพลาดในการลบใบปล่อยรถ",
+      );
     } finally {
       setReleaseToDelete(null);
     }
@@ -538,7 +667,11 @@ export const CarReleaseList: React.FC = () => {
       </label>
       {value ? (
         <div className="relative aspect-video rounded-md overflow-hidden bg-slate-900 border border-slate-200">
-          <img src={getImageUrl(value)} alt={label} className="w-full h-full object-cover" />
+          <img
+            src={getImageUrl(value)}
+            alt={label}
+            className="w-full h-full object-cover"
+          />
           <button
             type="button"
             onClick={() => setter("")}
@@ -602,14 +735,6 @@ export const CarReleaseList: React.FC = () => {
 
         <div className="flex items-center gap-2">
           {/* + Button opens Right Create Form Drawer */}
-          <button
-            onClick={handleOpenAdd}
-            className="bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 p-1.5 rounded-lg font-medium flex items-center justify-center shadow-2xs"
-            title="สร้างใบปล่อยรถใหม่"
-          >
-            <Plus className="w-4 h-4 text-slate-800" />
-          </button>
-
           <button
             onClick={handleOpenAdd}
             className="bg-slate-900 hover:bg-slate-800 text-white text-xs font-medium px-3.5 py-1.5 rounded-lg transition-colors shadow-2xs flex items-center gap-1.5 shrink-0"
@@ -683,6 +808,14 @@ export const CarReleaseList: React.FC = () => {
         </div>
       </div>
 
+      {/* Modal Quick Action */}
+      <QuickActionModal
+        isOpen={!!modalAction}
+        actionType={modalAction}
+        releaseNo={selectedRelease?.car_release_no || "TMS-2026720-0005"}
+        onClose={() => setModalAction(null)}
+      />
+
       {/* 100% FULL-WIDTH COMPACT REFERENCE TABLE */}
       <div className="tms-card overflow-hidden w-full">
         <div className="overflow-x-auto w-full">
@@ -691,6 +824,7 @@ export const CarReleaseList: React.FC = () => {
               <tr className="bg-slate-100/90 border-b border-slate-200 text-slate-700 font-bold uppercase text-[10px] tracking-wider whitespace-nowrap">
                 <th className="py-2.5 px-3">เลขที่ปล่อยรถ</th>
                 <th className="py-2.5 px-3">ทะเบียนรถ</th>
+                <th className="py-2.5 px-3">ความคืบหน้า</th>
                 <th className="py-2.5 px-3">กรุ๊ปรถ</th>
                 <th className="py-2.5 px-3 text-center">สถานะปล่อยรถ</th>
                 <th className="py-2.5 px-3 text-center">คืนรถ</th>
@@ -711,7 +845,7 @@ export const CarReleaseList: React.FC = () => {
                     <tr className="bg-slate-50 border-y border-slate-200/80">
                       <td
                         colSpan={11}
-                        className="py-1.5 px-3 font-bold text-[11px] text-slate-700"
+                        className="py-1 px-3 font-bold text-[11px] text-slate-700"
                       >
                         <div className="flex items-center gap-2">
                           <Calendar className="w-3.5 h-3.5 text-slate-500" />
@@ -731,8 +865,9 @@ export const CarReleaseList: React.FC = () => {
                         <tr
                           key={rel.car_release_id}
                           onClick={() => handleViewDetail(rel)}
-                          className={`hover:bg-slate-100/80 cursor-pointer transition-colors ${isSelected ? "bg-slate-100 font-semibold" : ""
-                            }`}
+                          className={`hover:bg-slate-100/80 cursor-pointer transition-colors ${
+                            isSelected ? "bg-slate-100 font-semibold" : ""
+                          }`}
                         >
                           {/* 1. เลขที่ปล่อยรถ */}
                           <td className="py-2 px-3 font-bold text-slate-900 font-mono">
@@ -740,12 +875,15 @@ export const CarReleaseList: React.FC = () => {
                           </td>
 
                           {/* 2. ทะเบียนรถ */}
-                          <td className="py-2 px-3">
+                          <td className="py-1 px-3">
                             <div className="flex items-center gap-2">
                               <img
-                                src={getImageUrl(rel.car_img || "https://images.unsplash.com/photo-1533473359331-0135ef1b58bf?w=100&q=80")}
+                                src={getImageUrl(
+                                  rel.car_img ||
+                                    "https://images.unsplash.com/photo-1533473359331-0135ef1b58bf?w=100&q=80",
+                                )}
                                 alt="car"
-                                className="w-7 h-7 rounded-md object-cover border border-slate-200 shrink-0"
+                                className="w-7 h-7 rounded-full object-cover border border-slate-200 shrink-0"
                               />
                               <span className="font-semibold text-slate-800 text-[11px]">
                                 {rel.license_plate}
@@ -753,66 +891,85 @@ export const CarReleaseList: React.FC = () => {
                             </div>
                           </td>
 
-                          {/* 3. กรุ๊ปรถ */}
-                          <td className="py-2 px-3">
+                          {/* 3. ความคืบหน้า */}
+                          <td className="py-1 px-3">
                             <span className="font-medium text-slate-700 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded text-[11px]">
-                              {rel.group_store_name !== "-" ? rel.group_store_name : (rel.brand_model || "-")}
+                              {rel.completedStores + "/" + rel.totalStores}
                             </span>
                           </td>
 
-                          {/* 4. สถานะปล่อยรถ */}
-                          <td className="py-2 px-3 text-center">
-                            {(rel.completedStores === rel.totalStores && rel.totalStores > 0) || rel.is_returned ? (
-                              <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                          {/* 4. กรุ๊ปรถ */}
+                          <td className="py-1 px-3">
+                            <div className="flex items-center gap-2 font-medium text-slate-700 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded text-[11px]">
+                              <div
+                                className="w-2.5 h-2.5 rounded-full border border-white shadow-2xs shrink-0"
+                                style={{ background: rel.group_color }}
+                              />
+                              <span>
+                                {rel.group_store_name !== "-"
+                                  ? rel.group_store_name
+                                  : rel.brand_model || "-"}
+                              </span>                                
+                            </div>
+
+                          </td>
+
+                          {/* 5. สถานะปล่อยรถ */}
+                          <td className="py-1 px-3 text-center">
+                            {(rel.completedStores === rel.totalStores &&
+                              rel.totalStores > 0) ||
+                            rel.is_returned ? (
+                              <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
                                 <CheckCircle2 className="w-3 h-3" /> เสร็จสิ้น
                               </span>
                             ) : (
-                              <span className="inline-flex items-center gap-1 text-[10px] font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded-full border border-blue-200">
+                              <span className="inline-flex items-center gap-1 text-[10px] font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded-md border border-blue-200">
                                 <Truck className="w-3 h-3" /> ดำเนินการอยู่
                               </span>
                             )}
                           </td>
 
-                          {/* 5. คืนรถ */}
-                          <td className="py-2 px-3 text-center">
+                          {/* 6. คืนรถ */}
+                          <td className="py-1 px-3 text-center">
                             {rel.is_returned ? (
-                              <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200/60">
+                              <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200/60">
                                 <CheckCircle2 className="w-3 h-3" /> คืนรถแล้ว
                               </span>
                             ) : (
-                              <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-rose-600 bg-rose-50 px-2 py-0.5 rounded-full border border-rose-200/60">
-                                <XCircle className="w-3 h-3 text-rose-600" /> ยังไม่คืนรถ
+                              <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-rose-600 bg-rose-50 px-2 py-0.5 rounded-md border border-rose-200/60">
+                                <XCircle className="w-3 h-3 text-rose-600" />{" "}
+                                ยังไม่คืนรถ
                               </span>
                             )}
                           </td>
 
-                          {/* 6. เบี้ยเลี้ยง */}
-                          <td className="py-2 px-3 text-center text-slate-600 font-mono">
+                          {/* 7. เบี้ยเลี้ยง */}
+                          <td className="py-1 px-3 text-center text-slate-600 font-mono">
                             {rel.allowance || "-"}
                           </td>
 
                           {/* 7. สถานะทางบัญชี */}
-                          <td className="py-2 px-3 text-slate-600 font-medium">
-                            {rel.accounting_status || "รอการตรวจสอบ"}
+                          <td className="py-1 px-3 text-slate-600 font-medium">
+                            {rel.accounting_status || "-"}
                           </td>
 
                           {/* 8. เลขไมล์ */}
-                          <td className="py-2 px-3 text-right font-bold text-slate-900 font-mono">
+                          <td className="py-1 px-3 text-right font-bold text-slate-900 font-mono">
                             {rel.mileage?.toLocaleString() || "0"}
                           </td>
 
                           {/* 9. คนขับ */}
-                          <td className="py-2 px-3 font-semibold text-slate-900">
+                          <td className="py-1 px-3 font-semibold text-slate-900">
                             {rel.driver_name}
                           </td>
 
                           {/* 10. ผู้ติดตาม */}
-                          <td className="py-2 px-3 text-slate-700">
+                          <td className="py-1 px-3 text-slate-700">
                             {rel.follower_name || "-"}
                           </td>
 
                           {/* จัดการ */}
-                          <td className="py-2 px-3 text-right space-x-1">
+                          <td className="py-1 px-3 text-right space-x-1">
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
@@ -875,24 +1032,25 @@ export const CarReleaseList: React.FC = () => {
       <AnimatedDrawer
         isOpen={isDrawerOpen}
         onClose={() => setIsDrawerOpen(false)}
-        title={editingId ? `แก้ไขรายการปล่อยรถ (#${editingId})` : "สร้างรายการปล่อยรถใหม่"}
+        title={
+          editingId
+            ? `แก้ไขรายการปล่อยรถ (#${editingId})`
+            : "สร้างรายการปล่อยรถใหม่"
+        }
         formId="release-form"
         onSubmit={handleFormSubmit}
         submitLabel={editingId ? "บันทึกการแก้ไข" : "บันทึกสร้างใบปล่อยรถ"}
-        maxWidthClass="max-w-xl"
+        maxWidthClass="max-w-6xl"
       >
         <form
           id="release-form"
           onSubmit={handleFormSubmit}
-          className="space-y-4 text-xs"
+          className="space-y text-xs"
         >
           {/* Section 1: ข้อมูลกรุ๊ปรถและคนขับ */}
-          <div className="space-y-3 bg-white p-4 rounded-lg border border-slate-200">
+          <div className="space-y-3 mb-4 bg-white rounded-lg">
             <h4 className="font-bold text-slate-900 text-xs border-b border-slate-100 pb-2 flex items-center justify-between">
               <span>1. เลือกกรุ๊ปรถและพนักงานขับรถ</span>
-              <span className="text-[10px] text-blue-600 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded font-semibold">
-                ⚡ เลือกรถอัตโนมัติตามกรุ๊ป
-              </span>
             </h4>
 
             <div className="space-y-2.5">
@@ -906,6 +1064,7 @@ export const CarReleaseList: React.FC = () => {
                     onChange={(val) => handleGroupChange(String(val))}
                     placeholder="-- ค้นหาและเลือกรถตามกรุ๊ป --"
                     searchPlaceholder="พิมพ์ค้นหากรุ๊ปรถ..."
+                    required
                   />
                 </div>
 
@@ -917,7 +1076,9 @@ export const CarReleaseList: React.FC = () => {
                     value={formUserId}
                     onChange={(val) => {
                       setFormUserId(val);
-                      const d = drivers.find((item) => String(item.user_id) === String(val));
+                      const d = drivers.find(
+                        (item) => String(item.user_id) === String(val),
+                      );
                       if (d) setFormDriverName(d.name);
                     }}
                     placeholder="-- ค้นหาคนขับ --"
@@ -934,7 +1095,7 @@ export const CarReleaseList: React.FC = () => {
                   </div>
                   <div>
                     <div className="text-[10px] text-slate-500 font-semibold">
-                      รถยนต์ประจำกรุ๊ป (Auto-Matched)
+                      รถยนต์ประจำกรุ๊ป
                     </div>
                     <div className="font-bold text-slate-900 text-xs flex items-center gap-1.5">
                       <span>{formPlateText || "ยังไม่ระบุรถ"}</span>
@@ -950,12 +1111,21 @@ export const CarReleaseList: React.FC = () => {
                 {/* Group Status Badge */}
                 {selectedGroupObj && (
                   <div className="flex items-center gap-1.5 shrink-0">
-                    <span className="text-[10px] font-semibold text-slate-500">สถานะกรุ๊ป:</span>
-                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md border shadow-2xs ${(selectedGroupObj.status === 1 || selectedGroupObj.status === true || selectedGroupObj.is_released)
-                      ? "bg-emerald-50 text-emerald-800 border-emerald-300"
-                      : "bg-red-50 text-red-800 border-red-300"
-                      }`}>
-                      {(selectedGroupObj.status === 1 || selectedGroupObj.status === true || selectedGroupObj.is_released)
+                    <span className="text-[10px] font-semibold text-slate-500">
+                      สถานะกรุ๊ป:
+                    </span>
+                    <span
+                      className={`text-[10px] font-bold px-2 py-0.5 rounded-md border shadow-2xs ${
+                        selectedGroupObj.status === 1 ||
+                        selectedGroupObj.status === true ||
+                        selectedGroupObj.is_released
+                          ? "bg-emerald-50 text-emerald-800 border-emerald-300"
+                          : "bg-red-50 text-red-800 border-red-300"
+                      }`}
+                    >
+                      {selectedGroupObj.status === 1 ||
+                      selectedGroupObj.status === true ||
+                      selectedGroupObj.is_released
                         ? "ปล่อยรถแล้ว"
                         : "ยังไม่ปล่อยรถ"}
                     </span>
@@ -970,7 +1140,8 @@ export const CarReleaseList: React.FC = () => {
                     <div className="flex items-center gap-1.5 text-xs font-bold text-slate-800">
                       <PackageCheck className="w-4 h-4 text-blue-600" />
                       <span>
-                        รายการจัดส่งในกรุ๊ปนี้ ({groupStoresPreview.length} จุดจัดส่ง)
+                        รายการจัดส่งในกรุ๊ปนี้ ({groupStoresPreview.length}{" "}
+                        จุดจัดส่ง)
                       </span>
                     </div>
                     {isLoadingPreview && (
@@ -982,19 +1153,28 @@ export const CarReleaseList: React.FC = () => {
 
                   {groupStoresPreview.length > 0 ? (
                     <div className="overflow-x-auto rounded-md border border-slate-200 bg-white max-h-60 custom-scrollbar">
-                      <table className="w-full text-left border-collapse text-[10px]">
+                      <table className="w-full text-left border-collapse whitespace-nowrap text-[10px]">
                         <thead className="bg-slate-100 text-slate-700 font-semibold sticky top-0 z-10 border-b border-slate-200">
                           <tr>
-                            <th className="py-1 px-1.5 text-center w-7">ลำดับ</th>
+                            <th className="py-1 px-1.5 text-center w-7">
+                              ลำดับ
+                            </th>
                             <th className="py-1 px-1.5">รหัสออเดอร์</th>
                             <th className="py-1 px-1.5">รหัสร้านค้า</th>
-                            <th className="py-1 px-1.5">ชื่อร้านค้า / จุดจัดส่ง</th>
-                            <th className="py-1 px-1.5 text-center w-12">ลัง</th>
+                            <th className="py-1 px-1.5">
+                              ชื่อร้านค้า / จุดจัดส่ง
+                            </th>
+                            <th className="py-1 px-1.5 text-center w-12">
+                              ลัง
+                            </th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100 text-slate-700">
                           {groupStoresPreview.map((item: any, idx: number) => (
-                            <tr key={item.list_id || idx} className="hover:bg-slate-50 transition-colors">
+                            <tr
+                              key={item.list_id || idx}
+                              className="hover:bg-slate-50 transition-colors"
+                            >
                               <td className="py-1 px-1.5 text-center font-mono text-slate-500 font-medium">
                                 {item.row_order || idx + 1}
                               </td>
@@ -1005,7 +1185,9 @@ export const CarReleaseList: React.FC = () => {
                                 {item.store_id || "-"}
                               </td>
                               <td className="py-1 px-1.5 font-medium text-slate-900 truncate max-w-[200px]">
-                                {item.store_name_result || item.store_name || "ไม่ระบุชื่อร้านค้า"}
+                                {item.store_name_result ||
+                                  item.store_name ||
+                                  "ไม่ระบุชื่อร้านค้า"}
                               </td>
                               <td className="py-1 px-1.5 text-center font-mono font-bold text-slate-800">
                                 {item.sum_quantity || 1}
@@ -1036,7 +1218,7 @@ export const CarReleaseList: React.FC = () => {
 
                 <div className="sm:col-span-2">
                   <label className="text-slate-700 font-semibold block mb-1 flex items-center justify-between">
-                    <span>ผู้ติดตาม (เลือกพนักงานเป็นผู้ติดตามได้หลายคนจากฐานข้อมูล)</span>
+                    <span>ผู้ติดตาม (เลือกพนักงานเป็นผู้ติดตามได้หลายคน)</span>
                     <span className="text-[10px] text-blue-600 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded font-semibold">
                       เลือกแล้ว {formFollowers.length} คน
                     </span>
@@ -1062,8 +1244,10 @@ export const CarReleaseList: React.FC = () => {
                         const q = followerSearch.trim().toLowerCase();
                         return (
                           (u.name && u.name.toLowerCase().includes(q)) ||
-                          (u.username && u.username.toLowerCase().includes(q)) ||
-                          (u.level_user_name && u.level_user_name.toLowerCase().includes(q))
+                          (u.username &&
+                            u.username.toLowerCase().includes(q)) ||
+                          (u.level_user_name &&
+                            u.level_user_name.toLowerCase().includes(q))
                         );
                       })
                       .map((u) => {
@@ -1071,10 +1255,11 @@ export const CarReleaseList: React.FC = () => {
                         return (
                           <label
                             key={u.user_id}
-                            className={`flex items-center justify-between p-1.5 rounded-md cursor-pointer transition-colors text-xs ${isChecked
-                              ? "bg-blue-50/90 text-blue-900 border border-blue-200 font-semibold"
-                              : "hover:bg-slate-100 text-slate-700"
-                              }`}
+                            className={`flex items-center justify-between p-1.5 rounded-md cursor-pointer transition-colors text-xs ${
+                              isChecked
+                                ? "bg-blue-50/90 text-blue-900 border border-blue-200 font-semibold"
+                                : "hover:bg-slate-100 text-slate-700"
+                            }`}
                           >
                             <div className="flex items-center gap-2 min-w-0">
                               <input
@@ -1082,17 +1267,23 @@ export const CarReleaseList: React.FC = () => {
                                 checked={isChecked}
                                 onChange={(e) => {
                                   if (e.target.checked) {
-                                    setFormFollowers((prev) => [...prev, u.name]);
+                                    setFormFollowers((prev) => [
+                                      ...prev,
+                                      u.name,
+                                    ]);
                                   } else {
                                     setFormFollowers((prev) =>
-                                      prev.filter((name) => name !== u.name)
+                                      prev.filter((name) => name !== u.name),
                                     );
                                   }
                                 }}
                                 className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 shrink-0 cursor-pointer"
                               />
                               <img
-                                src={getImageUrl(u.user_image || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&q=80")}
+                                src={getImageUrl(
+                                  u.user_image ||
+                                    "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&q=80",
+                                )}
                                 alt={u.name}
                                 className="w-5 h-5 rounded-full object-cover border border-slate-200 shrink-0"
                               />
@@ -1119,7 +1310,7 @@ export const CarReleaseList: React.FC = () => {
           </div>
 
           {/* Section 2: ข้อมูลการปฏิบัติงาน */}
-          <div className="space-y-3 bg-white p-4 rounded-lg border border-slate-200">
+          <div className="space-y-3 mb-4 bg-white rounded-lg">
             <h4 className="font-bold text-slate-900 text-xs border-b border-slate-100 pb-2">
               2. ข้อมูลการออกรถ & เบี้ยเลี้ยง
             </h4>
@@ -1188,392 +1379,906 @@ export const CarReleaseList: React.FC = () => {
           </div>
 
           {/* Section 3: รูปภาพการปล่อยรถ (ครบทุกมุม) */}
-          <div className="space-y-3 bg-white p-4 rounded-lg border border-slate-200">
+          <div className="space-y-3 bg-white rounded-lg">
             <h4 className="font-bold text-slate-900 text-xs border-b border-slate-100 pb-2 flex items-center justify-between">
               <span>3. รูปภาพการปล่อยรถ (ครบทุกมุม)</span>
-              <span className="text-[10px] text-slate-400 font-normal">อัปโหลดรูปภาพ</span>
+              <span className="text-[10px] text-slate-400 font-normal">
+                อัปโหลดรูปภาพ
+              </span>
             </h4>
 
             <div className="grid grid-cols-2 gap-2.5 pt-1">
               {/* 1. รูปถ่ายเลขไมล์ */}
-              {renderImagePicker("1. รูปถ่ายเลขไมล์", imgMileage, setImgMileage, "img_mileage_input")}
+              {renderImagePicker(
+                "1. รูปถ่ายเลขไมล์",
+                imgMileage,
+                setImgMileage,
+                "img_mileage_input",
+              )}
 
               {/* 2. รูปถ่ายหน้ารถ */}
-              {renderImagePicker("2. รูปถ่ายหน้ารถ", imgFront, setImgFront, "img_front_input")}
+              {renderImagePicker(
+                "2. รูปถ่ายหน้ารถ",
+                imgFront,
+                setImgFront,
+                "img_front_input",
+              )}
 
               {/* 3. รูปถ่ายรอบคัน 1 */}
-              {renderImagePicker("3. รอบคัน (ซ้าย)", imgAround1, setImgAround1, "img_around1_input")}
+              {renderImagePicker(
+                "3. รอบคัน (ซ้าย)",
+                imgAround1,
+                setImgAround1,
+                "img_around1_input",
+              )}
 
               {/* 4. รูปถ่ายรอบคัน 2 */}
-              {renderImagePicker("4. รอบคัน (ขวา)", imgAround2, setImgAround2, "img_around2_input")}
+              {renderImagePicker(
+                "4. รอบคัน (ขวา)",
+                imgAround2,
+                setImgAround2,
+                "img_around2_input",
+              )}
 
               {/* 5. รูปถ่ายรอบคัน 3 */}
-              {renderImagePicker("5. รอบคัน (หลัง)", imgAround3, setImgAround3, "img_around3_input")}
+              {renderImagePicker(
+                "5. รอบคัน (หลัง)",
+                imgAround3,
+                setImgAround3,
+                "img_around3_input",
+              )}
 
               {/* 6. รูปถ่ายรอบคัน 4 */}
-              {renderImagePicker("6. รอบคัน (กระบะ/ตู้)", imgAround4, setImgAround4, "img_around4_input")}
+              {renderImagePicker(
+                "6. รอบคัน (กระบะ/ตู้)",
+                imgAround4,
+                setImgAround4,
+                "img_around4_input",
+              )}
 
               {/* 7. รูปถ่ายรอบคัน 5 */}
-              {renderImagePicker("7. รอบคัน (ภายใน)", imgAround5, setImgAround5, "img_around5_input")}
+              {renderImagePicker(
+                "7. รอบคัน (ภายใน)",
+                imgAround5,
+                setImgAround5,
+                "img_around5_input",
+              )}
 
               {/* 8. รูปถ่ายอุปกรณ์ PDA */}
-              {renderImagePicker("8. รูปถ่ายอุปกรณ์ PDA", imgPda, setImgPda, "img_pda_input")}
+              {renderImagePicker(
+                "8. รูปถ่ายอุปกรณ์ PDA",
+                imgPda,
+                setImgPda,
+                "img_pda_input",
+              )}
             </div>
           </div>
         </form>
       </AnimatedDrawer>
 
-      {/* RIGHT SLIDE-OVER DETAIL INSPECTOR DRAWER */}
+      {/* RIGHT SLIDE-OVER DETAIL INSPECTOR DRAWER (WIDER MAX-W-6XL) */}
       <AnimatedDrawer
         isOpen={!!selectedRelease}
         onClose={() => setSelectedRelease(null)}
         title={
           selectedRelease ? (
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-3">
               <span className="font-bold text-slate-900 text-base font-mono">
                 {selectedRelease.car_release_no}
+              </span>
+              <span className="bg-slate-100 text-slate-700 border border-slate-200 px-2.5 py-0.5 rounded text-xs font-semibold">
+                {selectedRelease.license_plate} ({selectedRelease.driver_name})
               </span>
             </div>
           ) : (
             "รายละเอียดใบปล่อยรถ"
           )
         }
-        maxWidthClass="max-w-xl"
+        maxWidthClass="max-w-6xl"
       >
         {selectedRelease && (
           <div className="space-y-4">
-            {/* 10 QUICK ACTION BUTTONS */}
-            <div className="space-y-2">
-              <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                การดำเนินการด่วน
-              </div>
-              <div className="grid grid-cols-5 gap-2">
-                <button
-                  onClick={() => setModalAction("reset_key")}
-                  className="flex flex-col items-center justify-center p-2 rounded-lg border border-slate-200/80 bg-white hover:bg-slate-50 transition-colors"
-                >
-                  <Key className="w-4 h-4 text-slate-700 mb-1" />
-                  <span className="text-[10px] font-medium text-slate-700">
-                    รีเซ็ตกุญแจ
-                  </span>
-                </button>
+            {/* DUAL TAB SWITCHER (INFO vs LIVE GPS MAP) */}
+            <div className="flex border-b border-slate-200 bg-slate-50/80 -mt-2 -mx-5 px-5 pt-1 shrink-0">
+              <button
+                onClick={() => setActiveDetailTab("info")}
+                className={`py-2.5 px-4 font-bold text-xs border-b-2 flex items-center gap-2 transition-colors ${
+                  activeDetailTab === "info"
+                    ? "border-slate-900 text-slate-900 bg-white"
+                    : "border-transparent text-slate-500 hover:text-slate-800"
+                }`}
+              >
+                <FileText className="w-4 h-4 text-blue-600" />
+                <span>รายละเอียด</span>
+              </button>
 
-                <button
-                  onClick={() => setModalAction("cargo_photo")}
-                  className="flex flex-col items-center justify-center p-2 rounded-lg border border-slate-200/80 bg-white hover:bg-slate-50 transition-colors"
-                >
-                  <Camera className="w-4 h-4 text-slate-700 mb-1" />
-                  <span className="text-[10px] font-medium text-slate-700">
-                    รูปให้ของ
-                  </span>
-                </button>
-
-                <button
-                  onClick={() => setModalAction("accounting")}
-                  className="flex flex-col items-center justify-center p-2 rounded-lg border border-slate-200/80 bg-white hover:bg-slate-50 transition-colors"
-                >
-                  <ShieldCheck className="w-4 h-4 text-slate-700 mb-1" />
-                  <span className="text-[10px] font-medium text-slate-700">
-                    สถานะบัญชี
-                  </span>
-                </button>
-
-                <button
-                  onClick={() => setModalAction("add_store")}
-                  className="flex flex-col items-center justify-center p-2 rounded-lg border border-slate-200/80 bg-white hover:bg-slate-50 transition-colors"
-                >
-                  <Plus className="w-4 h-4 text-slate-700 mb-1" />
-                  <span className="text-[10px] font-medium text-slate-700">
-                    เพิ่มร้านค้า
-                  </span>
-                </button>
-
-                <button
-                  onClick={() => setModalAction("followup")}
-                  className="flex flex-col items-center justify-center p-2 rounded-lg border border-slate-200/80 bg-white hover:bg-slate-50 transition-colors"
-                >
-                  <Truck className="w-4 h-4 text-slate-700 mb-1" />
-                  <span className="text-[10px] font-medium text-slate-700">
-                    ติดตาม
-                  </span>
-                </button>
-
-                <button
-                  onClick={() => setModalAction("deposit")}
-                  className="flex flex-col items-center justify-center p-2 rounded-lg border border-slate-200/80 bg-white hover:bg-slate-50 transition-colors"
-                >
-                  <Wallet className="w-4 h-4 text-slate-700 mb-1" />
-                  <span className="text-[10px] font-medium text-slate-700">
-                    ฝากเงิน
-                  </span>
-                </button>
-
-                <button
-                  onClick={() => setModalAction("return_docs")}
-                  className="flex flex-col items-center justify-center p-2 rounded-lg border border-slate-200/80 bg-white hover:bg-slate-50 transition-colors"
-                >
-                  <FileText className="w-4 h-4 text-slate-700 mb-1" />
-                  <span className="text-[10px] font-medium text-slate-700">
-                    เอกสารคืนของ
-                  </span>
-                </button>
-
-                <button
-                  onClick={() => setModalAction("controlled_items")}
-                  className="flex flex-col items-center justify-center p-2 rounded-lg border border-slate-200/80 bg-white hover:bg-slate-50 transition-colors"
-                >
-                  <PackageCheck className="w-4 h-4 text-slate-700 mb-1" />
-                  <span className="text-[10px] font-medium text-slate-700">
-                    สินค้าควบคุม
-                  </span>
-                </button>
-
-                <button
-                  onClick={() => setModalAction("return_car")}
-                  className="flex flex-col items-center justify-center p-2 rounded-lg border border-slate-200/80 bg-white hover:bg-slate-50 transition-colors"
-                >
-                  <RotateCcw className="w-4 h-4 text-slate-700 mb-1" />
-                  <span className="text-[10px] font-medium text-slate-700">
-                    คืนรถ
-                  </span>
-                </button>
-
-                <button
-                  onClick={() => setModalAction("allowance")}
-                  className="flex flex-col items-center justify-center p-2 rounded-lg border border-slate-200/80 bg-white hover:bg-slate-50 transition-colors"
-                >
-                  <Coins className="w-4 h-4 text-slate-700 mb-1" />
-                  <span className="text-[10px] font-medium text-slate-700">
-                    เบี้ยเลี้ยง
-                  </span>
-                </button>
-              </div>
+              <button
+                onClick={() => setActiveDetailTab("gps")}
+                className={`py-2.5 px-4 font-bold text-xs border-b-2 flex items-center gap-2 transition-colors ${
+                  activeDetailTab === "gps"
+                    ? "border-slate-900 text-slate-900 bg-white"
+                    : "border-transparent text-slate-500 hover:text-slate-800"
+                }`}
+              >
+                <Truck className="w-4 h-4 text-emerald-600 animate-pulse" />
+                <span>ติดตาม GPS (Live)</span>
+              </button>
             </div>
 
-            {/* Metadata Details */}
-            <div className="border border-slate-200 rounded-lg p-4 bg-white space-y-3 shadow-2xs">
-              <h4 className="font-bold text-slate-900 text-xs border-b border-slate-100 pb-2">
-                รายละเอียดใบปล่อยรถ
-              </h4>
+            {/* TAB 1: RELEASE DETAILS & SINGLE-ROW STORES TABLE */}
+            {activeDetailTab === "info" && (
+              <div className="space-y-4">
+                {/* 10 QUICK ACTION BUTTONS */}
+                <div className="space-y-2">
+                  <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                    การดำเนินการด่วน
+                  </div>
+                  <div className="grid grid-cols-5 sm:grid-cols-10 gap-2">
+                    <button
+                      onClick={() => setModalAction("reset_key")}
+                      className="flex flex-col items-center justify-center p-2 rounded-lg border border-slate-200/80 bg-white hover:bg-slate-50 transition-colors"
+                    >
+                      <Key className="w-4 h-4 text-slate-700 mb-1" />
+                      <span className="text-[10px] font-medium text-slate-700">
+                        รีเซ็ตกุญแจ
+                      </span>
+                    </button>
 
-              <div className="grid grid-cols-2 gap-x-4 gap-y-2.5 text-xs">
-                <div>
-                  <span className="text-slate-400 block text-[11px]">รหัสปล่อยรถ</span>
-                  <span className="font-bold text-slate-900 font-mono">{selectedRelease.car_release_no}</span>
-                </div>
+                    <button
+                      onClick={() => setModalAction("cargo_photo")}
+                      className="flex flex-col items-center justify-center p-2 rounded-lg border border-slate-200/80 bg-white hover:bg-slate-50 transition-colors"
+                    >
+                      <Camera className="w-4 h-4 text-slate-700 mb-1" />
+                      <span className="text-[10px] font-medium text-slate-700">
+                        รูปให้ของ
+                      </span>
+                    </button>
 
-                <div>
-                  <span className="text-slate-400 block text-[11px]">ทะเบียนรถ</span>
-                  <span className="font-bold text-slate-900">{selectedRelease.license_plate}</span>
-                </div>
+                    <button
+                      onClick={() => setModalAction("accounting")}
+                      className="flex flex-col items-center justify-center p-2 rounded-lg border border-slate-200/80 bg-white hover:bg-slate-50 transition-colors"
+                    >
+                      <ShieldCheck className="w-4 h-4 text-slate-700 mb-1" />
+                      <span className="text-[10px] font-medium text-slate-700">
+                        สถานะบัญชี
+                      </span>
+                    </button>
 
-                <div>
-                  <span className="text-slate-400 block text-[11px]">สายจัดส่ง / กรุ๊ป</span>
-                  <span className="font-semibold text-slate-900">{selectedRelease.group_store_name || "-"}</span>
-                </div>
+                    <button
+                      onClick={() => setModalAction("add_store")}
+                      className="flex flex-col items-center justify-center p-2 rounded-lg border border-slate-200/80 bg-white hover:bg-slate-50 transition-colors"
+                    >
+                      <Plus className="w-4 h-4 text-slate-700 mb-1" />
+                      <span className="text-[10px] font-medium text-slate-700">
+                        เพิ่มร้านค้า
+                      </span>
+                    </button>
 
-                <div>
-                  <span className="text-slate-400 block text-[11px]">ประเภทการปล่อย</span>
-                  <span className="font-semibold text-slate-900">{selectedRelease.car_release_type_name || "ปล่อยรถปกติ"}</span>
-                </div>
+                    <button
+                      onClick={() => setModalAction("followup")}
+                      className="flex flex-col items-center justify-center p-2 rounded-lg border border-slate-200/80 bg-white hover:bg-slate-50 transition-colors"
+                    >
+                      <Truck className="w-4 h-4 text-slate-700 mb-1" />
+                      <span className="text-[10px] font-medium text-slate-700">
+                        ติดตาม
+                      </span>
+                    </button>
 
-                <div>
-                  <span className="text-slate-400 block text-[11px]">พนักงานขับรถ</span>
-                  <div className="flex items-center gap-2">                  
-                    <img
-                      src={getImageUrl(
-                        selectedRelease.driver_avatar || selectedRelease.user_image || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&q=80"
-                      )}
-                      alt={selectedRelease.driver_name}
-                      className="w-7 h-7 rounded-full object-cover border-2 border-white shadow-xs shrink-0"
-                    />
-                    <span className="font-semibold text-slate-900">{selectedRelease.driver_name || "ไม่ระบุ"}</span>
+                    <button
+                      onClick={() => setModalAction("deposit")}
+                      className="flex flex-col items-center justify-center p-2 rounded-lg border border-slate-200/80 bg-white hover:bg-slate-50 transition-colors"
+                    >
+                      <Wallet className="w-4 h-4 text-slate-700 mb-1" />
+                      <span className="text-[10px] font-medium text-slate-700">
+                        ฝากเงิน
+                      </span>
+                    </button>
+
+                    <button
+                      onClick={() => setModalAction("return_docs")}
+                      className="flex flex-col items-center justify-center p-2 rounded-lg border border-slate-200/80 bg-white hover:bg-slate-50 transition-colors"
+                    >
+                      <FileText className="w-4 h-4 text-slate-700 mb-1" />
+                      <span className="text-[10px] font-medium text-slate-700">
+                        เอกสารคืนของ
+                      </span>
+                    </button>
+
+                    <button
+                      onClick={() => setModalAction("controlled_items")}
+                      className="flex flex-col items-center justify-center p-2 rounded-lg border border-slate-200/80 bg-white hover:bg-slate-50 transition-colors"
+                    >
+                      <PackageCheck className="w-4 h-4 text-slate-700 mb-1" />
+                      <span className="text-[10px] font-medium text-slate-700">
+                        สินค้าควบคุม
+                      </span>
+                    </button>
+
+                    <button
+                      onClick={() => setModalAction("return_car")}
+                      className="flex flex-col items-center justify-center p-2 rounded-lg border border-slate-200/80 bg-white hover:bg-slate-50 transition-colors"
+                    >
+                      <RotateCcw className="w-4 h-4 text-slate-700 mb-1" />
+                      <span className="text-[10px] font-medium text-slate-700">
+                        คืนรถ
+                      </span>
+                    </button>
+
+                    <button
+                      onClick={() => setModalAction("allowance")}
+                      className="flex flex-col items-center justify-center p-2 rounded-lg border border-slate-200/80 bg-white hover:bg-slate-50 transition-colors"
+                    >
+                      <Coins className="w-4 h-4 text-slate-700 mb-1" />
+                      <span className="text-[10px] font-medium text-slate-700">
+                        เบี้ยเลี้ยง
+                      </span>
+                    </button>
                   </div>
                 </div>
 
-                <div>
-                  <span className="text-slate-400 block text-[11px]">เบอร์โทรศัพท์</span>
-                  <span className="font-medium text-slate-800 font-mono">{selectedRelease.driver_phone || "-"}</span>
+                {/* Metadata Details */}
+                <div className="border border-slate-200 rounded-lg p-4 bg-white space-y-3 shadow-2xs">
+                  <h4 className="font-bold text-slate-900 text-xs border-b border-slate-100 pb-2">
+                    รายละเอียดใบปล่อยรถ
+                  </h4>
+
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-2.5 text-xs">
+                    <div>
+                      <span className="text-slate-400 block text-[11px]">
+                        รหัสปล่อยรถ
+                      </span>
+                      <span className="font-bold text-slate-900 font-mono">
+                        {selectedRelease.car_release_no}
+                      </span>
+                    </div>
+
+                    <div>
+                      <span className="text-slate-400 block text-[11px]">
+                        ทะเบียนรถ
+                      </span>
+                      <span className="font-bold text-slate-900">
+                        {selectedRelease.license_plate}
+                      </span>
+                    </div>
+
+                    <div>
+                      <span className="text-slate-400 block text-[11px]">
+                        สายจัดส่ง / กรุ๊ป
+                      </span>
+                      <span className="font-semibold text-slate-900">
+                        {selectedRelease.group_store_name || "-"}
+                      </span>
+                    </div>
+
+                    <div>
+                      <span className="text-slate-400 block text-[11px]">
+                        ประเภทการปล่อย
+                      </span>
+                      <span className="font-semibold text-slate-900">
+                        {selectedRelease.car_release_type_name || "ปล่อยรถปกติ"}
+                      </span>
+                    </div>
+
+                    <div>
+                      <span className="text-slate-400 block text-[11px]">
+                        พนักงานขับรถ
+                      </span>
+                      <div className="flex items-center gap-2">
+                        <img
+                          loading="lazy"
+                          src={getImageUrl(
+                            selectedRelease.driver_avatar ||
+                              selectedRelease.user_image ||
+                              "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&q=80",
+                          )}
+                          alt={selectedRelease.driver_name}
+                          className="w-6 h-6 rounded-full object-cover border border-slate-200 shrink-0"
+                        />
+                        <span className="font-semibold text-slate-900">
+                          {selectedRelease.driver_name || "ไม่ระบุ"}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div>
+                      <span className="text-slate-400 block text-[11px]">
+                        เบอร์โทรศัพท์
+                      </span>
+                      <span className="font-medium text-slate-800 font-mono">
+                        {selectedRelease.driver_phone || "-"}
+                      </span>
+                    </div>
+
+                    <div>
+                      <span className="text-slate-400 block text-[11px]">
+                        เลขไมล์ออก
+                      </span>
+                      <span className="font-bold text-slate-900 font-mono">
+                        {Number(selectedRelease.mileage || 0).toLocaleString()}{" "}
+                        กม.
+                      </span>
+                    </div>
+
+                    <div>
+                      <span className="text-slate-400 block text-[11px]">
+                        อุปกรณ์ PDA
+                      </span>
+                      <span className="font-medium text-slate-800">
+                        {selectedRelease.pda_device || "-"}
+                      </span>
+                    </div>
+
+                    <div className="sm:col-span-2">
+                      <span className="text-slate-400 block text-[11px] mb-0.5">
+                        ผู้ติดตาม
+                      </span>
+                      <div className="flex flex-wrap gap-1">
+                        {Array.isArray(selectedRelease.followers) &&
+                        selectedRelease.followers.length > 0 ? (
+                          selectedRelease.followers.map(
+                            (f: any, idx: number) => (
+                              <span
+                                key={idx}
+                                className="bg-blue-50 text-blue-700 border border-blue-200 px-2 py-0.5 rounded text-[11px] font-medium"
+                              >
+                                {typeof f === "string" ? f : f.follower_name}
+                              </span>
+                            ),
+                          )
+                        ) : (
+                          <span className="font-medium text-slate-800">
+                            {selectedRelease.follower_name || "-"}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    <div>
+                      <span className="text-slate-400 block text-[11px]">
+                        สถานะทางบัญชี
+                      </span>
+                      <span className="font-semibold text-amber-700">
+                        {selectedRelease.accounting_status_name ||
+                          selectedRelease.accounting_status ||
+                          "-"}
+                      </span>
+                    </div>
+
+                    <div>
+                      <span className="text-slate-400 block text-[11px]">
+                        วันที่ออกรถ
+                      </span>
+                      <span className="font-medium text-slate-800">
+                        {selectedRelease.created_at
+                          ? new Date(selectedRelease.created_at).toLocaleString(
+                              "th-TH",
+                            )
+                          : selectedRelease.dateGroup || "-"}
+                      </span>
+                    </div>
+                  </div>
                 </div>
 
-                <div className="col-span-2">
-                  <span className="text-slate-400 block text-[11px] mb-0.5">ผู้ติดตาม</span>
-                  <div className="flex flex-wrap gap-1">
-                    {Array.isArray(selectedRelease.followers) && selectedRelease.followers.length > 0 ? (
-                      selectedRelease.followers.map((f: any, idx: number) => (
-                        <span key={idx} className="bg-blue-50 text-blue-700 border border-blue-200 px-2 py-0.5 rounded text-[11px] font-medium">
-                          {typeof f === "string" ? f : f.follower_name}
-                        </span>
-                      ))
-                    ) : (
-                      <span className="font-medium text-slate-800">{selectedRelease.follower_name || "-"}</span>
+                {/* Lazy-Loaded Car Release Photos (Smooth rendering) */}
+                <div className="border border-slate-200 rounded-lg p-4 bg-white space-y-2 shadow-2xs">
+                  <h4 className="font-bold text-slate-900 text-xs border-b border-slate-100 pb-2 flex items-center justify-between">
+                    <span>รูปภาพการปล่อยรถ</span>
+                    <span className="text-[10px] text-slate-400 font-normal">
+                      {
+                        [
+                          selectedRelease.image_mileage,
+                          selectedRelease.image_front,
+                          selectedRelease.image_around_1,
+                          selectedRelease.image_around_2,
+                          selectedRelease.image_around_3,
+                          selectedRelease.image_around_4,
+                          selectedRelease.image_around_5,
+                          selectedRelease.image_pda,
+                        ].filter(Boolean).length
+                      }{" "}
+                      รูป
+                    </span>
+                  </h4>
+
+                  <div className="grid grid-cols-4 sm:grid-cols-8 gap-2 pt-1">
+                    {[
+                      { label: "เลขไมล์", val: selectedRelease.image_mileage },
+                      { label: "หน้ารถ", val: selectedRelease.image_front },
+                      {
+                        label: "รอบคัน 1",
+                        val: selectedRelease.image_around_1,
+                      },
+                      {
+                        label: "รอบคัน 2",
+                        val: selectedRelease.image_around_2,
+                      },
+                      {
+                        label: "รอบคัน 3",
+                        val: selectedRelease.image_around_3,
+                      },
+                      {
+                        label: "รอบคัน 4",
+                        val: selectedRelease.image_around_4,
+                      },
+                      {
+                        label: "รอบคัน 5",
+                        val: selectedRelease.image_around_5,
+                      },
+                      { label: "อุปกรณ์ PDA", val: selectedRelease.image_pda },
+                    ]
+                      .filter((item) => !!item.val)
+                      .map((item, idx) => (
+                        <div
+                          key={idx}
+                          className="border border-slate-200 rounded-lg overflow-hidden bg-slate-100 aspect-video relative group shadow-2xs"
+                        >
+                          <img
+                            loading="lazy"
+                            src={getImageUrl(item.val)}
+                            alt={item.label}
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                          />
+                          <div className="absolute bottom-0.5 right-0.5 bg-slate-900/80 text-white text-[8px] px-1 py-0.2 rounded font-medium">
+                            {item.label}
+                          </div>
+                        </div>
+                      ))}
+
+                    {[
+                      selectedRelease.image_mileage,
+                      selectedRelease.image_front,
+                      selectedRelease.image_around_1,
+                      selectedRelease.image_around_2,
+                      selectedRelease.image_around_3,
+                      selectedRelease.image_around_4,
+                      selectedRelease.image_around_5,
+                      selectedRelease.image_pda,
+                    ].filter(Boolean).length === 0 && (
+                      <div className="col-span-8 text-center py-3 text-slate-400 bg-slate-50 rounded-lg border border-dashed border-slate-200 text-[11px]">
+                        ไม่มีการแนบรูปภาพสำหรับการปล่อยรถนี้
+                      </div>
                     )}
                   </div>
                 </div>
 
-                <div>
-                  <span className="text-slate-400 block text-[11px]">เลขไมล์ออก</span>
-                  <span className="font-bold text-slate-900 font-mono">
-                    {Number(selectedRelease.mileage || 0).toLocaleString()} กม.
-                  </span>
-                </div>
+                {/* SINGLE-ROW STORES TABLE (คล้ายหน้า Route) */}
+                {Array.isArray(selectedRelease.stores) &&
+                  selectedRelease.stores.length > 0 && (
+                    <div className="border border-slate-200 rounded-lg p-4 bg-white space-y-3 shadow-2xs">
+                      <h4 className="font-bold text-slate-900 text-xs border-b border-slate-100 pb-2 flex items-center justify-between">
+                        <span className="flex items-center gap-2">
+                          <PackageCheck className="w-4 h-4 text-blue-600" />
+                          ตารางรายการจุดจัดส่งในกรุ๊ป (
+                          {selectedRelease.stores.length} ร้าน)
+                        </span>
+                      </h4>
 
-                <div>
-                  <span className="text-slate-400 block text-[11px]">อุปกรณ์ PDA</span>
-                  <span className="font-medium text-slate-800">{selectedRelease.pda_device || "-"}</span>
-                </div>
+                      <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
+                        <table className="w-full text-[11px] min-w-[1300px] border-collapse whitespace-nowrap">
+                          <thead className="sticky top-0 bg-slate-100/95 font-bold text-slate-700 border-b border-slate-200 shadow-2xs z-10">
+                            <tr className="text-left text-[11px] text-slate-700 font-semibold uppercase tracking-wider">
+                              <th className="px-2.5 py-1 w-28">สถานะ</th>
+                              <th className="px-2.5 py-1 w-28">รหัสออเดอร์</th>
+                              <th className="px-2.5 py-1 text-right w-24">
+                                จำนวน (ลัง)
+                              </th>
+                              <th className="px-2.5 py-1 text-center w-24">
+                                จุดวาง
+                              </th>
+                              <th className="px-2.5 py-1 w-24 text-center">
+                                หลักฐานการส่ง
+                              </th>
+                              <th className="px-2.5 py-1 w-24">
+                                กำหนดเวลาไว้ที่
+                              </th>
+                              <th className="px-2.5 py-1 w-36">เริ่มบริการ</th>
+                              <th className="px-2.5 py-1 w-36">
+                                สิ้นสุดบริการ
+                              </th>
+                              <th className="px-2.5 py-1 w-24">ระยะเวลาจริง</th>
+                              <th className="px-2.5 py-1 w-20">
+                                ลำดับความสำคัญ
+                              </th>
+                              <th className="px-2.5 py-1 min-w-[200px]">
+                                ที่ตั้ง / ร้านค้า
+                              </th>
+                              <th className="px-2.5 py-1 w-32">
+                                สายรถ / ทะเบียน
+                              </th>
+                              <th className="px-2.5 py-1 text-right w-16">
+                                จัดการ
+                              </th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100">
+                            {selectedRelease.stores.map(
+                              (st: any, idx: number) => {
+                                const status = getRouteStopStatus(st);
+                                const statusStyle = getRouteStatusStyle(status);
+                                const priority = String(
+                                  st.priority || "medium",
+                                ).toLowerCase();
+                                const startTime =
+                                  st.start_service_time ||
+                                  st.date_time_check_in;
+                                const endTime =
+                                  st.end_service_time || st.date_time_check_out;
+                                return (
+                                  <tr
+                                    key={`route-style-${st.list_id || idx}`}
+                                    onClick={() => setSelectedStoreItem(st)}
+                                    className="hover:bg-blue-50/50 cursor-pointer transition-colors whitespace-nowrap"
+                                  >
+                                    <td className="px-2.5 py-1">
+                                      <div className="flex items-center gap-1.5 shrink-0">
+                                        <div
+                                          className="w-3.5 h-3.5 rounded-full text-white text-[8px] font-bold flex items-center justify-center shrink-0 shadow-2xs"
+                                          style={{
+                                            background:
+                                              selectedRelease.group_color ||
+                                              "#3b82f6",
+                                          }}
+                                        >
+                                          {st.row_order || idx + 1}
+                                        </div>
+                                        <span
+                                          className="text-[10px] font-bold px-2 py-0.2 rounded-full inline-block"
+                                          style={{
+                                            background: statusStyle.bg,
+                                            color: statusStyle.text,
+                                          }}
+                                        >
+                                          {getRouteStatusLabel(status)}
+                                        </span>
+                                      </div>
+                                    </td>
+                                    <td className="px-2.5 py-1 font-mono font-bold text-slate-800">
+                                      {st.data_store_no || "-"}
+                                    </td>
+                                    <td className="px-2.5 py-1 text-right font-mono font-bold text-amber-800">{`${st.sum_quantity ?? 1} ลัง`}</td>
+                                    <td className="px-2.5 py-1 text-center font-mono font-bold">
+                                      {st.position_product_name ||
+                                      st.position_product_id ? (
+                                        <span className="inline-flex items-center bg-amber-100 text-amber-900 border border-amber-300 font-mono font-extrabold text-[10px] px-1.5 py-0.2 rounded shadow-2xs shrink-0">
+                                          {st.position_product_name ||
+                                            st.position_product_id}
+                                          /{st.position_production_order || 1}
+                                        </span>
+                                      ) : (
+                                        <span className="text-slate-400 font-normal">
+                                          -
+                                        </span>
+                                      )}
+                                    </td>
+                                    <td className="px-2.5 py-1 text-center">
+                                      {st.pod_image ? (
+                                        <a
+                                          href={getImageUrl(st.pod_image)}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          onClick={(e) => e.stopPropagation()}
+                                          className="inline-block"
+                                        >
+                                          <img
+                                            src={getImageUrl(st.pod_image)}
+                                            alt="POD"
+                                            className="w-5 h-5 object-cover rounded border border-slate-300 hover:scale-110 transition-transform"
+                                          />
+                                        </a>
+                                      ) : (
+                                        <span className="text-slate-400 font-mono">
+                                          -
+                                        </span>
+                                      )}
+                                    </td>
+                                    <td className="px-2.5 py-1 font-mono font-bold text-slate-700">
+                                      {st.scheduled_time?.slice(0, 5) || "-"}
+                                    </td>
+                                    <td className="px-2.5 py-1 font-mono font-bold text-slate-800">
+                                      {formatRouteServiceTime(startTime)}
+                                    </td>
+                                    <td className="px-2.5 py-1 font-mono font-bold text-slate-800">
+                                      {formatRouteServiceTime(endTime)}
+                                    </td>
+                                    <td className="px-2.5 py-1 font-mono text-slate-700 font-bold">
+                                      {getRouteDuration(startTime, endTime)}
+                                    </td>
+                                    <td className="px-2.5 py-1">
+                                      <span
+                                        className={`px-2 py-0.5 rounded-md text-[10px] font-bold border ${priority === "high" ? "bg-rose-100 text-rose-700 border-rose-200" : priority === "low" ? "bg-slate-100 text-slate-600 border-slate-200" : "bg-blue-50 text-blue-700 border-blue-200"}`}
+                                      >
+                                        {priority === "high"
+                                          ? "สูง"
+                                          : priority === "low"
+                                            ? "ต่ำ"
+                                            : "กลาง"}
+                                      </span>
+                                    </td>
+                                    <td className="px-2.5 py-1">
+                                      <span className="font-semibold text-slate-900">
+                                        {st.store_name_result ||
+                                          st.store_name ||
+                                          "ร้านค้า"}
+                                      </span>
+                                      {(st.store_address ||
+                                        st.telephone_number) && (
+                                        <span className="text-[10px] text-slate-500 font-normal ml-1">
+                                          (
+                                          {st.store_address ||
+                                            st.telephone_number}
+                                          )
+                                        </span>
+                                      )}
+                                    </td>
+                                    <td className="px-2.5 py-1">
+                                      <span className="font-medium text-slate-800 text-[11px]">
+                                        {selectedRelease.driver_name || "-"}
+                                      </span>
+                                      {selectedRelease.license_plate && (
+                                        <span className="text-[10px] font-mono text-slate-500 ml-1">
+                                          [{selectedRelease.license_plate}]
+                                        </span>
+                                      )}
+                                    </td>
+                                    <td className="px-2.5 py-1 text-right">
+                                      <button
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setSelectedStoreItem(st);
+                                        }}
+                                        className="p-0.5 rounded text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
+                                        title="ตรวจเช็ครายการ"
+                                      >
+                                        <Eye className="w-3.5 h-3.5" />
+                                      </button>
+                                    </td>
+                                  </tr>
+                                );
+                              },
+                            )}
+                          </tbody>
+                        </table>
+                        <table className="hidden">
+                          <thead>
+                            <tr className="bg-slate-100/90 border-b border-slate-200 text-slate-700 font-bold uppercase text-[10px] tracking-wider">
+                              <th className="py-2.5 px-3 text-center w-10">
+                                ลำดับ
+                              </th>
+                              <th className="py-2.5 px-3">รหัสออเดอร์</th>
+                              <th className="py-2.5 px-3">รหัสร้านค้า</th>
+                              <th className="py-2.5 px-3">
+                                ชื่อร้านค้า / จุดจัดส่ง
+                              </th>
+                              <th className="py-2.5 px-3 text-center">
+                                ตำแหน่งวางสินค้า
+                              </th>
+                              <th className="py-2.5 px-3 text-center">
+                                จำนวนส่ง
+                              </th>
+                              <th className="py-2.5 px-3 text-center">
+                                สถานะจัดส่ง
+                              </th>
+                              <th className="py-2.5 px-3">เวลาเช็คอิน</th>
+                              <th className="py-2.5 px-3">เวลาเช็คเอาท์</th>
+                              <th className="py-2.5 px-3 text-right">
+                                ยอดชำระเงิน
+                              </th>
+                              <th className="py-2.5 px-3 text-center">
+                                ตรวจเช็ค
+                              </th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-200/70 text-slate-800">
+                            {selectedRelease.stores.map(
+                              (st: any, idx: number) => {
+                                const isCompleted = !!st.check_out_id;
+                                const isCheckIn = !!st.check_in_id;
+                                const isProblem =
+                                  !!st.problem_id || st.status === "problem";
 
-                <div>
-                  <span className="text-slate-400 block text-[11px]">สถานะทางบัญชี</span>
-                  <span className="font-semibold text-amber-700">
-                    {selectedRelease.accounting_status_name || selectedRelease.accounting_status || "-"}
-                  </span>
-                </div>
+                                return (
+                                  <tr
+                                    key={st.list_id || idx}
+                                    onClick={() => setSelectedStoreItem(st)}
+                                    className="hover:bg-blue-50/70 cursor-pointer transition-colors"
+                                  >
+                                    {/* 1. ลำดับ */}
+                                    <td className="py-2 px-3 text-center font-bold text-slate-600 font-mono">
+                                      {st.row_order || idx + 1}
+                                    </td>
 
-                <div>
-                  <span className="text-slate-400 block text-[11px]">วันที่ออกรถ</span>
-                  <span className="font-medium text-slate-800">
-                    {selectedRelease.created_at ? new Date(selectedRelease.created_at).toLocaleString("th-TH") : selectedRelease.dateGroup || "-"}
-                  </span>
-                </div>
+                                    {/* 2. รหัสออเดอร์ */}
+                                    <td className="py-2 px-3 font-mono font-bold text-slate-900">
+                                      {st.data_store_no || "-"}
+                                    </td>
 
-                {selectedRelease.description && (
-                  <div className="col-span-2 bg-slate-50 p-2 rounded border border-slate-100 mt-1">
-                    <span className="text-slate-400 block text-[10px]">หมายเหตุ</span>
-                    <span className="text-slate-700 text-xs">{selectedRelease.description}</span>
+                                    {/* 3. รหัสร้านค้า */}
+                                    <td className="py-2 px-3 font-mono font-semibold text-blue-700">
+                                      {st.store_id || "-"}
+                                    </td>
+
+                                    {/* 4. ชื่อร้านค้า */}
+                                    <td className="py-2 px-3">
+                                      <div className="font-semibold text-slate-900 max-w-[200px] truncate">
+                                        {st.store_name_result ||
+                                          st.store_name ||
+                                          "ร้านค้า"}
+                                      </div>
+                                      <div className="text-[10px] text-slate-400 max-w-[200px] truncate">
+                                        {st.store_address ||
+                                          st.telephone_number ||
+                                          "-"}
+                                      </div>
+                                    </td>
+
+                                    {/* 5. ตำแหน่งวางสินค้า */}
+                                    <td className="py-2 px-3 text-center">
+                                      {st.position_product_name ||
+                                      st.position_product_id ? (
+                                        <span className="inline-flex items-center bg-amber-50 text-amber-900 border border-amber-300 font-mono font-bold text-[10px] px-2 py-0.5 rounded shadow-2xs">
+                                          จุดวาง{" "}
+                                          {st.position_product_name ||
+                                            st.position_product_id}
+                                          /{st.position_production_order || 1}
+                                        </span>
+                                      ) : (
+                                        <span className="text-slate-400 text-[10px]">
+                                          -
+                                        </span>
+                                      )}
+                                    </td>
+
+                                    {/* 6. จำนวนส่ง */}
+                                    <td className="py-2 px-3 text-center font-mono font-bold text-slate-900">
+                                      {st.sum_quantity || 1} ลัง
+                                    </td>
+
+                                    {/* 7. สถานะจัดส่ง */}
+                                    <td className="py-2 px-3 text-center">
+                                      {isProblem ? (
+                                        <span className="inline-flex items-center gap-1 bg-rose-100 text-rose-800 border border-rose-300 font-bold text-[10px] px-2 py-0.5 rounded-full">
+                                          <AlertTriangle className="w-3 h-3 text-rose-600" />{" "}
+                                          ติดปัญหา
+                                        </span>
+                                      ) : isCompleted ? (
+                                        <span className="inline-flex items-center gap-1 bg-emerald-100 text-emerald-800 border border-emerald-300 font-bold text-[10px] px-2 py-0.5 rounded-full">
+                                          <CheckCircle2 className="w-3 h-3" />{" "}
+                                          เช็คเอาท์แล้ว
+                                        </span>
+                                      ) : isCheckIn ? (
+                                        <span className="inline-flex items-center gap-1 bg-blue-100 text-blue-800 border border-blue-300 font-bold text-[10px] px-2 py-0.5 rounded-full">
+                                          <Clock className="w-3 h-3" /> กำลังส่ง
+                                        </span>
+                                      ) : (
+                                        <span className="inline-flex items-center gap-1 bg-slate-100 text-slate-700 border border-slate-200 font-semibold text-[10px] px-2 py-0.5 rounded-full">
+                                          รอส่ง
+                                        </span>
+                                      )}
+                                    </td>
+
+                                    {/* 8. เวลาเช็คอิน */}
+                                    <td className="py-2 px-3 text-slate-700 font-mono text-[11px]">
+                                      {st.date_time_check_in
+                                        ? new Date(
+                                            st.date_time_check_in,
+                                          ).toLocaleTimeString("th-TH", {
+                                            hour: "2-digit",
+                                            minute: "2-digit",
+                                          })
+                                        : "-"}
+                                    </td>
+
+                                    {/* 9. เวลาเช็คเอาท์ */}
+                                    <td className="py-2 px-3 text-slate-700 font-mono text-[11px]">
+                                      {st.date_time_check_out
+                                        ? new Date(
+                                            st.date_time_check_out,
+                                          ).toLocaleTimeString("th-TH", {
+                                            hour: "2-digit",
+                                            minute: "2-digit",
+                                          })
+                                        : "-"}
+                                    </td>
+
+                                    {/* 10. ยอดชำระเงิน */}
+                                    <td className="py-2 px-3 text-right">
+                                      {st.amount ? (
+                                        <div>
+                                          <span className="font-bold text-slate-900 font-mono">
+                                            {Number(st.amount).toLocaleString()}{" "}
+                                            ฿
+                                          </span>
+                                          <span className="text-[10px] text-slate-500 block">
+                                            ({st.payment_name || "เงินสด"})
+                                          </span>
+                                        </div>
+                                      ) : (
+                                        <span className="text-slate-400 text-[10px]">
+                                          -
+                                        </span>
+                                      )}
+                                    </td>
+
+                                    {/* 11. ตรวจเช็ค */}
+                                    <td className="py-2 px-3 text-center">
+                                      <button
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setSelectedStoreItem(st);
+                                        }}
+                                        className="bg-white border border-slate-200 hover:bg-slate-100 text-slate-700 p-1 rounded-md text-[10px] font-semibold transition-colors inline-flex items-center gap-1 shadow-2xs"
+                                      >
+                                        <Eye className="w-3 h-3 text-blue-600" />
+                                        <span>ตรวจเช็ค</span>
+                                      </button>
+                                    </td>
+                                  </tr>
+                                );
+                              },
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+
+                {/* Car Return Record */}
+                {selectedRelease.car_return && (
+                  <div className="border border-emerald-200 bg-emerald-50/50 rounded-lg p-4 space-y-2 shadow-2xs">
+                    <h4 className="font-bold text-emerald-900 text-xs border-b border-emerald-200 pb-2 flex items-center gap-1.5">
+                      <RotateCcw className="w-4 h-4 text-emerald-600" />
+                      <span>ข้อมูลการคืนรถ (บันทึกเรียบร้อย)</span>
+                    </h4>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs text-emerald-900">
+                      <div>
+                        <span className="text-emerald-600 block text-[10px]">
+                          เลขไมล์คืน
+                        </span>
+                        <span className="font-bold font-mono">
+                          {Number(
+                            selectedRelease.car_return.mileage || 0,
+                          ).toLocaleString()}{" "}
+                          กม.
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-emerald-600 block text-[10px]">
+                          ผู้ถือกุญแจ
+                        </span>
+                        <span className="font-semibold">
+                          {selectedRelease.car_return.key_holder_name || "-"}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-emerald-600 block text-[10px]">
+                          จุดจอดรถ
+                        </span>
+                        <span className="font-semibold">
+                          {selectedRelease.car_return.parking_name || "-"}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-emerald-600 block text-[10px]">
+                          ค่าน้ำมัน
+                        </span>
+                        <span className="font-semibold">
+                          {selectedRelease.car_return.gas_bill
+                            ? `${Number(selectedRelease.car_return.gas_bill).toLocaleString()} ฿`
+                            : "-"}
+                        </span>
+                      </div>
+                    </div>
                   </div>
                 )}
               </div>
-            </div>
-
-            {/* Real Uploaded Car Release Photos */}
-            <div className="border border-slate-200 rounded-lg p-4 bg-white space-y-2 shadow-2xs">
-              <h4 className="font-bold text-slate-900 text-xs border-b border-slate-100 pb-2 flex items-center justify-between">
-                <span>รูปภาพการปล่อยรถ</span>
-                <span className="text-[10px] text-slate-400 font-normal">
-                  {[
-                    selectedRelease.image_mileage,
-                    selectedRelease.image_front,
-                    selectedRelease.image_around_1,
-                    selectedRelease.image_around_2,
-                    selectedRelease.image_around_3,
-                    selectedRelease.image_around_4,
-                    selectedRelease.image_around_5,
-                    selectedRelease.image_pda,
-                  ].filter(Boolean).length} รูป
-                </span>
-              </h4>
-
-              <div className="grid grid-cols-3 gap-2 pt-1">
-                {[
-                  { label: "เลขไมล์", val: selectedRelease.image_mileage },
-                  { label: "หน้ารถ", val: selectedRelease.image_front },
-                  { label: "รอบคัน 1", val: selectedRelease.image_around_1 },
-                  { label: "รอบคัน 2", val: selectedRelease.image_around_2 },
-                  { label: "รอบคัน 3", val: selectedRelease.image_around_3 },
-                  { label: "รอบคัน 4", val: selectedRelease.image_around_4 },
-                  { label: "รอบคัน 5", val: selectedRelease.image_around_5 },
-                  { label: "อุปกรณ์ PDA", val: selectedRelease.image_pda },
-                ]
-                  .filter((item) => !!item.val)
-                  .map((item, idx) => (
-                    <div
-                      key={idx}
-                      className="border border-slate-200 rounded-lg overflow-hidden bg-slate-100 aspect-video relative group shadow-2xs"
-                    >
-                      <img
-                        src={getImageUrl(item.val)}
-                        alt={item.label}
-                        className="w-full h-full object-cover group-hover:scale-105 transition-transform"
-                      />
-                      <div className="absolute bottom-1 right-1 bg-slate-900/80 text-white text-[9px] px-1.5 py-0.5 rounded font-medium">
-                        {item.label}
-                      </div>
-                    </div>
-                  ))}
-
-                {[
-                  selectedRelease.image_mileage,
-                  selectedRelease.image_front,
-                  selectedRelease.image_around_1,
-                  selectedRelease.image_around_2,
-                  selectedRelease.image_around_3,
-                  selectedRelease.image_around_4,
-                  selectedRelease.image_around_5,
-                  selectedRelease.image_pda,
-                ].filter(Boolean).length === 0 && (
-                    <div className="col-span-3 text-center py-4 text-slate-400 bg-slate-50 rounded-lg border border-dashed border-slate-200 text-[11px]">
-                      ไม่มีการแนบรูปภาพสำหรับการปล่อยรถนี้
-                    </div>
-                  )}
-              </div>
-            </div>
-
-            {/* Stores Timeline List */}
-            {Array.isArray(selectedRelease.stores) && selectedRelease.stores.length > 0 && (
-              <div className="border border-slate-200 rounded-lg p-4 bg-white space-y-2 shadow-2xs">
-                <h4 className="font-bold text-slate-900 text-xs border-b border-slate-100 pb-2 flex items-center justify-between">
-                  <span>รายการจุดจัดส่งในกรุ๊ป ({selectedRelease.stores.length} ร้าน)</span>
-                </h4>
-                <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1 custom-scrollbar">
-                  {selectedRelease.stores.map((st: any, idx: number) => (
-                    <div key={st.list_id || idx} className="flex items-center justify-between p-2 rounded-lg bg-slate-50 border border-slate-200 text-xs">
-                      <div className="flex items-center gap-2 min-w-0">
-                        <span className="w-5 h-5 rounded bg-blue-100 text-blue-700 font-bold flex items-center justify-center text-[10px] shrink-0">
-                          {st.row_order || idx + 1}
-                        </span>
-                        <div className="min-w-0">
-                          <div className="font-semibold text-slate-900 truncate flex items-center gap-1.5">
-                            <span>{st.store_name_result || st.store_name || "ร้านค้าจุดจัดส่ง"}</span>
-                            {(st.position_product_name || st.position_product_id) && (
-                              <span className="inline-flex items-center gap-0.5 bg-amber-50 text-amber-800 border border-amber-300 px-1.5 py-0.5 rounded text-[10px] font-bold font-mono shrink-0">
-                                จุดวาง {st.position_product_name || st.position_product_id}/{st.position_production_order || 1}
-                              </span>
-                            )}
-                          </div>
-                          <div className="text-[10px] text-slate-400 truncate">
-                            {st.store_address || st.telephone_number || "-"}
-                          </div>
-                        </div>
-                      </div>
-                      <div className="text-right shrink-0">
-                        <span className="font-bold text-slate-800 block">{st.sum_quantity || 1} ลัง</span>
-                        <span className={`text-[10px] font-semibold ${st.check_out_id ? "text-emerald-600" : st.check_in_id ? "text-blue-600" : "text-amber-600"}`}>
-                          {st.check_out_id ? "เช็คเอาท์แล้ว" : st.check_in_id ? "กำลังส่ง" : "รอส่ง"}
-                        </span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
             )}
 
-            {/* Car Return Record */}
-            {selectedRelease.car_return && (
-              <div className="border border-emerald-200 bg-emerald-50/50 rounded-lg p-4 space-y-2 shadow-2xs">
-                <h4 className="font-bold text-emerald-900 text-xs border-b border-emerald-200 pb-2 flex items-center gap-1.5">
-                  <RotateCcw className="w-4 h-4 text-emerald-600" />
-                  <span>ข้อมูลการคืนรถ (บันทึกเรียบร้อย)</span>
-                </h4>
-                <div className="grid grid-cols-2 gap-2 text-xs text-emerald-900">
-                  <div>
-                    <span className="text-emerald-600 block text-[10px]">เลขไมล์คืน</span>
-                    <span className="font-bold font-mono">{Number(selectedRelease.car_return.mileage || 0).toLocaleString()} กม.</span>
-                  </div>
-                  <div>
-                    <span className="text-emerald-600 block text-[10px]">ผู้ถือกุญแจ</span>
-                    <span className="font-semibold">{selectedRelease.car_return.key_holder_name || "-"}</span>
-                  </div>
-                  <div>
-                    <span className="text-emerald-600 block text-[10px]">จุดจอดรถ</span>
-                    <span className="font-semibold">{selectedRelease.car_return.parking_name || "-"}</span>
-                  </div>
-                  <div>
-                    <span className="text-emerald-600 block text-[10px]">ค่าน้ำมัน</span>
-                    <span className="font-semibold">{selectedRelease.car_return.gas_bill ? `${Number(selectedRelease.car_return.gas_bill).toLocaleString()} ฿` : "-"}</span>
-                  </div>
-                </div>
-              </div>
+            {/* TAB 2: LIVE VEHICLE GPS TRACKING & ROUTE MAP */}
+            {activeDetailTab === "gps" && (
+              <ReleaseGpsMapTab
+                release={selectedRelease}
+                stores={selectedRelease.stores || []}
+              />
             )}
           </div>
         )}
@@ -1588,13 +2293,6 @@ export const CarReleaseList: React.FC = () => {
         cancelText="ยกเลิก"
         onConfirm={handleConfirmDelete}
         onCancel={() => setReleaseToDelete(null)}
-      />
-
-      <QuickActionModal
-        isOpen={!!modalAction}
-        actionType={modalAction}
-        releaseNo={selectedRelease?.car_release_no || "TMS-2026720-0005"}
-        onClose={() => setModalAction(null)}
       />
     </div>
   );

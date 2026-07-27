@@ -69,11 +69,7 @@ export const Sidebar: React.FC = () => {
   const mainNavItems = [
     { to: '/', label: 'แดชบอร์ด', icon: LayoutDashboard, key: 'dashboard' },
     { to: '/releases', label: 'ใบปล่อยรถ', icon: Truck, key: 'releases' },
-    { to: '/releases/create', label: 'สร้างใบปล่อยรถ', icon: FileText, key: 'create_release' },
-    { to: '/driver', label: 'ประตูรถ (เช็คอิน)', icon: MapPin, key: 'driver' },
-    { to: '/return', label: 'บันทึกคืนกุญแจ', icon: Key, key: 'return' },
-    { to: '/reports', label: 'สถานะทางบัญชี', icon: ShieldCheck, key: 'reports' },
-    { to: '/route', label: 'เส้นทาง Route', icon: Map, key: 'optimoroute' },
+    { to: '/route', label: 'จัดรถ & เส้นทาง', icon: Map, key: 'route' },
     { to: '/import-optimo', label: 'นำเข้า OptimoRoute', icon: DownloadCloud, key: 'import_optimo' },
     { to: '/profile', label: 'โปรไฟล์', icon: User }
   ].filter((item) => isMenuAllowed(item.key));

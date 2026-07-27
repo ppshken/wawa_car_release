@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { query } = require('../config/db');
+const { query, hasColumn } = require('../config/db');
 const { authenticateToken } = require('../middleware/auth');
 const { saveBase64Image } = require('../middleware/upload');
 
@@ -139,19 +139,31 @@ router.post('/list-store/:id/check-out', authenticateToken, async (req, res) => 
 
     // Recalculate totals on car_release
     const releaseRow = listRows[0];
-    if (releaseRow && releaseRow.car_release_id) {
-      const totals = await query(
-        `SELECT COUNT(*) as total_bills, SUM(co.amount) as sum_amount 
-         FROM check_out co 
-         JOIN list_store ls ON co.list_id = ls.list_id 
-         WHERE ls.car_release_id = ? AND ls.bypass = 0`,
-        [releaseRow.car_release_id]
-      );
-      if (totals.length > 0) {
-        await query(
-          `UPDATE car_release SET total_number_of_bills = ?, total_amount = ? WHERE car_release_id = ?`,
-          [totals[0].total_bills || 0, totals[0].sum_amount || 0, releaseRow.car_release_id]
+    if (releaseRow) {
+      const hasCarReleaseId = await hasColumn('list_store', 'car_release_id');
+      let targetCarReleaseId = hasCarReleaseId ? releaseRow.car_release_id : null;
+      let filterCol = hasCarReleaseId && targetCarReleaseId ? 'ls.car_release_id' : 'ls.group_store_id';
+      let filterVal = hasCarReleaseId && targetCarReleaseId ? targetCarReleaseId : releaseRow.group_store_id;
+
+      if (!targetCarReleaseId && releaseRow.group_store_id) {
+        const crs = await query(`SELECT car_release_id FROM car_release WHERE group_store_id = ? ORDER BY car_release_id DESC LIMIT 1`, [releaseRow.group_store_id]);
+        if (crs.length > 0) targetCarReleaseId = crs[0].car_release_id;
+      }
+
+      if (targetCarReleaseId && filterVal) {
+        const totals = await query(
+          `SELECT COUNT(*) as total_bills, SUM(co.amount) as sum_amount 
+           FROM check_out co 
+           JOIN list_store ls ON co.list_id = ls.list_id 
+           WHERE ${filterCol} = ? AND ls.bypass = 0`,
+          [filterVal]
         );
+        if (totals.length > 0) {
+          await query(
+            `UPDATE car_release SET total_number_of_bills = ?, total_amount = ? WHERE car_release_id = ?`,
+            [totals[0].total_bills || 0, totals[0].sum_amount || 0, targetCarReleaseId]
+          );
+        }
       }
     }
 

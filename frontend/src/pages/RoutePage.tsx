@@ -14,7 +14,6 @@ import {
   useMap,
 } from "react-leaflet";
 import L from "leaflet";
-import "leaflet/dist/leaflet.css";
 import api from "../services/api";
 import { useToast } from "../context/ToastContext";
 import { AnimatedDrawer } from "../components/AnimatedDrawer";
@@ -63,6 +62,8 @@ import {
   Settings,
   PanelLeftClose,
   PanelLeftOpen,
+  Calculator,
+  AlertTriangle,
 } from "lucide-react";
 
 interface DeliverySettings {
@@ -602,11 +603,6 @@ export const RoutePage: React.FC = () => {
 
   // Auto-Routing Calculation Drawer State
   const [isAutoRouteDrawerOpen, setIsAutoRouteDrawerOpen] = useState(false);
-  const [autoRouteStrategy, setAutoRouteStrategy] = useState<
-    "shortest_distance" | "lowest_fuel" | "avoid_tolls"
-  >("shortest_distance");
-  const [autoRouteMaxLoad, setAutoRouteMaxLoad] = useState<number>(100);
-  const [autoRouteMaxStops, setAutoRouteMaxStops] = useState<number>(15);
   const [autoRouteSelectedVehicles, setAutoRouteSelectedVehicles] = useState<
     string[]
   >([]);
@@ -848,26 +844,36 @@ export const RoutePage: React.FC = () => {
         {
           "รหัสร้านค้า": "ST-001",
           "จำนวนสินค้า": 50,
+          "ตำแหน่งวางสินค้า": "E",
+          "แถว": 1,
           "รหัสออเดอร์": "ORD-2026-001",
         },
         {
           "รหัสร้านค้า": "ST-002",
           "จำนวนสินค้า": 35,
+          "ตำแหน่งวางสินค้า": "A",
+          "แถว": 2,
           "รหัสออเดอร์": "ORD-2026-002",
         },
         {
           "รหัสร้านค้า": "ST-003",
           "จำนวนสินค้า": 60,
+          "ตำแหน่งวางสินค้า": "R",
+          "แถว": 4,
           "รหัสออเดอร์": "ORD-2026-003",
         },
         {
           "รหัสร้านค้า": "ST-004",
           "จำนวนสินค้า": 40,
+          "ตำแหน่งวางสินค้า": "B",
+          "แถว": 8,
           "รหัสออเดอร์": "ORD-2026-004",
         },
         {
           "รหัสร้านค้า": "ST-005",
           "จำนวนสินค้า": 80,
+          "ตำแหน่งวางสินค้า": "C",
+          "แถว": 7,
           "รหัสออเดอร์": "ORD-2026-005",
         },
       ];
@@ -935,6 +941,28 @@ export const RoutePage: React.FC = () => {
               10,
             ) || 1;
 
+          const positionValue = String(
+            row["ตำแหน่งวางสินค้า"] ||
+              row["position_product"] ||
+              row["position_product_id"] ||
+              row["Position Product"] ||
+              "",
+          ).trim();
+          const matchedPosition = positionProductsList.find(
+            (position) =>
+              String(position.position_product_id) === positionValue ||
+              String(position.position_product_name).trim().toLowerCase() === positionValue.toLowerCase(),
+          );
+          const positionOrder =
+            parseInt(
+              row["แถว"] ||
+                row["position_production_order"] ||
+                row["Position Row"] ||
+                "1",
+              10,
+            ) || 1;
+
+
           // Map ข้อมูลกับ Master Store Database จาก store_id
           const foundMaster = storesList.find(
             (s) => String(s.store_id).trim().toLowerCase() === storeId.toLowerCase(),
@@ -973,6 +1001,9 @@ export const RoutePage: React.FC = () => {
             data_store_no: orderNo,
             sum_quantity: quantity,
             lat_long: latLong,
+            position_product_id: matchedPosition?.position_product_id || "",
+            position_product_name: matchedPosition?.position_product_name || positionValue,
+            position_production_order: positionOrder,
             is_mapped_master: !!foundMaster,
           };
         });
@@ -1005,6 +1036,9 @@ export const RoutePage: React.FC = () => {
       data_store_no: "",
       sum_quantity: 1,
       lat_long: "",
+      position_product_id: "",
+      position_product_name: "",
+      position_production_order: 1,
       is_mapped_master: false,
     };
     setExcelPreviewStops((prev) => [...prev, newRow]);
@@ -2400,7 +2434,7 @@ export const RoutePage: React.FC = () => {
 
                           {/* Line 3: Stats & Progress Bar Inline */}
                           <div className="flex items-center justify-between gap-1.5 mt-0.5 text-[10px] text-slate-500 font-medium">
-                            <div className="flex items-center gap-1 shrink-0">
+                            <div className="flex items-center gap-2 shrink-0">
                               <span className="flex items-center gap-0.5">
                                 <MapPin className="w-2.5 h-2.5 text-slate-400" />
                                 {deliveryStops} จุด
@@ -2410,7 +2444,12 @@ export const RoutePage: React.FC = () => {
                                 <Clock className="w-2.5 h-2.5 text-slate-400" />
                                 {estimatedTime}
                               </span>
+                              <span className="flex items-center gap-0.5">
+                                <Route className="w-2.5 h-2.5 text-slate-400" />
+                                {estimatedDist}
+                              </span>
                             </div>
+                            
 
                             {/* Progress Bar & Counter */}
                             <div className="flex items-center gap-1.5 shrink-0">
@@ -3332,9 +3371,6 @@ export const RoutePage: React.FC = () => {
                         >
                           <Settings className="w-3.5 h-3.5 text-slate-600" />
                           <span>ตั้งค่าจัดส่ง</span>
-                          <span className="bg-slate-100 text-slate-700 text-[10px] font-bold px-1.5 py-0.2 rounded-full border border-slate-200">
-                            {deliverySettings.serviceTimePerStop}น./จุด
-                          </span>
                         </button>
 
                         <button
@@ -3348,7 +3384,7 @@ export const RoutePage: React.FC = () => {
                           }}
                           className="bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs px-3 py-1 rounded-md flex items-center gap-1.5 shadow-2xs transition-all hover:scale-105 shrink-0"
                         >
-                          <Cpu className="w-3.5 h-3.5 text-amber-300 animate-pulse" />
+                          <Calculator className="w-3.5 h-3.5 text-amber-300 animate-pulse" />
                           <span>คำนวณเส้นทาง</span>
                         </button>
 
@@ -3953,9 +3989,9 @@ export const RoutePage: React.FC = () => {
             onChange={(val) => setFormStopPriority(String(val))}
             placeholder="-- เลือกลำดับความสำคัญ --"
             options={[
-              { value: "high", label: "🔴 สูง (High Priority)", badge: "ด่วนที่สุด" },
-              { value: "medium", label: "🔵 กลาง (Medium Priority)", badge: "ปกติ" },
-              { value: "low", label: "⚪ ต่ำ (Low Priority)", badge: "ไม่รีบ" },
+              { value: "high", label: "สูง (High Priority)", badge: "ด่วนที่สุด" },
+              { value: "medium", label: "กลาง (Medium Priority)", badge: "ปกติ" },
+              { value: "low", label: "ต่ำ (Low Priority)", badge: "ไม่รีบ" },
             ]}
             required
           />
@@ -4383,9 +4419,9 @@ export const RoutePage: React.FC = () => {
             onChange={(val) => setUnassignedPriority(String(val))}
             placeholder="-- เลือกลำดับความสำคัญ --"
             options={[
-              { value: "high", label: "🔴 สูง (High Priority)", badge: "ด่วนที่สุด" },
-              { value: "medium", label: "🔵 กลาง (Medium Priority)", badge: "ปกติ" },
-              { value: "low", label: "⚪ ต่ำ (Low Priority)", badge: "ไม่รีบ" },
+              { value: "high", label: "สูง (High Priority)", badge: "ด่วนที่สุด" },
+              { value: "medium", label: "กลาง (Medium Priority)", badge: "ปกติ" },
+              { value: "low", label: "ต่ำ (Low Priority)", badge: "ไม่รีบ" },
             ]}
             required
           />
@@ -4735,6 +4771,8 @@ export const RoutePage: React.FC = () => {
                   <th className="p-2 w-36">ชื่อร้านค้า</th>
                   <th className="p-2 min-w-[200px]">ที่อยู่</th>
                   <th className="p-2 w-20 text-center">จำนวน (ลัง)</th>
+                  <th className="p-2 w-40">ตำแหน่งวางสินค้า</th>
+                  <th className="p-2 w-16 text-center">แถว</th>
                   <th className="p-2 w-32">รหัสออเดอร์</th>
                   <th className="p-2 w-32">พิกัด GPS</th>
                   <th className="p-2 text-center w-10">ลบ</th>
@@ -4831,6 +4869,54 @@ export const RoutePage: React.FC = () => {
                         className="w-full border border-slate-200 rounded px-1.5 py-1 text-xs text-center font-bold text-amber-700"
                       />
                     </td>
+                    <td className="p-1 min-w-[150px]">
+                      <select
+                        value={item.position_product_id || ""}
+                        onChange={(e) => {
+                          const positionId = e.target.value;
+                          const foundPosition = positionProductsList.find(
+                            (position) => String(position.position_product_id) === positionId,
+                          );
+                          setExcelPreviewStops((prev) =>
+                            prev.map((row) =>
+                              row.id === item.id
+                                ? {
+                                    ...row,
+                                    position_product_id: positionId,
+                                    position_product_name: foundPosition?.position_product_name || "",
+                                  }
+                                : row,
+                            ),
+                          );
+                        }}
+                        className="w-full border border-slate-200 rounded px-1.5 py-1 text-xs font-semibold text-slate-800 bg-white focus:outline-none focus:border-blue-400"
+                      >
+                        <option value="">-- เลือกตำแหน่งวาง --</option>
+                        {positionProductsList.map((position) => (
+                          <option key={position.position_product_id} value={position.position_product_id}>
+                            {position.position_product_name}
+                          </option>
+                        ))}
+                      </select>
+                    </td>
+                    <td className="p-1">
+                      <input
+                        type="number"
+                        min={1}
+                        value={item.position_production_order || 1}
+                        onChange={(e) => {
+                          const positionOrder = parseInt(e.target.value, 10) || 1;
+                          setExcelPreviewStops((prev) =>
+                            prev.map((row) =>
+                              row.id === item.id
+                                ? { ...row, position_production_order: positionOrder }
+                                : row,
+                            ),
+                          );
+                        }}
+                        className="w-full border border-slate-200 rounded px-1.5 py-1 text-xs text-center font-bold text-slate-800 focus:border-blue-400"
+                      />
+                    </td>
                     <td className="p-1">
                       <input
                         type="text"
@@ -4891,7 +4977,7 @@ export const RoutePage: React.FC = () => {
 
                 {/* Row for adding a new empty item at the end of the table */}
                 <tr className="bg-slate-50/80 hover:bg-blue-50/50 transition-colors border-t-2 border-dashed border-slate-200">
-                  <td colSpan={8} className="p-2 text-center">
+                  <td colSpan={10} className="p-2 text-center">
                     <button
                       type="button"
                       onClick={handleAddEmptyExcelRow}
@@ -4912,7 +4998,7 @@ export const RoutePage: React.FC = () => {
       <AnimatedDrawer
         isOpen={isAutoRouteDrawerOpen}
         onClose={() => setIsAutoRouteDrawerOpen(false)}
-        title="⚡ ตัวเลือกคำนวณและจัดสายรถอัตโนมัติ"
+        title="ตัวเลือกคำนวณและจัดสายรถอัตโนมัติ"
         formId="auto-route-form"
         onSubmit={(e) => {
           e.preventDefault();
@@ -4938,7 +5024,7 @@ export const RoutePage: React.FC = () => {
             {/* 1. Strategy */}
             <div>
               <label className="block text-slate-800 font-bold mb-1.5 flex items-center justify-between">
-                <span>🎯 กลยุทธ์การคำนวณจัดสาย (ซิงก์กับการตั้งค่าระบบ)</span>
+                <span>กลยุทธ์การคำนวณจัดสาย (ซิงก์กับการตั้งค่าระบบ)</span>
                 <span className="text-[10px] text-blue-600 font-semibold bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
                   ซิงก์ฐานข้อมูลแล้ว
                 </span>
@@ -5001,7 +5087,7 @@ export const RoutePage: React.FC = () => {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1 border-t border-slate-200/60">
               <div>
                 <label className="block text-slate-700 font-semibold mb-1">
-                  ⏱️ ระยะเวลาลงสินค้าต่อสถานที่ (นาที/จุด)
+                   ระยะเวลาลงสินค้าต่อสถานที่ (นาที/จุด)
                 </label>
                 <div className="relative">
                   <input
@@ -5026,7 +5112,7 @@ export const RoutePage: React.FC = () => {
 
               <div>
                 <label className="block text-slate-700 font-semibold mb-1">
-                  📌 จำนวนจุดรับสินค้าต่อคัน
+                  จำนวนจุดรับสินค้าต่อคัน
                 </label>
                 <div className="bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-[11px] font-semibold text-slate-700 flex items-center justify-between h-[34px]">
                   <span>ไม่จำกัดจำนวนจุด (อิงความจุลังรถ)</span>
@@ -5093,11 +5179,11 @@ export const RoutePage: React.FC = () => {
               <div className="pt-1">
                 {totalSelectedCapacity >= totalUnassignedBoxes ? (
                   <div className="text-[11px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 p-2 rounded-lg flex items-center gap-1.5">
-                    <span>🟢</span> ความจุของรถที่เลือกเพียงพอสำหรับสินค้าทั้งหมด ({totalUnassignedBoxes} / {totalSelectedCapacity} ลัง)
+                    <span><Check className="w-4 h-4" /></span> ความจุของรถที่เลือกเพียงพอสำหรับสินค้าทั้งหมด ({totalUnassignedBoxes} / {totalSelectedCapacity} ลัง)
                   </div>
                 ) : (
                   <div className="text-[11px] font-bold text-amber-800 bg-amber-50 border border-amber-200 p-2 rounded-lg flex items-center gap-1.5">
-                    <span>⚠️</span> ความจุรถไม่เพียงพอ! ต้องการอีก {totalUnassignedBoxes - totalSelectedCapacity} ลัง (กรุณาเลือกรถเพิ่ม)
+                    <span><AlertTriangle className="w-4 h-4" /></span> ความจุรถไม่เพียงพอ! ต้องการอีก {totalUnassignedBoxes - totalSelectedCapacity} ลัง (กรุณาเลือกรถเพิ่ม)
                   </div>
                 )}
               </div>
@@ -5191,7 +5277,7 @@ export const RoutePage: React.FC = () => {
                     </div>
 
                     <div className="flex items-center gap-1.5">
-                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-200">
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-amber-100 text-amber-800 border border-amber-200">
                         บรรจุได้ {capacity} ลัง
                       </span>
                       {isAssigned && (
@@ -5223,7 +5309,7 @@ export const RoutePage: React.FC = () => {
       <AnimatedDrawer
         isOpen={isDeliverySettingsDrawerOpen}
         onClose={() => setIsDeliverySettingsDrawerOpen(false)}
-        title="⚙️ ตั้งค่าเงื่อนไขและหลักการจัดส่ง (Delivery Settings)"
+        title="ตั้งค่าเงื่อนไขและหลักการจัดส่ง (Delivery Settings)"
         formId="delivery-settings-form"
         onSubmit={async (e) => {
           e.preventDefault();
@@ -5245,7 +5331,6 @@ export const RoutePage: React.FC = () => {
         <div className="space-y-5 text-xs">
           {/* Banner Info */}
           <div className="bg-blue-50 border border-blue-200 p-3 rounded-xl text-slate-700 leading-relaxed flex items-start gap-2.5">
-            <span className="text-lg">⏱️</span>
             <div>
               <strong className="text-blue-950 font-bold block mb-0.5">
                 การตั้งค่าระยะเวลา & ลำดับความสำคัญ

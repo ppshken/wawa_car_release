@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { query } = require('../config/db');
+const { query, hasColumn } = require('../config/db');
 const { authenticateToken } = require('../middleware/auth');
 const { saveBase64Image } = require('../middleware/upload');
 
@@ -43,15 +43,16 @@ router.post('/car-release', authenticateToken, async (req, res) => {
     const countRows = await query(`SELECT COUNT(*) AS count FROM car_release WHERE DATE(created_at) = CURDATE()`);
     const seqNum = String((countRows[0]?.count || 0) + 1).padStart(4, '0');
     const releaseNo = `TMS-${dateStr}-${seqNum}`;
+    const imgPath = `car_release/${releaseNo}`;
 
-    const imgMileageUrl = saveBase64Image(image_mileage, releaseNo);
-    const imgFrontUrl = saveBase64Image(image_front, releaseNo);
-    const imgAround1Url = saveBase64Image(image_around_1, releaseNo);
-    const imgAround2Url = saveBase64Image(image_around_2, releaseNo);
-    const imgAround3Url = saveBase64Image(image_around_3, releaseNo);
-    const imgAround4Url = saveBase64Image(image_around_4, releaseNo);
-    const imgAround5Url = saveBase64Image(image_around_5, releaseNo);
-    const imgPdaUrl = saveBase64Image(image_pda, releaseNo);
+    const imgMileageUrl = saveBase64Image(image_mileage, imgPath);
+    const imgFrontUrl = saveBase64Image(image_front, imgPath);
+    const imgAround1Url = saveBase64Image(image_around_1, imgPath);
+    const imgAround2Url = saveBase64Image(image_around_2, imgPath);
+    const imgAround3Url = saveBase64Image(image_around_3, imgPath);
+    const imgAround4Url = saveBase64Image(image_around_4, imgPath);
+    const imgAround5Url = saveBase64Image(image_around_5, imgPath);
+    const imgPdaUrl = saveBase64Image(image_pda, imgPath);
 
     const result = await query(
       `INSERT INTO car_release 
@@ -81,6 +82,9 @@ router.post('/car-release', authenticateToken, async (req, res) => {
     );
 
     const car_release_id = result.insertId;
+
+    // Update Group Store status to 1
+    await query(`UPDATE group_store SET status = 1 WHERE group_store_id = ?`, [group_store_id]);
 
     // Insert Followers
     if (Array.isArray(followers) && followers.length > 0) {
@@ -147,10 +151,10 @@ router.get('/car-release', authenticateToken, async (req, res) => {
              c.license_plate, c.brand, c.model, c.sub_model, c.car_image,
              u.name as driver_name, u.phone_number_1 as driver_phone, u.user_image,
              crt.type as car_release_type_name,
-             gs.group_store_name,
+             gs.group_store_name, gs.group_color,
              acc.status_name as accounting_status_name, acc.status_id as accounting_status_id,
              (SELECT COUNT(*) FROM list_store ls WHERE ls.group_store_id = cr.group_store_id) as total_stores,
-             (SELECT COUNT(*) FROM list_store ls WHERE ls.group_store_id = cr.group_store_id AND ls.status = 'completed') as completed_stores,
+             (SELECT COUNT(*) FROM list_store ls WHERE ls.group_store_id = cr.group_store_id AND ls.status = 'completed' OR ls.status = 'problem') as completed_stores,
              (SELECT COUNT(*) FROM car_return crt WHERE crt.car_release_id = cr.car_release_id) > 0 as is_returned
       ${baseSql}
       ORDER BY cr.car_release_id DESC
@@ -228,6 +232,12 @@ router.get('/car-release/:id', authenticateToken, async (req, res) => {
     );
 
     // Fetch List Stores + CheckIn + CheckOut + Problem
+    const hasCarReleaseId = await hasColumn('list_store', 'car_release_id');
+    const storeWhere = hasCarReleaseId
+      ? `WHERE ls.group_store_id = (SELECT group_store_id FROM car_release WHERE car_release_id = ?) OR ls.car_release_id = ?`
+      : `WHERE ls.group_store_id = (SELECT group_store_id FROM car_release WHERE car_release_id = ?)`;
+    const storeParams = hasCarReleaseId ? [car_release_id, car_release_id] : [car_release_id];
+
     const stores = await query(
       `SELECT ls.*, 
               pp.position_product_name,
@@ -246,10 +256,9 @@ router.get('/car-release/:id', authenticateToken, async (req, res) => {
        LEFT JOIN visit_type vt ON co.visit_type_id = vt.visit_type_id
        LEFT JOIN payment p ON co.payment_id = p.payment_id
        LEFT JOIN problem prob ON ls.list_id = prob.list_id
-       WHERE ls.group_store_id = (SELECT group_store_id FROM car_release WHERE car_release_id = ?)
-          OR (SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_NAME='list_store' AND COLUMN_NAME='car_release_id') > 0 AND ls.car_release_id = ?
+       ${storeWhere}
        ORDER BY ls.row_order ASC`,
-      [car_release_id, car_release_id]
+      storeParams
     );
 
     // Fetch Car Return details if exists
@@ -456,7 +465,10 @@ router.delete('/car-release/:id', authenticateToken, async (req, res) => {
     await query(`DELETE FROM car_return WHERE car_release_id = ?`, [car_release_id]);
 
     // Unlink or clean list_store
-    await query(`UPDATE list_store SET car_release_id = NULL WHERE car_release_id = ?`, [car_release_id]);
+    const hasCarReleaseId = await hasColumn('list_store', 'car_release_id');
+    if (hasCarReleaseId) {
+      await query(`UPDATE list_store SET car_release_id = NULL WHERE car_release_id = ?`, [car_release_id]);
+    }
 
     // Delete main car_release record
     await query(`DELETE FROM car_release WHERE car_release_id = ?`, [car_release_id]);

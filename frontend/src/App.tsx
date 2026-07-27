@@ -9,10 +9,6 @@ import { Sidebar } from './components/Sidebar';
 import { Login } from './pages/Login';
 import { Dashboard } from './pages/Dashboard';
 import { CarReleaseList } from './pages/CarReleaseList';
-import { CreateCarRelease } from './pages/CreateCarRelease';
-import { CarReleaseDetail } from './pages/CarReleaseDetail';
-import { DriverCheckInOut } from './pages/DriverCheckInOut';
-import { CarReturnPage } from './pages/CarReturnPage';
 import { StoresPage } from './pages/master/StoresPage';
 import { KeyHoldersPage } from './pages/master/KeyHoldersPage';
 import { PdaDevicesPage } from './pages/master/PdaDevicesPage';
@@ -81,38 +77,6 @@ export const App: React.FC = () => {
             element={
               <ProtectedLayout>
                 <CarReleaseList />
-              </ProtectedLayout>
-            }
-          />
-          <Route
-            path="/releases/create"
-            element={
-              <ProtectedLayout>
-                <CreateCarRelease />
-              </ProtectedLayout>
-            }
-          />
-          <Route
-            path="/releases/:id"
-            element={
-              <ProtectedLayout>
-                <CarReleaseDetail />
-              </ProtectedLayout>
-            }
-          />
-          <Route
-            path="/driver"
-            element={
-              <ProtectedLayout>
-                <DriverCheckInOut />
-              </ProtectedLayout>
-            }
-          />
-          <Route
-            path="/return"
-            element={
-              <ProtectedLayout>
-                <CarReturnPage />
               </ProtectedLayout>
             }
           />

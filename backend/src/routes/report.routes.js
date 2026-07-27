@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { query } = require('../config/db');
+const { query, hasColumn } = require('../config/db');
 const { authenticateToken } = require('../middleware/auth');
 
 // GET /api/reports/dashboard
@@ -49,10 +49,15 @@ router.get('/reports/dashboard', authenticateToken, async (req, res) => {
     `);
 
     // 6. Recent Releases
+    const hasCarReleaseId = await hasColumn('list_store', 'car_release_id');
+    const storeCountSubquery = hasCarReleaseId
+      ? `(SELECT COUNT(*) FROM list_store ls WHERE ls.car_release_id = cr.car_release_id OR ls.group_store_id = cr.group_store_id)`
+      : `(SELECT COUNT(*) FROM list_store ls WHERE ls.group_store_id = cr.group_store_id)`;
+
     const recentReleases = await query(`
       SELECT cr.car_release_id, cr.car_release_no, cr.created_at, cr.accounting_status,
              c.license_plate, u.name as driver_name,
-             (SELECT COUNT(*) FROM list_store ls WHERE ls.car_release_id = cr.car_release_id) as store_count
+             ${storeCountSubquery} as store_count
       FROM car_release cr
       LEFT JOIN car c ON cr.car_id = c.car_id
       LEFT JOIN user u ON cr.user_id = u.user_id
@@ -84,14 +89,20 @@ router.get('/reports/dashboard', authenticateToken, async (req, res) => {
 // GET /api/reports/pending-transfer (รายงานยอดโอนตามค้างชำระ)
 router.get('/reports/pending-transfer', authenticateToken, async (req, res) => {
   try {
+    const hasCarReleaseId = await hasColumn('list_store', 'car_release_id');
+    const selectReleaseId = hasCarReleaseId ? `ls.car_release_id,` : `cr.car_release_id,`;
+    const joinClause = hasCarReleaseId
+      ? `JOIN car_release cr ON (ls.car_release_id = cr.car_release_id OR ls.group_store_id = cr.group_store_id)`
+      : `JOIN car_release cr ON ls.group_store_id = cr.group_store_id`;
+
     const list = await query(`
-      SELECT co.*, ls.store_name_result, ls.car_release_id,
+      SELECT co.*, ls.store_name_result, ${selectReleaseId}
              cr.car_release_no, cr.created_at as release_date,
              c.license_plate, u.name as driver_name,
              s.store_name, s.telephone_number
       FROM check_out co
       JOIN list_store ls ON co.list_id = ls.list_id
-      JOIN car_release cr ON ls.car_release_id = cr.car_release_id
+      ${joinClause}
       LEFT JOIN car c ON cr.car_id = c.car_id
       LEFT JOIN user u ON cr.user_id = u.user_id
       LEFT JOIN store s ON ls.store_id = s.store_id
@@ -107,13 +118,18 @@ router.get('/reports/pending-transfer', authenticateToken, async (req, res) => {
 // GET /api/reports/off-site-checks (รายงานการเช็คเอาท์นอกสถานที่)
 router.get('/reports/off-site-checks', authenticateToken, async (req, res) => {
   try {
+    const hasCarReleaseId = await hasColumn('list_store', 'car_release_id');
+    const joinClause = hasCarReleaseId
+      ? `JOIN car_release cr ON (ls.car_release_id = cr.car_release_id OR ls.group_store_id = cr.group_store_id)`
+      : `JOIN car_release cr ON ls.group_store_id = cr.group_store_id`;
+
     const list = await query(`
       SELECT co.*, ls.store_name_result, ls.lat_long as target_location,
              cr.car_release_no, u.name as driver_name,
              s.store_name, s.store_location
       FROM check_out co
       JOIN list_store ls ON co.list_id = ls.list_id
-      JOIN car_release cr ON ls.car_release_id = cr.car_release_id
+      ${joinClause}
       LEFT JOIN user u ON cr.user_id = u.user_id
       LEFT JOIN store s ON ls.store_id = s.store_id
       WHERE co.off_site = 1
