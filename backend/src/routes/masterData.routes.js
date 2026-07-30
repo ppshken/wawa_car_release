@@ -368,24 +368,10 @@ router.delete('/keys/:id', authenticateToken, async (req, res) => {
 // GET /api/master/pda
 router.get('/pda', authenticateToken, async (req, res) => {
   try {
-    const pdas = await query('SELECT * FROM pda_device ORDER BY pda_id DESC');
+    const pdas = await query('SELECT * FROM pda_device ORDER BY pda_id ASC');
     res.json({ success: true, pdas });
   } catch (err) {
-    try {
-      await query(`CREATE TABLE IF NOT EXISTS pda_device (
-        pda_id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-        device_code VARCHAR(50) NOT NULL,
-        device_name VARCHAR(255) NOT NULL,
-        serial_number VARCHAR(100),
-        assigned_user VARCHAR(255),
-        status VARCHAR(20) DEFAULT 'active',
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;`);
-      const pdas = await query('SELECT * FROM pda_device ORDER BY pda_id DESC');
-      res.json({ success: true, pdas });
-    } catch (e) {
-      res.status(500).json({ success: false, message: err.message });
-    }
+    res.status(500).json({ success: false, message: err.message });
   }
 });
 
@@ -1047,4 +1033,72 @@ router.delete('/position-product/:id', authenticateToken, async (req, res) => {
   }
 });
 
+// =========================================================
+// 9. CAR RELEASE TYPES (ตาราง: car_release_type)
+// =========================================================
+
+// GET /api/master/car-release-types
+router.get('/car-release-types', authenticateToken, async (req, res) => {
+  try {
+    const releaseTypes = await query('SELECT * FROM car_release_type ORDER BY car_release_type_id ASC');
+    res.json({ success: true, releaseTypes });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// POST /api/master/car-release-types
+router.post('/car-release-types', authenticateToken, async (req, res) => {
+  try {
+    const { type } = req.body;
+    if (!type || !type.trim()) {
+      return res.status(400).json({ success: false, message: 'กรุณากรอกชื่อประเภทการปล่อยรถ' });
+    }
+    const result = await query(
+      'INSERT INTO car_release_type (type) VALUES (?)',
+      [type.trim()]
+    );
+    res.json({ success: true, message: 'เพิ่มประเภทการปล่อยรถสำเร็จ', car_release_type_id: result.insertId });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// PUT /api/master/car-release-types/:id
+router.put('/car-release-types/:id', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { type } = req.body;
+    if (!type || !type.trim()) {
+      return res.status(400).json({ success: false, message: 'กรุณากรอกชื่อประเภทการปล่อยรถ' });
+    }
+    await query(
+      'UPDATE car_release_type SET type = ? WHERE car_release_type_id = ?',
+      [type.trim(), id]
+    );
+    res.json({ success: true, message: 'อัปเดตประเภทการปล่อยรถเรียบร้อยแล้ว' });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// DELETE /api/master/car-release-types/:id
+router.delete('/car-release-types/:id', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const used = await query('SELECT COUNT(*) as cnt FROM car_release WHERE car_release_type_id = ?', [id]);
+    if (used[0]?.cnt > 0) {
+      return res.status(400).json({
+        success: false,
+        message: `ไม่สามารถลบได้ เนื่องจากมีใบปล่อยรถ ${used[0].cnt} ใบที่ใช้ประเภทนี้อยู่`
+      });
+    }
+    await query('DELETE FROM car_release_type WHERE car_release_type_id = ?', [id]);
+    res.json({ success: true, message: 'ลบประเภทการปล่อยรถเรียบร้อยแล้ว' });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
 module.exports = router;
+

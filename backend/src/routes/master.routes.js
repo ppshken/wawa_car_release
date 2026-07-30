@@ -233,4 +233,56 @@ router.get('/car-release-types', authenticateToken, async (req, res) => {
   }
 });
 
+router.post('/car-release-types', authenticateToken, async (req, res) => {
+  try {
+    const { type } = req.body;
+    if (!type || !type.trim()) {
+      return res.status(400).json({ success: false, message: 'กรุณากรอกชื่อประเภทการปล่อยรถ' });
+    }
+    const result = await query(
+      'INSERT INTO car_release_type (type) VALUES (?)',
+      [type.trim()]
+    );
+    res.json({ success: true, message: 'เพิ่มประเภทการปล่อยรถสำเร็จ', car_release_type_id: result.insertId });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+router.put('/car-release-types/:id', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { type } = req.body;
+    if (!type || !type.trim()) {
+      return res.status(400).json({ success: false, message: 'กรุณากรอกชื่อประเภทการปล่อยรถ' });
+    }
+    await query(
+      'UPDATE car_release_type SET type = ? WHERE car_release_type_id = ?',
+      [type.trim(), id]
+    );
+    res.json({ success: true, message: 'อัปเดตประเภทการปล่อยรถเรียบร้อยแล้ว' });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+router.delete('/car-release-types/:id', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    // ตรวจสอบว่ามี car_release ที่ใช้ประเภทนี้อยู่หรือไม่
+    const used = await query('SELECT COUNT(*) as cnt FROM car_release WHERE car_release_type_id = ?', [id]);
+    if (used[0]?.cnt > 0) {
+      return res.status(400).json({
+        success: false,
+        message: `ไม่สามารถลบได้ เนื่องจากมีใบปล่อยรถ ${used[0].cnt} ใบที่ใช้ประเภทนี้อยู่`
+      });
+    }
+    await query('DELETE FROM car_release_type WHERE car_release_type_id = ?', [id]);
+    res.json({ success: true, message: 'ลบประเภทการปล่อยรถเรียบร้อยแล้ว' });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
 module.exports = router;
+

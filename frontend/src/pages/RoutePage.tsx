@@ -64,6 +64,7 @@ import {
   PanelLeftOpen,
   Calculator,
   AlertTriangle,
+  ListPlus,
 } from "lucide-react";
 
 interface DeliverySettings {
@@ -242,7 +243,7 @@ const renderPositionBadge = (stop: any, positionProductsList: any[]) => {
 
   const displayName = posName || posId;
   return (
-    <span className="inline-flex items-center bg-amber-100 text-amber-900 border border-amber-300 font-mono font-extrabold text-[10px] px-1.5 py-0.2 rounded shadow-2xs shrink-0">
+    <span className="inline-flex items-center text-amber-900 font-mono font-extrabold text-[10px] px-1.5 py-0.2 rounded shadow-2xs shrink-0">
       {displayName}/{posOrder}
     </span>
   );
@@ -600,6 +601,11 @@ export const RoutePage: React.FC = () => {
   const [excelPreviewStops, setExcelPreviewStops] = useState<any[]>([]);
   const [importingExcelStops, setImportingExcelStops] = useState(false);
   const [isParsingExcel, setIsParsingExcel] = useState(false);
+
+  // Multi-Add Unassigned Stops Drawer State
+  const [isMultiAddDrawerOpen, setIsMultiAddDrawerOpen] = useState(false);
+  const [multiAddStops, setMultiAddStops] = useState<any[]>([]);
+  const [importingMultiAddStops, setImportingMultiAddStops] = useState(false);
 
   // Auto-Routing Calculation Drawer State
   const [isAutoRouteDrawerOpen, setIsAutoRouteDrawerOpen] = useState(false);
@@ -1044,6 +1050,85 @@ export const RoutePage: React.FC = () => {
     setExcelPreviewStops((prev) => [...prev, newRow]);
   };
 
+  // ─── Multi-Add Handlers ───
+  const handleOpenMultiAddDrawer = () => {
+    const initialRows = Array.from({ length: 5 }, (_, i) => ({
+      id: `multi-${Date.now()}-${i}-${Math.random().toString(36).slice(2, 6)}`,
+      store_id: "",
+      store_name: "",
+      address: "",
+      data_store_no: "",
+      sum_quantity: 1,
+      lat_long: "",
+      position_product_id: "",
+      position_product_name: "",
+      position_production_order: 1,
+      is_mapped_master: false,
+    }));
+    setMultiAddStops(initialRows);
+    setIsMultiAddDrawerOpen(true);
+  };
+
+  const handleAddEmptyMultiAddRow = () => {
+    const newRow = {
+      id: `multi-manual-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      store_id: "",
+      store_name: "",
+      address: "",
+      data_store_no: "",
+      sum_quantity: 1,
+      lat_long: "",
+      position_product_id: "",
+      position_product_name: "",
+      position_production_order: 1,
+      is_mapped_master: false,
+    };
+    setMultiAddStops((prev) => [...prev, newRow]);
+  };
+
+  const handleConfirmMultiAddImport = async () => {
+    const validStops = multiAddStops.filter(
+      (s) => s.store_id && String(s.store_id).trim(),
+    );
+    if (validStops.length === 0) {
+      showError("กรุณาเลือกร้านค้าอย่างน้อย 1 รายการก่อนกดบันทึก");
+      return;
+    }
+
+    const missingOrderNo = validStops.find(
+      (s) => !s.data_store_no || !String(s.data_store_no).trim(),
+    );
+    if (missingOrderNo) {
+      showError("กรุณากรอกรหัสออเดอร์ให้ครบทุกรายการที่มีร้านค้าก่อนกดบันทึก");
+      return;
+    }
+
+    setImportingMultiAddStops(true);
+    try {
+      const res = await api.post("/optimoroute/unassigned/import", {
+        date: selectedDate,
+        stops: validStops,
+      });
+
+      if (res.data.success) {
+        showSuccess(
+          res.data.message || `นำเข้า ${validStops.length} รายการจัดส่งสำเร็จ!`,
+        );
+        setIsMultiAddDrawerOpen(false);
+        setMultiAddStops([]);
+        fetchUnassignedStops(selectedDate);
+      } else {
+        showError(res.data.message || "นำเข้าข้อมูลไม่สำเร็จ");
+      }
+    } catch (err: any) {
+      showError(
+        err?.response?.data?.message || "เกิดข้อผิดพลาดในการนำเข้าข้อมูล",
+      );
+    } finally {
+      setImportingMultiAddStops(false);
+    }
+  };
+
   const handleConfirmExcelImport = async () => {
     if (excelPreviewStops.length === 0) {
       showError("ไม่พบรายการที่ต้องนำเข้า");
@@ -1119,6 +1204,7 @@ export const RoutePage: React.FC = () => {
         priorityStrategy: deliverySettings.priorityStrategy,
         serviceTimeMinutes: deliverySettings.serviceTimePerStop,
         depotStartTime: deliverySettings.depotStartTime,
+        bufferTimePerRoute: deliverySettings.bufferTimePerRoute,
         selectedVehicleIds: autoRouteSelectedVehicles,
       });
 
@@ -3329,6 +3415,15 @@ export const RoutePage: React.FC = () => {
                           <span>เพิ่มรายการรอจัดสาย</span>
                         </button>
 
+                        <button
+                          type="button"
+                          onClick={handleOpenMultiAddDrawer}
+                          className="bg-violet-600 hover:bg-violet-700 text-white font-semibold text-xs px-2.5 py-1 rounded-md flex items-center gap-1 shadow-2xs transition-colors shrink-0"
+                        >
+                          <ListPlus className="w-3.5 h-3.5" />
+                          <span>เพิ่มหลายรายการ</span>
+                        </button>
+
                         <label className={`bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs px-2.5 py-1 rounded-md flex items-center gap-1 shadow-2xs transition-colors shrink-0 ${
                           isParsingExcel || importingExcelStops ? "opacity-70 cursor-not-allowed pointer-events-none" : "cursor-pointer"
                         }`}>
@@ -4984,6 +5079,254 @@ export const RoutePage: React.FC = () => {
                       className="w-full py-2 bg-white hover:bg-blue-50 text-blue-700 font-bold text-xs rounded-lg border border-blue-200 hover:border-blue-400 flex items-center justify-center gap-1.5 transition-all shadow-2xs group cursor-pointer"
                     >
                       <Plus className="w-4 h-4 text-blue-600 group-hover:scale-125 transition-transform" />
+                      <span>เพิ่มแถวจัดส่งใหม่</span>
+                    </button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </AnimatedDrawer>
+
+      {/* ─── MULTI-ADD UNASSIGNED STOPS PREVIEW DRAWER ─── */}
+      <AnimatedDrawer
+        isOpen={isMultiAddDrawerOpen}
+        onClose={() => setIsMultiAddDrawerOpen(false)}
+        title={`เพิ่มรายการจัดส่งแบบหลายรายการ (${multiAddStops.filter((s) => s.store_id && String(s.store_id).trim()).length} รายการ)`}
+        formId="multi-add-stops-form"
+        onSubmit={(e) => {
+          e.preventDefault();
+          handleConfirmMultiAddImport();
+        }}
+        submitLabel={
+          importingMultiAddStops
+            ? "กำลังบันทึกข้อมูล..."
+            : `ยืนยันบันทึก (${multiAddStops.filter((s) => s.store_id && String(s.store_id).trim()).length} รายการ)`
+        }
+        maxWidthClass="max-w-4xl sm:max-w-6xl"
+      >
+        <div className="space-y-3 text-xs">
+          {importingMultiAddStops && (
+            <div className="bg-gradient-to-r from-violet-600 to-indigo-600 text-white p-3.5 rounded-xl flex items-center justify-between shadow-lg animate-pulse">
+              <div className="flex items-center gap-3">
+                <RefreshCw className="w-5 h-5 animate-spin text-white" />
+                <div>
+                  <div className="font-extrabold text-sm">กำลังบันทึกรายการจัดส่งเข้าสู่ฐานข้อมูล...</div>
+                  <div className="text-[11px] text-violet-100 font-medium">กรุณารอสักครู่ ระบบกำลังนำเข้า {multiAddStops.filter((s) => s.store_id).length} รายการลงในส่วนยังไม่จัดสายรถ</div>
+                </div>
+              </div>
+              <span className="text-xs font-mono font-bold bg-white/20 px-3 py-1 rounded-lg backdrop-blur-xs">
+                Processing...
+              </span>
+            </div>
+          )}
+
+          <div className="text-[11px] text-slate-700 bg-violet-50 p-2.5 rounded-lg border border-violet-200 leading-relaxed">
+            💡 <strong>เพิ่มรายการจัดส่งหลายรายการพร้อมกัน</strong> — เลือก <code>ร้านค้า</code> จากมาสเตอร์ กรอก <code>จำนวน</code> และ <code>รหัสออเดอร์</code> ได้เลย ข้อมูลชื่อร้าน / ที่อยู่ / พิกัด GPS จะถูกดึงมาให้อัตโนมัติ (แถวที่ไม่ได้เลือกร้านค้าจะถูกข้ามไป)
+          </div>
+
+          <div className="max-h-[75vh] min-h-[480px] overflow-auto border border-slate-200 rounded-lg shadow-inner bg-white">
+            <table className="w-full text-[11px] text-slate-700 border-collapse">
+              <thead className="sticky top-0 bg-slate-100 font-bold text-slate-700 border-b border-slate-200 z-10 shadow-2xs">
+                <tr>
+                  <th className="p-2 text-center w-8">#</th>
+                  <th className="p-2 w-20">รหัสร้านค้า</th>
+                  <th className="p-2 w-36">ชื่อร้านค้า</th>
+                  <th className="p-2 min-w-[200px]">ที่อยู่</th>
+                  <th className="p-2 w-20 text-center">จำนวน (ลัง)</th>
+                  <th className="p-2 w-40">ตำแหน่งวางสินค้า</th>
+                  <th className="p-2 w-16 text-center">แถว</th>
+                  <th className="p-2 w-32">รหัสออเดอร์</th>
+                  <th className="p-2 w-32">พิกัด GPS</th>
+                  <th className="p-2 text-center w-10">ลบ</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {multiAddStops.map((item, idx) => (
+                  <tr key={item.id} className="hover:bg-slate-50">
+                    <td className="p-1.5 text-center font-bold text-slate-400">
+                      {idx + 1}
+                    </td>
+                    <td className="p-1 min-w-[160px]">
+                      <SearchableSelect
+                        value={item.store_id}
+                        onChange={(val) => {
+                          const selectedVal = String(val);
+                          const found = storesMap.get(selectedVal.trim().toLowerCase());
+                          setMultiAddStops((prev) =>
+                            prev.map((row) =>
+                              row.id === item.id
+                                ? {
+                                    ...row,
+                                    store_id: selectedVal,
+                                    store_name: found ? found.store_name : row.store_name,
+                                    address: found ? found.store_address || "" : row.address,
+                                    lat_long: found ? found.store_location || "" : row.lat_long,
+                                    is_mapped_master: !!found,
+                                  }
+                                : row,
+                            ),
+                          );
+                        }}
+                        placeholder="-- เลือกร้านค้า --"
+                        searchPlaceholder="พิมพ์ค้นหาร้านค้า (รหัส / ชื่อ)..."
+                        hasError={false}
+                        buttonClassName="px-1.5 py-1 text-xs font-mono font-bold bg-white rounded-md"
+                        dropdownClassName="w-[360px] sm:w-[420px] max-w-xl shadow-2xl"
+                        renderSelected={(opt) => (
+                          <span className="font-bold truncate text-slate-800 font-mono">
+                            {opt.value}
+                          </span>
+                        )}
+                        options={masterStoreSearchableOptions}
+                      />
+                    </td>
+                    <td className="p-1">
+                      <input
+                        type="text"
+                        value={item.store_name || "-"}
+                        readOnly
+                        disabled
+                        tabIndex={-1}
+                        className="w-full border border-slate-200 rounded px-1.5 py-1 text-xs font-semibold text-slate-500 bg-slate-100/90 cursor-not-allowed"
+                        title="ดึงข้อมูลอัตโนมัติจากมาสเตอร์ร้านค้า (แก้ไขไม่ได้)"
+                      />
+                    </td>
+                    <td className="p-1">
+                      <input
+                        type="text"
+                        value={item.address || "-"}
+                        readOnly
+                        disabled
+                        tabIndex={-1}
+                        className="w-full border border-slate-200 rounded px-1.5 py-1 text-xs text-slate-500 bg-slate-100/90 cursor-not-allowed"
+                        title="ดึงข้อมูลอัตโนมัติจากมาสเตอร์ร้านค้า (แก้ไขไม่ได้)"
+                      />
+                    </td>
+                    <td className="p-1">
+                      <input
+                        type="number"
+                        min={1}
+                        value={item.sum_quantity}
+                        onChange={(e) => {
+                          const val = parseInt(e.target.value, 10) || 1;
+                          setMultiAddStops((prev) =>
+                            prev.map((row) =>
+                              row.id === item.id
+                                ? { ...row, sum_quantity: val }
+                                : row,
+                            ),
+                          );
+                        }}
+                        className="w-full border border-slate-200 rounded px-1.5 py-1 text-xs text-center font-bold text-amber-700"
+                      />
+                    </td>
+                    <td className="p-1 min-w-[150px]">
+                      <select
+                        value={item.position_product_id || ""}
+                        onChange={(e) => {
+                          const positionId = e.target.value;
+                          const foundPosition = positionProductsList.find(
+                            (position) => String(position.position_product_id) === positionId,
+                          );
+                          setMultiAddStops((prev) =>
+                            prev.map((row) =>
+                              row.id === item.id
+                                ? {
+                                    ...row,
+                                    position_product_id: positionId,
+                                    position_product_name: foundPosition?.position_product_name || "",
+                                  }
+                                : row,
+                            ),
+                          );
+                        }}
+                        className="w-full border border-slate-200 rounded px-1.5 py-1 text-xs font-semibold text-slate-800 bg-white focus:outline-none focus:border-blue-400"
+                      >
+                        <option value="">-- เลือกตำแหน่งวาง --</option>
+                        {positionProductsList.map((position) => (
+                          <option key={position.position_product_id} value={position.position_product_id}>
+                            {position.position_product_name}
+                          </option>
+                        ))}
+                      </select>
+                    </td>
+                    <td className="p-1">
+                      <input
+                        type="number"
+                        min={1}
+                        value={item.position_production_order || 1}
+                        onChange={(e) => {
+                          const positionOrder = parseInt(e.target.value, 10) || 1;
+                          setMultiAddStops((prev) =>
+                            prev.map((row) =>
+                              row.id === item.id
+                                ? { ...row, position_production_order: positionOrder }
+                                : row,
+                            ),
+                          );
+                        }}
+                        className="w-full border border-slate-200 rounded px-1.5 py-1 text-xs text-center font-bold text-slate-800 focus:border-blue-400"
+                      />
+                    </td>
+                    <td className="p-1">
+                      <input
+                        type="text"
+                        value={item.data_store_no}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setMultiAddStops((prev) =>
+                            prev.map((row) =>
+                              row.id === item.id
+                                ? { ...row, data_store_no: val }
+                                : row,
+                            ),
+                          );
+                        }}
+                        placeholder="กรอกรหัสออเดอร์ *"
+                        className={`w-full border rounded px-1.5 py-1 text-xs font-mono font-bold transition-all ${
+                          item.store_id && (!item.data_store_no || !String(item.data_store_no).trim())
+                            ? "border-2 border-rose-500 bg-rose-50/70 text-rose-900 focus:border-rose-600 shadow-2xs"
+                            : "border-slate-200 text-slate-800 focus:border-blue-400"
+                        }`}
+                      />
+                    </td>
+                    <td className="p-1">
+                      <input
+                        type="text"
+                        value={item.lat_long}
+                        readOnly
+                        disabled
+                        className="w-full border border-slate-200 rounded px-1.5 py-1 text-xs text-slate-500 bg-slate-100/90 cursor-not-allowed"
+                        placeholder="lat,lng"
+                      />
+                    </td>
+                    <td className="p-1 text-center">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setMultiAddStops((prev) =>
+                            prev.filter((row) => row.id !== item.id),
+                          );
+                        }}
+                        className="p-1 text-slate-400 hover:text-rose-600 rounded"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+
+                {/* Row for adding a new empty item */}
+                <tr className="bg-slate-50/80 hover:bg-violet-50/50 transition-colors border-t-2 border-dashed border-slate-200">
+                  <td colSpan={10} className="p-2 text-center">
+                    <button
+                      type="button"
+                      onClick={handleAddEmptyMultiAddRow}
+                      className="w-full py-2 bg-white hover:bg-violet-50 text-violet-700 font-bold text-xs rounded-lg border border-violet-200 hover:border-violet-400 flex items-center justify-center gap-1.5 transition-all shadow-2xs group cursor-pointer"
+                    >
+                      <Plus className="w-4 h-4 text-violet-600 group-hover:scale-125 transition-transform" />
                       <span>เพิ่มแถวจัดส่งใหม่</span>
                     </button>
                   </td>

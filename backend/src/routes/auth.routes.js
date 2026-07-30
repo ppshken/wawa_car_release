@@ -14,7 +14,7 @@ router.post('/login', async (req, res) => {
     }
 
     const users = await query(
-      `SELECT u.*, l.level_user_name, l.setting_car_release, a.access_name 
+      `SELECT u.*, l.level_user_name, l.setting_car_release, l.menu_permissions, a.access_name 
        FROM user u 
        LEFT JOIN level_user l ON u.level_user_id = l.level_user_id
        LEFT JOIN access a ON l.access_id = a.access_id
@@ -99,6 +99,85 @@ router.get('/me', authenticateToken, async (req, res) => {
 
 const { upload, saveBase64Image } = require('../middleware/upload');
 
+// PUT /api/auth/profile — อัปเดตโปรไฟล์ตัวเอง
+router.put('/profile', authenticateToken, upload.single('user_image'), async (req, res) => {
+  try {
+    const userId = req.user.user_id;
+    const { name, phone_number_1, phone_number_2, phone_number_3 } = req.body;
+
+    let user_image = undefined;
+    if (req.file) {
+      const sub = req.file.subDir || 'user';
+      user_image = `/uploads/${sub}/${req.file.filename}`;
+    } else if (req.body.user_image !== undefined && req.body.user_image !== '') {
+      user_image = saveBase64Image(req.body.user_image, 'user');
+    }
+
+    if (user_image !== undefined) {
+      await query(
+        `UPDATE user SET name = ?, phone_number_1 = ?, phone_number_2 = ?, phone_number_3 = ?, user_image = ? WHERE user_id = ?`,
+        [name || '', phone_number_1 || '', phone_number_2 || '', phone_number_3 || '', user_image, userId]
+      );
+    } else {
+      await query(
+        `UPDATE user SET name = ?, phone_number_1 = ?, phone_number_2 = ?, phone_number_3 = ? WHERE user_id = ?`,
+        [name || '', phone_number_1 || '', phone_number_2 || '', phone_number_3 || '', userId]
+      );
+    }
+
+    // Fetch updated user data to return
+    const updated = await query(
+      `SELECT u.user_id, u.username, u.name, u.phone_number_1, u.phone_number_2, u.phone_number_3, u.level_user_id,
+              u.user_image, u.location_now, u.created_at,
+              IF(u.user_status = 'inactive' OR u.user_status = '0', 'inactive', 'active') AS user_status,
+              l.level_user_name, l.setting_car_release, l.menu_permissions, a.access_id, a.access_name
+       FROM user u
+       LEFT JOIN level_user l ON u.level_user_id = l.level_user_id
+       LEFT JOIN access a ON l.access_id = a.access_id
+       WHERE u.user_id = ?`,
+      [userId]
+    );
+
+    res.json({ success: true, message: 'อัปเดตโปรไฟล์เรียบร้อยแล้ว', user: updated[0] || null });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// PUT /api/auth/change-password — เปลี่ยนรหัสผ่านตัวเอง
+router.put('/change-password', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.user_id;
+    const { current_password, new_password } = req.body;
+
+    if (!current_password || !new_password) {
+      return res.status(400).json({ success: false, message: 'กรุณากรอกรหัสผ่านปัจจุบันและรหัสผ่านใหม่' });
+    }
+
+    if (new_password.length < 4) {
+      return res.status(400).json({ success: false, message: 'รหัสผ่านใหม่ต้องมีอย่างน้อย 4 ตัวอักษร' });
+    }
+
+    // Verify current password
+    const users = await query('SELECT password FROM user WHERE user_id = ?', [userId]);
+    if (users.length === 0) {
+      return res.status(404).json({ success: false, message: 'ไม่พบผู้ใช้งาน' });
+    }
+
+    const isMatch = await bcrypt.compare(current_password, users[0].password);
+    if (!isMatch) {
+      return res.status(401).json({ success: false, message: 'รหัสผ่านปัจจุบันไม่ถูกต้อง' });
+    }
+
+    const hashedPassword = await bcrypt.hash(new_password, 10);
+    await query('UPDATE user SET password = ? WHERE user_id = ?', [hashedPassword, userId]);
+
+    res.json({ success: true, message: 'เปลี่ยนรหัสผ่านเรียบร้อยแล้ว' });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
 // Ensure user_image column exists
 async function ensureUserImageColumns() {
   try {
@@ -131,6 +210,34 @@ router.get('/users', authenticateToken, async (req, res) => {
        FROM user u
        LEFT JOIN level_user l ON u.level_user_id = l.level_user_id
        LEFT JOIN access a ON l.access_id = a.access_id
+       ORDER BY u.user_id DESC`
+    );
+    res.json({ success: true, users });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// GET /api/users
+router.get('/users/driver', authenticateToken, async (req, res) => {
+  try {
+    const users = await query(
+      `SELECT u.user_id,
+              u.username,
+              u.name,
+              u.phone_number_1,
+              u.level_user_id,
+              u.user_image,
+              u.location_now,
+              IF(u.user_status = 'inactive' OR u.user_status = '0', 'inactive', 'active') AS user_status,
+              l.level_user_name,
+              l.setting_car_release,
+              a.access_id,
+              a.access_name
+       FROM user u
+       LEFT JOIN level_user l ON u.level_user_id = l.level_user_id
+       LEFT JOIN access a ON l.access_id = a.access_id
+       WHERE l.level_user_id = 3
        ORDER BY u.user_id DESC`
     );
     res.json({ success: true, users });

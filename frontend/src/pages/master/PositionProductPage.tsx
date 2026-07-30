@@ -145,23 +145,34 @@ export const PositionProductPage: React.FC = () => {
   return (
     <div className="space-y-4 max-w-full">
       {/* Top Header */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 bg-white p-4 rounded-xl border border-slate-200 shadow-2xs">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-1">
         <div>
           <h1 className="text-lg font-bold text-slate-900 flex items-center gap-2">
-            <Layers className="w-5 h-5 text-slate-700" />
+            <Layers className="w-5 h-5 text-slate-800" />
             <span>ตำแหน่งวางสินค้า (Product Position)</span>
           </h1>
-          <p className="text-xs text-slate-500 mt-0.5">
+          <p className="text-[11px] text-slate-500">
             จัดการมาสเตอร์ข้อมูลตำแหน่งจัดวางสินค้าสำหรับสายจัดส่งและร้านค้าจุดจัดส่ง
           </p>
         </div>
-        <button
-          onClick={handleOpenAddDrawer}
-          className="bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold px-3.5 py-2 rounded-lg transition-all flex items-center gap-1.5 shadow-2xs shrink-0"
-        >
-          <Plus className="w-4 h-4" />
-          <span>เพิ่มตำแหน่งวางสินค้า</span>
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={fetchPositions}
+            className="bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 p-1.5 rounded-lg font-medium flex items-center gap-1 shadow-2xs"
+            title="รีเฟรชข้อมูล"
+          >
+            <RefreshCw
+              className={`w-4 h-4 text-slate-700 ${loading ? "animate-spin" : ""}`}
+            />
+          </button>
+          <button
+            onClick={handleOpenAddDrawer}
+            className="bg-slate-900 hover:bg-slate-800 text-white text-xs font-medium px-3.5 py-1.5 rounded-lg transition-colors shadow-2xs flex items-center gap-1.5 shrink-0"
+          >
+            <Plus className="w-3.5 h-3.5" />{" "}
+            <span>เพิ่มตำแหน่งวางสินค้า</span>
+          </button>
+        </div>
       </div>
 
       {/* Sub Navigation */}
@@ -219,18 +230,18 @@ export const PositionProductPage: React.FC = () => {
               ) : (
                 paginatedPositions.map((item) => (
                   <tr key={item.position_product_id} className="hover:bg-slate-50/80 transition-colors">
-                    <td className="py-2.5 px-4 text-center font-mono font-medium text-slate-500">
+                    <td className="py-2 px-4 text-center font-mono font-medium text-slate-500">
                       {item.position_product_id}
                     </td>
-                    <td className="py-2.5 px-4 font-bold text-slate-900">
+                    <td className="py-2 px-4 font-bold text-slate-900">
                       <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-slate-100 border border-slate-200 text-slate-800 font-mono text-xs">
                         {item.position_product_name}
                       </span>
                     </td>
-                    <td className="py-2.5 px-4 text-slate-500">
+                    <td className="py-2 px-4 text-slate-500">
                       {item.created_at ? new Date(item.created_at).toLocaleString("th-TH") : "-"}
                     </td>
-                    <td className="py-2.5 px-4 text-center">
+                    <td className="py-2 px-4 text-center">
                       <div className="flex items-center justify-center gap-1">
                         <button
                           onClick={() => handleOpenEditDrawer(item)}

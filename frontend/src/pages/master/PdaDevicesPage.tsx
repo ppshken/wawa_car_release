@@ -246,14 +246,14 @@ export const PdaDevicesPage: React.FC = () => {
             <tbody className="divide-y divide-slate-200/60 text-slate-800 whitespace-nowrap">
               {paginatedPdas.map((p, idx) => (
                 <tr key={p.pda_id} className="hover:bg-slate-50/80 transition-colors">
-                  <td className="py-2.5 px-4 text-center text-slate-400 font-medium">{(currentPage - 1) * itemsPerPage + idx + 1}</td>
-                  <td className="py-2.5 px-4">
+                  <td className="py-2 px-4 text-center text-slate-400 font-medium">{(currentPage - 1) * itemsPerPage + idx + 1}</td>
+                  <td className="py-2 px-4">
                     <code className="bg-slate-100 border border-slate-200 text-slate-700 px-2 py-0.5 rounded text-[10px] font-mono font-bold">{p.device_code}</code>
                   </td>
-                  <td className="py-2.5 px-4 font-bold text-slate-900">{p.device_name}</td>
-                  <td className="py-2.5 px-4 text-slate-600 font-mono text-[11px]">{p.serial_number || "-"}</td>
-                  <td className="py-2.5 px-4 text-slate-700 font-medium">{p.assigned_user || "ยังไม่ระบุผู้ดูแล"}</td>
-                  <td className="py-2.5 px-4 text-right space-x-1">
+                  <td className="py-2 px-4 font-bold text-slate-900">{p.device_name}</td>
+                  <td className="py-2 px-4 text-slate-600 font-mono text-[11px]">{p.serial_number || "-"}</td>
+                  <td className="py-2 px-4 text-slate-700 font-medium">{p.assigned_user || "ยังไม่ระบุผู้ดูแล"}</td>
+                  <td className="py-2 px-4 text-right space-x-1">
                     <button onClick={() => handleOpenEditPda(p)} className="p-1 rounded-md text-slate-600 hover:text-slate-900 hover:bg-slate-100" title="แก้ไข">
                       <Edit2 className="w-3.5 h-3.5" />
                     </button>

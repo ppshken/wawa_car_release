@@ -3,6 +3,7 @@ const router = express.Router();
 const { query, hasColumn } = require('../config/db');
 const { authenticateToken } = require('../middleware/auth');
 const { saveBase64Image } = require('../middleware/upload');
+const { logAudit } = require('../utils/auditLogger');
 
 // POST /api/car-release (สร้างใบปล่อยรถ)
 router.post('/car-release', authenticateToken, async (req, res) => {
@@ -97,6 +98,13 @@ router.post('/car-release', authenticateToken, async (req, res) => {
         }
       }
     }
+
+    await logAudit(req, {
+      action: 'CREATE_CAR_RELEASE',
+      targetType: 'car_release',
+      targetId: car_release_id,
+      details: { releaseNo, car_id, user_id, mileage, followersCount: followers.length }
+    });
 
     res.json({
       success: true,
@@ -334,6 +342,13 @@ router.post('/car-release/:id/return', authenticateToken, async (req, res) => {
       ]
     );
 
+    await logAudit(req, {
+      action: 'RETURN_CAR',
+      targetType: 'car_return',
+      targetId: result.insertId,
+      details: { car_release_id, mileage, key_holder_id, parking_id, gas_bill }
+    });
+
     res.json({
       success: true,
       message: 'บันทึกใบคืนรถสำเร็จ',
@@ -355,6 +370,13 @@ router.patch('/car-release/:id/accounting', authenticateToken, async (req, res) 
       `UPDATE car_release SET accounting_status = ?, accounting_note = ? WHERE car_release_id = ?`,
       [accounting_status, accounting_note || '', car_release_id]
     );
+
+    await logAudit(req, {
+      action: 'UPDATE_ACCOUNTING_STATUS',
+      targetType: 'car_release',
+      targetId: car_release_id,
+      details: { accounting_status, accounting_note }
+    });
 
     res.json({ success: true, message: 'อัปเดตสถานะบัญชีเรียบร้อยแล้ว' });
   } catch (err) {
@@ -448,6 +470,13 @@ router.put('/car-release/:id', authenticateToken, async (req, res) => {
       }
     }
 
+    await logAudit(req, {
+      action: 'UPDATE_CAR_RELEASE',
+      targetType: 'car_release',
+      targetId: car_release_id,
+      details: { car_id, user_id, mileage, accounting_status }
+    });
+
     res.json({ success: true, message: 'อัปเดตข้อมูลใบปล่อยรถเรียบร้อยแล้ว' });
   } catch (err) {
     console.error('Error updating car release:', err);
@@ -473,6 +502,13 @@ router.delete('/car-release/:id', authenticateToken, async (req, res) => {
     // Delete main car_release record
     await query(`DELETE FROM car_release WHERE car_release_id = ?`, [car_release_id]);
 
+    await logAudit(req, {
+      action: 'DELETE_CAR_RELEASE',
+      targetType: 'car_release',
+      targetId: car_release_id,
+      details: { car_release_id }
+    });
+
     res.json({ success: true, message: 'ลบข้อมูลใบปล่อยรถเรียบร้อยแล้ว' });
   } catch (err) {
     console.error('Error deleting car release:', err);
@@ -480,4 +516,87 @@ router.delete('/car-release/:id', authenticateToken, async (req, res) => {
   }
 });
 
+// Auto-migration for car_release_chat table
+(async () => {
+  try {
+    const { query } = require('../config/db');
+    await query(`
+      CREATE TABLE IF NOT EXISTS car_release_chat (
+        chat_id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+        car_release_id INT UNSIGNED NOT NULL,
+        user_id INT UNSIGNED NOT NULL,
+        sender_name VARCHAR(255) NOT NULL,
+        message TEXT NOT NULL,
+        image_url VARCHAR(500) NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        INDEX (car_release_id)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    `);
+  } catch (err) {
+    console.error('Error creating car_release_chat table:', err);
+  }
+})();
+
+// GET /api/car-release/:id/chat (ดึงข้อความแชทของใบปล่อยรถ)
+router.get('/car-release/:id/chat', authenticateToken, async (req, res) => {
+  try {
+    const car_release_id = req.params.id;
+    const messages = await query(
+      `SELECT c.*, u.user_image as sender_avatar
+       FROM car_release_chat c
+       LEFT JOIN user u ON c.user_id = u.user_id
+       WHERE c.car_release_id = ?
+       ORDER BY c.chat_id ASC`,
+      [car_release_id]
+    );
+    res.json({ success: true, messages });
+  } catch (err) {
+    console.error('Error fetching chat messages:', err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// POST /api/car-release/:id/chat (ส่งข้อความแชท)
+router.post('/car-release/:id/chat', authenticateToken, async (req, res) => {
+  try {
+    const car_release_id = req.params.id;
+    const { message, image } = req.body;
+    const userId = req.user?.user_id || req.user?.id || 0;
+    const senderName = req.user?.name || req.user?.username || 'ผู้ใช้งาน';
+
+    if ((!message || !message.trim()) && !image) {
+      return res.status(400).json({ success: false, message: 'กรุณากรอกข้อความหรือแนบรูปภาพ' });
+    }
+
+    let imgUrl = null;
+    if (image) {
+      imgUrl = saveBase64Image(image, `chat/${car_release_id}`);
+    }
+
+    const result = await query(
+      `INSERT INTO car_release_chat (car_release_id, user_id, sender_name, message, image_url, created_at)
+       VALUES (?, ?, ?, ?, ?, NOW())`,
+      [car_release_id, userId, senderName, message ? message.trim() : '', imgUrl]
+    );
+
+    res.json({
+      success: true,
+      message: 'ส่งข้อความสำเร็จ',
+      chat: {
+        chat_id: result.insertId,
+        car_release_id,
+        user_id: userId,
+        sender_name: senderName,
+        message: message ? message.trim() : '',
+        image_url: imgUrl,
+        created_at: new Date().toISOString()
+      }
+    });
+  } catch (err) {
+    console.error('Send chat error:', err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
 module.exports = router;
+

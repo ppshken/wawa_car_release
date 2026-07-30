@@ -141,4 +141,57 @@ router.get('/reports/off-site-checks', authenticateToken, async (req, res) => {
   }
 });
 
+// GET /api/reports/audit-logs (ดึงประวัติการใช้งานและกิจกรรมในระบบ Audit Log)
+router.get('/reports/audit-logs', authenticateToken, async (req, res) => {
+  try {
+    const { page, limit, search, action } = req.query;
+
+    let whereClause = ' WHERE 1=1';
+    const params = [];
+
+    if (action && action.trim()) {
+      whereClause += ` AND action = ?`;
+      params.push(action.trim());
+    }
+
+    if (search && search.trim()) {
+      const p = `%${search.trim()}%`;
+      whereClause += ` AND (action LIKE ? OR user_name LIKE ? OR username LIKE ? OR target_type LIKE ? OR target_id LIKE ? OR details LIKE ?)`;
+      params.push(p, p, p, p, p, p);
+    }
+
+    const countRes = await query(`SELECT COUNT(*) as total FROM audit_log${whereClause}`, params);
+    const total = countRes[0]?.total || 0;
+
+    let paginationObj = null;
+    let dataSql = `SELECT * FROM audit_log${whereClause} ORDER BY log_id DESC`;
+
+    if (page !== undefined && page !== null && page !== '') {
+      const pageNum = Math.max(1, parseInt(page, 10) || 1);
+      const limitNum = Math.max(1, parseInt(limit, 10) || 15);
+      const offset = (pageNum - 1) * limitNum;
+      dataSql += ` LIMIT ${limitNum} OFFSET ${offset}`;
+      paginationObj = {
+        total,
+        page: pageNum,
+        limit: limitNum,
+        totalPages: Math.ceil(total / limitNum) || 1
+      };
+    }
+
+    const logs = await query(dataSql, params);
+
+    res.json({
+      success: true,
+      logs,
+      total,
+      pagination: paginationObj
+    });
+  } catch (err) {
+    console.error('Audit logs query error:', err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
 module.exports = router;
+

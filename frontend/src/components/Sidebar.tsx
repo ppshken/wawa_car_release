@@ -31,6 +31,7 @@ import {
   X,
   Map,
   DownloadCloud,
+  BarChart3,
 } from 'lucide-react';
 
 export const Sidebar: React.FC = () => {
@@ -55,14 +56,13 @@ export const Sidebar: React.FC = () => {
   }
 
   const isMenuAllowed = (key?: string) => {
-    if (!key) return true;
-    if (permissions[key] !== undefined) {
+    if (!key) return true; // Items without key (e.g. profile) always shown
+    // If permissions are loaded from DB, use them as source of truth
+    if (Object.keys(permissions).length > 0) {
       return !!permissions[key];
     }
+    // Fallback for admin level 1 when no permissions loaded yet
     if (user?.level_user_id === 1) return true;
-    if (key === 'dashboard' || key === 'releases' || key === 'optimoroute' || key === 'import_optimo') return true;
-    if (user?.level_user_id === 2 && (key === 'create_release' || key === 'driver' || key === 'return' || key === 'stores' || key === 'reports' || key === 'optimoroute' || key === 'import_optimo')) return true;
-    if (user?.level_user_id === 3 && (key === 'driver' || key === 'return' || key === 'optimoroute')) return true;
     return false;
   };
 
@@ -79,7 +79,7 @@ export const Sidebar: React.FC = () => {
     { to: '/user-levels', label: 'ระดับผู้ใช้งาน', icon: Layers, key: 'user_levels' },
     { to: '/permissions', label: 'สิทธิ์ระบบ', icon: KeyRound, key: 'permissions' },
     { to: '/user-access', label: 'กลุ่มการเข้าถึง', icon: Shield, key: 'user_access' },
-  ].filter((item) => isMenuAllowed(item.key) || user?.level_user_id === 1);
+  ].filter((item) => isMenuAllowed(item.key));
 
   const masterNavItems = [
     { to: '/master/stores', label: 'ร้านค้า', icon: Building, key: 'stores' },
@@ -90,8 +90,13 @@ export const Sidebar: React.FC = () => {
     { to: '/master/parking', label: 'ที่จอด', icon: MapPin, key: 'parking' },
     { to: '/master/accounting-status', label: 'สถานะทางบัญชี', icon: ShieldCheck, key: 'accounting_status' },
     { to: '/master/position-product', label: 'ตำแหน่งวางสินค้า', icon: Grid, key: 'position_product' },
-    
-  ].filter((item) => isMenuAllowed(item.key) || user?.level_user_id === 1);
+    { to: '/master/release-types', label: 'ประเภทการปล่อยรถ', icon: FileText, key: 'release_types' },
+  ].filter((item) => isMenuAllowed(item.key));
+
+  const settingNavItems = [
+    { to: '/reports', label: 'รายงานระบบ', icon: BarChart3, key: 'reports' },
+  ].filter((item) => isMenuAllowed(item.key));
+  
 
   const otherNavItems = [
     { to: '/routes', label: 'จัดรถ & เส้นทาง', icon: Package, key: 'routes' },
@@ -158,7 +163,7 @@ export const Sidebar: React.FC = () => {
             {(!collapsed || isMobile) && (
               <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider px-3 mb-1 flex items-center justify-between">
                 <span>จัดการผู้ใช้งาน</span>
-                <span className="bg-slate-200/70 text-slate-700 text-[9px] px-1.5 py-0.2 rounded font-mono font-normal">4</span>
+                <span className="bg-slate-200/70 text-slate-700 text-[9px] px-1.5 py-0.2 rounded font-mono font-normal">{userNavItems.length}</span>
               </div>
             )}
             <div className="space-y-0.5">
@@ -173,7 +178,7 @@ export const Sidebar: React.FC = () => {
             {(!collapsed || isMobile) && (
               <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider px-3 mb-1 flex items-center justify-between">
                 <span>ข้อมูลมาสเตอร์</span>
-                <span className="bg-slate-200/70 text-slate-700 text-[9px] px-1.5 py-0.2 rounded font-mono font-normal">7</span>
+                <span className="bg-slate-200/70 text-slate-700 text-[9px] px-1.5 py-0.2 rounded font-mono font-normal">{masterNavItems.length}</span>
               </div>
             )}
             <div className="space-y-0.5">
@@ -182,7 +187,22 @@ export const Sidebar: React.FC = () => {
           </div>
         )}
 
-        {/* Section 4: Other Operations */}
+        {/* Section 4: Setting Header & Items */}
+        {settingNavItems.length > 0 && (
+          <div className="pt-2 border-t border-slate-100">
+            {(!collapsed || isMobile) && (
+              <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider px-3 mb-1 flex items-center justify-between">
+                <span>การตั้งค่า</span>
+                <span className="bg-slate-200/70 text-slate-700 text-[9px] px-1.5 py-0.2 rounded font-mono font-normal">{settingNavItems.length}</span>
+              </div>
+            )}
+            <div className="space-y-0.5">
+              {settingNavItems.map((item) => renderNavLink(item, isMobile))}
+            </div>
+          </div>
+        )}
+
+        {/* Section 5: Other Operations */}
         {otherNavItems.length > 0 && (
           <div className="pt-2 border-t border-slate-100">
             {(!collapsed || isMobile) && (

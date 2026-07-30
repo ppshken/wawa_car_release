@@ -17,6 +17,7 @@ import { VehiclesPage } from './pages/master/VehiclesPage';
 import { ParkingPage } from './pages/master/ParkingPage';
 import { AccountingStatusPage } from './pages/master/AccountingStatusPage';
 import { PositionProductPage } from './pages/master/PositionProductPage';
+import { ReleaseTypesPage } from './pages/master/ReleaseTypesPage';
 
 import { UsersListPage } from './pages/users/UsersListPage';
 import { UserLevelsPage } from './pages/users/UserLevelsPage';
@@ -25,6 +26,7 @@ import { AccessPage } from './pages/users/AccessPage';
 import { RoutePage } from './pages/RoutePage';
 import { ImportOptimoPage } from './pages/ImportOptimoPage';
 import { Reports } from './pages/Reports';
+import { ProfilePage } from './pages/ProfilePage';
 
 const ProtectedLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { isAuthenticated, loading } = useAuth();
@@ -56,6 +58,34 @@ const ProtectedLayout: React.FC<{ children: React.ReactNode }> = ({ children }) 
   );
 };
 
+// Route-level permission guard based on menu_permissions
+const PermissionGuard: React.FC<{ permKey: string; children: React.ReactNode }> = ({ permKey, children }) => {
+  const { user } = useAuth();
+
+  let permissions: Record<string, boolean> = {};
+  if (user?.menu_permissions) {
+    if (typeof user.menu_permissions === 'string') {
+      try { permissions = JSON.parse(user.menu_permissions); } catch (e) {}
+    } else if (typeof user.menu_permissions === 'object') {
+      permissions = user.menu_permissions as Record<string, boolean>;
+    }
+  }
+
+  // If permissions loaded, check the key
+  if (Object.keys(permissions).length > 0) {
+    if (!permissions[permKey]) {
+      return <Navigate to="/" replace />;
+    }
+  } else {
+    // No permissions loaded yet — only admin level 1 can pass
+    if (user?.level_user_id !== 1) {
+      return <Navigate to="/" replace />;
+    }
+  }
+
+  return <>{children}</>;
+};
+
 export const App: React.FC = () => {
   return (
     <AuthProvider>
@@ -76,7 +106,7 @@ export const App: React.FC = () => {
             path="/releases"
             element={
               <ProtectedLayout>
-                <CarReleaseList />
+                <PermissionGuard permKey="releases"><CarReleaseList /></PermissionGuard>
               </ProtectedLayout>
             }
           />
@@ -84,34 +114,37 @@ export const App: React.FC = () => {
           {/* Master Data Standalone Pages */}
           <Route path="/stores" element={<Navigate to="/master/stores" replace />} />
           <Route path="/master" element={<Navigate to="/master/stores" replace />} />
-          <Route path="/master/stores" element={<ProtectedLayout><StoresPage /></ProtectedLayout>} />
-          <Route path="/master/keys" element={<ProtectedLayout><KeyHoldersPage /></ProtectedLayout>} />
-          <Route path="/master/pda" element={<ProtectedLayout><PdaDevicesPage /></ProtectedLayout>} />
-          <Route path="/master/payments" element={<ProtectedLayout><PaymentsPage /></ProtectedLayout>} />
-          <Route path="/master/vehicles" element={<ProtectedLayout><VehiclesPage /></ProtectedLayout>} />
-          <Route path="/master/parking" element={<ProtectedLayout><ParkingPage /></ProtectedLayout>} />
-          <Route path="/master/accounting-status" element={<ProtectedLayout><AccountingStatusPage /></ProtectedLayout>} />
-          <Route path="/master/position-product" element={<ProtectedLayout><PositionProductPage /></ProtectedLayout>} />
+          <Route path="/master/stores" element={<ProtectedLayout><PermissionGuard permKey="stores"><StoresPage /></PermissionGuard></ProtectedLayout>} />
+          <Route path="/master/keys" element={<ProtectedLayout><PermissionGuard permKey="keys"><KeyHoldersPage /></PermissionGuard></ProtectedLayout>} />
+          <Route path="/master/pda" element={<ProtectedLayout><PermissionGuard permKey="pda"><PdaDevicesPage /></PermissionGuard></ProtectedLayout>} />
+          <Route path="/master/payments" element={<ProtectedLayout><PermissionGuard permKey="payments"><PaymentsPage /></PermissionGuard></ProtectedLayout>} />
+          <Route path="/master/vehicles" element={<ProtectedLayout><PermissionGuard permKey="vehicles"><VehiclesPage /></PermissionGuard></ProtectedLayout>} />
+          <Route path="/master/parking" element={<ProtectedLayout><PermissionGuard permKey="parking"><ParkingPage /></PermissionGuard></ProtectedLayout>} />
+          <Route path="/master/accounting-status" element={<ProtectedLayout><PermissionGuard permKey="accounting_status"><AccountingStatusPage /></PermissionGuard></ProtectedLayout>} />
+          <Route path="/master/position-product" element={<ProtectedLayout><PermissionGuard permKey="position_product"><PositionProductPage /></PermissionGuard></ProtectedLayout>} />
+          <Route path="/master/release-types" element={<ProtectedLayout><PermissionGuard permKey="release_types"><ReleaseTypesPage /></PermissionGuard></ProtectedLayout>} />
 
           {/* User Management & Permissions Standalone Pages */}
-          <Route path="/users" element={<ProtectedLayout><UsersListPage /></ProtectedLayout>} />
-          <Route path="/user-levels" element={<ProtectedLayout><UserLevelsPage /></ProtectedLayout>} />
-          <Route path="/permissions" element={<ProtectedLayout><PermissionsPage /></ProtectedLayout>} />
-          <Route path="/user-access" element={<ProtectedLayout><AccessPage /></ProtectedLayout>} />
+          <Route path="/users" element={<ProtectedLayout><PermissionGuard permKey="users"><UsersListPage /></PermissionGuard></ProtectedLayout>} />
+          <Route path="/user-levels" element={<ProtectedLayout><PermissionGuard permKey="user_levels"><UserLevelsPage /></PermissionGuard></ProtectedLayout>} />
+          <Route path="/permissions" element={<ProtectedLayout><PermissionGuard permKey="permissions"><PermissionsPage /></PermissionGuard></ProtectedLayout>} />
+          <Route path="/user-access" element={<ProtectedLayout><PermissionGuard permKey="user_access"><AccessPage /></PermissionGuard></ProtectedLayout>} />
 
           {/* OptimoRoute Map & Import */}
-          <Route path="/route" element={<ProtectedLayout><RoutePage /></ProtectedLayout>} />
+          <Route path="/route" element={<ProtectedLayout><PermissionGuard permKey="route"><RoutePage /></PermissionGuard></ProtectedLayout>} />
           <Route path="/optimoroute" element={<Navigate to="/route" replace />} />
-          <Route path="/import-optimo" element={<ProtectedLayout><ImportOptimoPage /></ProtectedLayout>} />
+          <Route path="/import-optimo" element={<ProtectedLayout><PermissionGuard permKey="import_optimo"><ImportOptimoPage /></PermissionGuard></ProtectedLayout>} />
 
           <Route
             path="/reports"
             element={
               <ProtectedLayout>
-                <Reports />
+                <PermissionGuard permKey="reports"><Reports /></PermissionGuard>
               </ProtectedLayout>
             }
           />
+
+          <Route path="/profile" element={<ProtectedLayout><ProfilePage /></ProtectedLayout>} />
 
           <Route path="*" element={<Navigate to="/" replace />} />
 

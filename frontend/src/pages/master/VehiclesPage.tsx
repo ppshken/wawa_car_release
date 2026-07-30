@@ -317,8 +317,8 @@ export const VehiclesPage: React.FC = () => {
               className="bg-transparent font-bold text-slate-800 focus:outline-none cursor-pointer"
             >
               <option value="all">ทั้งหมด ({vehicles.length})</option>
-              <option value="available">🟢 ว่าง / พร้อมใช้งาน ({availableCount})</option>
-              <option value="assigned">🟠 ไม่ว่าง / จัดสายแล้ว ({assignedCount})</option>
+              <option value="available">ว่าง / พร้อมใช้งาน ({availableCount})</option>
+              <option value="assigned">ไม่ว่าง / จัดสายแล้ว ({assignedCount})</option>
             </select>
           </div>
         </div>
@@ -356,7 +356,7 @@ export const VehiclesPage: React.FC = () => {
                       </div>
                     )}
                   </td>
-                  <td className="py-2.5 px-4 text-center font-mono">
+                  <td className="py-2 px-4 text-center font-mono">
                     <div className="text-[10px] font-bold text-blue-700 truncate max-w-[140px]" title={String(v.car_id)}>
                       {v.car_id}
                     </div>
@@ -366,18 +366,18 @@ export const VehiclesPage: React.FC = () => {
                       </div>
                     )}
                   </td>
-                  <td className="py-2.5 px-4">
+                  <td className="py-2 px-4">
                     <span className="font-bold text-slate-900 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded">{v.license_plate}</span>
                   </td>
-                  <td className="py-2.5 px-4 font-semibold text-slate-800">{v.brand || "-"}</td>
-                  <td className="py-2.5 px-4 text-slate-600">{v.model || "-"}</td>
-                  <td className="py-2.5 px-4 text-slate-600">
+                  <td className="py-2 px-4 font-semibold text-slate-800">{v.brand || "-"}</td>
+                  <td className="py-2 px-4 text-slate-600">{v.model || "-"}</td>
+                  <td className="py-2 px-4 text-slate-600">
                     {v.sub_model ? `${v.sub_model} ${v.year ? `(${v.year})` : ""}` : (v.year ? `ปี ${v.year}` : "-")}
                   </td>
-                  <td className="py-2.5 px-4 text-right font-bold text-amber-800 font-mono">
+                  <td className="py-2 px-4 text-right font-bold text-amber-800 font-mono">
                     {v.quantity ?? 100} ลัง
                   </td>
-                  <td className="py-2.5 px-4 text-center">
+                  <td className="py-2 px-4 text-center">
                     {v.is_assigned_today ? (
                       <span
                         className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200"
@@ -387,14 +387,14 @@ export const VehiclesPage: React.FC = () => {
                       </span>
                     ) : (
                       <span
-                        className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200"
+                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200"
                         title={`ว่าง พร้อมใช้งาน ณ วันที่ ${selectedDate}`}
                       >
                         <CheckCircle2 className="w-3 h-3 text-emerald-600" /> ว่าง (พร้อมใช้งาน)
                       </span>
                     )}
                   </td>
-                  <td className="py-2.5 px-4 text-right space-x-1">
+                  <td className="py-2 px-4 text-right space-x-1">
                     <button onClick={() => handleOpenEditVehicle(v)} className="p-1 rounded-md text-slate-600 hover:text-slate-900 hover:bg-slate-100" title="แก้ไข">
                       <Edit2 className="w-3.5 h-3.5" />
                     </button>

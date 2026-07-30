@@ -519,7 +519,7 @@ export const UsersListPage: React.FC = () => {
       >
         <div>
           <label className="block text-slate-700 font-semibold mb-1">
-            รูปโปรไฟล์ (user_image)
+            รูปโปรไฟล์
           </label>
           <div className="flex items-center gap-3 bg-slate-50 p-2.5 rounded-lg border border-slate-200/80">
             <div className="w-14 h-14 rounded-full overflow-hidden bg-white border border-slate-300 flex items-center justify-center shrink-0 shadow-2xs relative">

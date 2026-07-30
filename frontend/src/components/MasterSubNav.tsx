@@ -1,5 +1,6 @@
 import React from "react";
 import { NavLink } from "react-router-dom";
+import { useAuth } from "../context/AuthContext";
 import {
   Building,
   Key,
@@ -9,19 +10,38 @@ import {
   MapPin,
   ShieldCheck,
   Layers,
+  FileText,
 } from "lucide-react";
 
 export const MasterSubNav: React.FC = () => {
+  const { user } = useAuth();
+
+  let permissions: Record<string, boolean> = {};
+  if (user?.menu_permissions) {
+    if (typeof user.menu_permissions === 'string') {
+      try { permissions = JSON.parse(user.menu_permissions); } catch (e) {}
+    } else if (typeof user.menu_permissions === 'object') {
+      permissions = user.menu_permissions as Record<string, boolean>;
+    }
+  }
+
+  const isAllowed = (key: string) => {
+    if (Object.keys(permissions).length > 0) return !!permissions[key];
+    if (user?.level_user_id === 1) return true;
+    return false;
+  };
+
   const tabs = [
-    { to: "/master/stores", label: "ร้านค้า", icon: Building },
-    { to: "/master/keys", label: "ที่ฝากกุญแจ", icon: Key },
-    { to: "/master/pda", label: "เครื่อง PDA", icon: Smartphone },
-    { to: "/master/payments", label: "การชำระเงิน", icon: CreditCard },
-    { to: "/master/vehicles", label: "รถ", icon: Truck },
-    { to: "/master/parking", label: "ที่จอด", icon: MapPin },
-    { to: "/master/accounting-status", label: "สถานะทางบัญชี", icon: ShieldCheck },
-    { to: "/master/position-product", label: "ตำแหน่งวางสินค้า", icon: Layers },
-  ];
+    { to: "/master/stores", label: "ร้านค้า", icon: Building, key: "stores" },
+    { to: "/master/keys", label: "ที่ฝากกุญแจ", icon: Key, key: "keys" },
+    { to: "/master/pda", label: "เครื่อง PDA", icon: Smartphone, key: "pda" },
+    { to: "/master/payments", label: "การชำระเงิน", icon: CreditCard, key: "payments" },
+    { to: "/master/vehicles", label: "รถ", icon: Truck, key: "vehicles" },
+    { to: "/master/parking", label: "ที่จอด", icon: MapPin, key: "parking" },
+    { to: "/master/accounting-status", label: "สถานะทางบัญชี", icon: ShieldCheck, key: "accounting_status" },
+    { to: "/master/position-product", label: "ตำแหน่งวางสินค้า", icon: Layers, key: "position_product" },
+    { to: "/master/release-types", label: "ประเภทการปล่อยรถ", icon: FileText, key: "release_types" },
+  ].filter((t) => isAllowed(t.key));
 
   return (
     <div className="flex border-b border-slate-200 bg-slate-100/70 p-1 rounded-lg gap-1 overflow-x-auto custom-scrollbar mb-4">

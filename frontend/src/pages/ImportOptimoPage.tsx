@@ -287,15 +287,15 @@ export const ImportOptimoPage: React.FC = () => {
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div className="bg-white p-3 rounded-lg border border-emerald-100 text-center">
                 <div className="text-base font-bold text-slate-800">{resultStats.importedGroups}</div>
-                <div className="text-[10px] text-slate-500 font-medium">กลุ่มสายจัดส่ง (group_store)</div>
+                <div className="text-[10px] text-slate-500 font-medium">กลุ่มสายจัดส่ง</div>
               </div>
               <div className="bg-white p-3 rounded-lg border border-emerald-100 text-center">
                 <div className="text-base font-bold text-slate-800">{resultStats.importedStores}</div>
-                <div className="text-[10px] text-slate-500 font-medium">ร้านค้าใหม่ (store)</div>
+                <div className="text-[10px] text-slate-500 font-medium">ร้านค้าใหม่</div>
               </div>
               <div className="bg-white p-3 rounded-lg border border-emerald-100 text-center">
                 <div className="text-base font-bold text-emerald-600">{resultStats.importedListStores}</div>
-                <div className="text-[10px] text-slate-500 font-medium">รายการจุดหยุด (list_store)</div>
+                <div className="text-[10px] text-slate-500 font-medium">รายการจุดหยุด</div>
               </div>
             </div>
 
@@ -304,7 +304,7 @@ export const ImportOptimoPage: React.FC = () => {
                 onClick={() => navigate("/route")}
                 className="bg-emerald-700 hover:bg-emerald-800 text-white font-semibold px-4 py-2 rounded-lg text-xs flex items-center gap-2 shadow-xs transition-colors"
               >
-                ดูเส้นทางบนแผนที่ (OptimoRoute Map)
+                ดูเส้นทางบนแผนที่ (Route Map)
                 <ArrowRight className="w-4 h-4" />
               </button>
             </div>

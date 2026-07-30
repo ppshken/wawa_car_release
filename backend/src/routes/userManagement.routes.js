@@ -227,6 +227,105 @@ router.get('/role-permissions', authenticateToken, async (req, res) => {
   }
 });
 
+// Helper function to sync role_permission table to level_user.menu_permissions JSON column
+async function syncRolePermissionsToMenuPermissions(levelUserId) {
+  try {
+    const rows = await query(
+      `SELECT p.permission_key 
+       FROM role_permission rp 
+       JOIN permission p ON rp.permission_id = p.permission_id 
+       WHERE rp.level_user_id = ?`,
+      [levelUserId]
+    );
+
+    const menuPermObj = {};
+    rows.forEach(r => {
+      if (r.permission_key) {
+        menuPermObj[r.permission_key] = true;
+      }
+    });
+
+    await query(
+      `UPDATE level_user SET menu_permissions = ? WHERE level_user_id = ?`,
+      [JSON.stringify(menuPermObj), levelUserId]
+    );
+    return menuPermObj;
+  } catch (err) {
+    console.error('Error syncing role permissions:', err);
+  }
+}
+
+// Auto-seed default system menu permissions
+(async () => {
+  try {
+    const defaultPermissions = [
+      { key: 'dashboard', name: 'หน้าแดชบอร์ด', group: 'เมนูหลัก', action: 'view', desc: 'การเข้าถึงหน้าแดชบอร์ดสรุปผล' },
+      { key: 'releases', name: 'รายการใบปล่อยรถ', group: 'เมนูหลัก', action: 'view', desc: 'การเข้าถึงหน้ารายการใบปล่อยรถ' },
+      { key: 'route', name: 'จัดรถ & เส้นทาง', group: 'เมนูหลัก', action: 'view', desc: 'การเข้าถึงหน้าแผนที่จัดรถและเส้นทาง' },
+      { key: 'import_optimo', name: 'นำเข้า OptimoRoute', group: 'เมนูหลัก', action: 'view', desc: 'การเข้าถึงหน้านำเข้าข้อมูลเส้นทาง' },
+      { key: 'reports', name: 'รายงานระบบ & Audit Log', group: 'เมนูหลัก', action: 'view', desc: 'การเข้าถึงหน้ารายงานระบบและประวัติกิจกรรม' },
+      { key: 'users', name: 'จัดการผู้ใช้งาน', group: 'จัดการผู้ใช้งาน', action: 'view', desc: 'การเข้าถึงหน้าบริหารจัดการผู้ใช้งาน' },
+      { key: 'user_levels', name: 'จัดการระดับผู้ใช้งาน', group: 'จัดการผู้ใช้งาน', action: 'view', desc: 'การเข้าถึงหน้าบริหารจัดการบทบาท/ระดับผู้ใช้' },
+      { key: 'permissions', name: 'จัดการสิทธิ์ระบบ (Matrix)', group: 'จัดการผู้ใช้งาน', action: 'view', desc: 'การเข้าถึงหน้ากำหนดสิทธิ์ระบบรายเมนู' },
+      { key: 'user_access', name: 'จัดการกลุ่มการเข้าถึง', group: 'จัดการผู้ใช้งาน', action: 'view', desc: 'การเข้าถึงหน้าจัดการกลุ่มสิทธิ์ Access' },
+      { key: 'stores', name: 'ข้อมูลร้านค้า', group: 'ข้อมูลมาสเตอร์', action: 'view', desc: 'การเข้าถึงหน้าข้อมูลร้านค้า' },
+      { key: 'keys', name: 'ข้อมูลที่ฝากกุญแจ', group: 'ข้อมูลมาสเตอร์', action: 'view', desc: 'การเข้าถึงหน้าข้อมูลที่ฝากกุญแจ' },
+      { key: 'pda', name: 'ข้อมูลเครื่อง PDA', group: 'ข้อมูลมาสเตอร์', action: 'view', desc: 'การเข้าถึงหน้าข้อมูลเครื่อง PDA' },
+      { key: 'payments', name: 'ข้อมูลช่องทางชำระเงิน', group: 'ข้อมูลมาสเตอร์', action: 'view', desc: 'การเข้าถึงหน้าประเภทการชำระเงิน' },
+      { key: 'vehicles', name: 'ข้อมูลรถ', group: 'ข้อมูลมาสเตอร์', action: 'view', desc: 'การเข้าถึงหน้าข้อมูลรถ' },
+      { key: 'parking', name: 'ข้อมูลที่จอดรถ', group: 'ข้อมูลมาสเตอร์', action: 'view', desc: 'การเข้าถึงหน้าข้อมูลที่จอดรถ' },
+      { key: 'accounting_status', name: 'สถานะทางบัญชี', group: 'ข้อมูลมาสเตอร์', action: 'view', desc: 'การเข้าถึงหน้าสถานะตรวจสอบทางบัญชี' },
+      { key: 'position_product', name: 'ตำแหน่งวางสินค้า', group: 'ข้อมูลมาสเตอร์', action: 'view', desc: 'การเข้าถึงหน้าตำแหน่งวางสินค้า' },
+      { key: 'release_types', name: 'ประเภทการปล่อยรถ', group: 'ข้อมูลมาสเตอร์', action: 'view', desc: 'การเข้าถึงหน้าจัดการประเภทการปล่อยรถ' }
+    ];
+
+    for (const p of defaultPermissions) {
+      const exist = await query('SELECT permission_id FROM permission WHERE permission_key = ?', [p.key]);
+      if (exist.length === 0) {
+        await query(
+          'INSERT INTO permission (permission_key, permission_name, menu_group, action_type, description) VALUES (?, ?, ?, ?, ?)',
+          [p.key, p.name, p.group, p.action, p.desc]
+        );
+      }
+    }
+
+    // Grant Admin (level 1) all default permissions if missing
+    const allP = await query('SELECT permission_id FROM permission');
+    for (const item of allP) {
+      try {
+        await query('INSERT IGNORE INTO role_permission (level_user_id, permission_id) VALUES (1, ?)', [item.permission_id]);
+      } catch (e) {}
+    }
+    await syncRolePermissionsToMenuPermissions(1);
+
+    // Grant Admin staff (level 2) default permissions
+    const lvl2Keys = ['dashboard', 'releases', 'route', 'import_optimo', 'reports', 'stores', 'keys', 'pda', 'payments', 'vehicles', 'parking', 'accounting_status', 'position_product', 'release_types'];
+    const lvl2Placeholders = lvl2Keys.map(() => '?').join(',');
+    const lvl2Ps = await query(`SELECT permission_id FROM permission WHERE permission_key IN (${lvl2Placeholders})`, lvl2Keys);
+    for (const item of lvl2Ps) {
+      try {
+        await query('INSERT IGNORE INTO role_permission (level_user_id, permission_id) VALUES (2, ?)', [item.permission_id]);
+      } catch (e) {}
+    }
+    await syncRolePermissionsToMenuPermissions(2);
+
+    // Grant Driver (level 3) default permissions
+    const lvl3Keys = ['dashboard', 'releases', 'route'];
+    const lvl3Placeholders = lvl3Keys.map(() => '?').join(',');
+    const lvl3Ps = await query(`SELECT permission_id FROM permission WHERE permission_key IN (${lvl3Placeholders})`, lvl3Keys);
+    for (const item of lvl3Ps) {
+      try {
+        await query('INSERT IGNORE INTO role_permission (level_user_id, permission_id) VALUES (3, ?)', [item.permission_id]);
+      } catch (e) {}
+    }
+    await syncRolePermissionsToMenuPermissions(3);
+
+    console.log('[PermissionSeed] Auto-seed completed for all levels');
+  } catch (err) {
+    console.error('Error auto-seeding permissions:', err);
+  }
+})();
+
 // PUT /api/manage/role-permissions/:levelUserId — อัปเดต Permissions ของ Role (bulk replace)
 router.put('/role-permissions/:levelUserId', authenticateToken, async (req, res) => {
   try {
@@ -245,6 +344,8 @@ router.put('/role-permissions/:levelUserId', authenticateToken, async (req, res)
       const values = permission_ids.map(pid => `(${parseInt(levelUserId)}, ${parseInt(pid)})`).join(', ');
       await query(`INSERT INTO role_permission (level_user_id, permission_id) VALUES ${values}`);
     }
+
+    await syncRolePermissionsToMenuPermissions(levelUserId);
 
     res.json({ success: true, message: 'อัปเดตสิทธิ์ของระดับผู้ใช้งานเรียบร้อยแล้ว' });
   } catch (err) {
@@ -266,18 +367,29 @@ router.post('/role-permissions/toggle', authenticateToken, async (req, res) => {
       [level_user_id, permission_id]
     );
 
+    let action = '';
     if (existing.length > 0) {
       // ลบออก (ปิดสิทธิ์)
       await query('DELETE FROM role_permission WHERE level_user_id = ? AND permission_id = ?', [level_user_id, permission_id]);
-      res.json({ success: true, action: 'removed', message: 'ปิดสิทธิ์เรียบร้อยแล้ว' });
+      action = 'removed';
     } else {
       // เพิ่ม (เปิดสิทธิ์)
       await query('INSERT INTO role_permission (level_user_id, permission_id) VALUES (?, ?)', [level_user_id, permission_id]);
-      res.json({ success: true, action: 'added', message: 'เปิดสิทธิ์เรียบร้อยแล้ว' });
+      action = 'added';
     }
+
+    const updatedMenuPerms = await syncRolePermissionsToMenuPermissions(level_user_id);
+
+    res.json({
+      success: true,
+      action,
+      message: action === 'added' ? 'เปิดสิทธิ์เรียบร้อยแล้ว' : 'ปิดสิทธิ์เรียบร้อยแล้ว',
+      menu_permissions: updatedMenuPerms
+    });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
 });
 
 module.exports = router;
+

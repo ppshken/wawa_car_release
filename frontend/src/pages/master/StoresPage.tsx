@@ -363,7 +363,7 @@ export const StoresPage: React.FC = () => {
           <table className="w-full text-left text-xs border-collapse">
             <thead>
               <tr className="bg-slate-100/90 border-b border-slate-200 text-slate-700 font-bold uppercase text-[10px] tracking-wider whitespace-nowrap">
-                <th className="py-2.5 px-4 text-center w-28">รหัสร้านค้า (store_id)</th>
+                <th className="py-2.5 px-4 text-center w-28">รหัสร้านค้า</th>
                 <th className="py-2.5 px-4">ชื่อร้านค้า</th>
                 <th className="py-2.5 px-4">เวลาเปิด-ปิดทำการ</th>
                 <th className="py-2.5 px-4">ที่อยู่ร้านค้า</th>

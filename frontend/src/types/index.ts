@@ -12,7 +12,7 @@ export interface User {
   phone_number_2?: string;
   phone_number_3?: string;
   location_now?: string;
-  language?: string;
+  user_status?: string;
   created_at?: string;
 }
 

@@ -7,6 +7,7 @@ import { PaginationControl } from "../components/PaginationControl";
 import { AnimatedDrawer } from "../components/AnimatedDrawer";
 import { SearchableSelect } from "../components/SearchableSelect";
 import { ReleaseGpsMapTab } from "../components/ReleaseGpsMapTab";
+import { ReleaseChatTab } from "../components/ReleaseChatTab";
 import {
   Plus,
   Filter,
@@ -23,6 +24,7 @@ import {
   PackageCheck,
   RotateCcw,
   Coins,
+  MessageSquare,
   Truck,
   Search,
   Eye,
@@ -52,7 +54,7 @@ interface CarReleaseData {
   total_stores: number;
   allowance: string;
   allowance_paid: string;
-  accounting_status: string;
+  accounting_status_name: string;
   accounting_status_id: number;
   mileage: number;
   user_image: string;
@@ -115,7 +117,7 @@ export const CarReleaseList: React.FC = () => {
   const { showSuccess, showError } = useToast();
   const [releases, setReleases] = useState<any[]>([]);
   const [selectedRelease, setSelectedRelease] = useState<any | null>(null);
-  const [activeDetailTab, setActiveDetailTab] = useState<"info" | "gps">(
+  const [activeDetailTab, setActiveDetailTab] = useState<"info" | "gps" | "chat">(
     "info",
   );
   const [selectedStoreItem, setSelectedStoreItem] = useState<any | null>(null);
@@ -139,6 +141,7 @@ export const CarReleaseList: React.FC = () => {
   const [groupStores, setGroupStores] = useState<any[]>([]);
   const [pdaDevices, setPdaDevices] = useState<any[]>([]);
   const [accountingStatuses, setAccountingStatuses] = useState<any[]>([]);
+  const [releaseTypes, setReleaseTypes] = useState<any[]>([]);
 
   // Group Delivery List Preview State
   const [groupStoresPreview, setGroupStoresPreview] = useState<any[]>([]);
@@ -255,12 +258,13 @@ export const CarReleaseList: React.FC = () => {
 
   const fetchMasterData = useCallback(async () => {
     try {
-      const [vRes, uRes, gRes, pRes, aRes] = await Promise.allSettled([
+      const [vRes, uRes, gRes, pRes, aRes, rtRes] = await Promise.allSettled([
         api.get("/master/vehicles"),
-        api.get("/users"),
+        api.get("/users/driver"),
         api.get("/master/group-stores"),
         api.get("/master/pda"),
         api.get("/master/accounting-status"),
+        api.get("/master/car-release-types"),
       ]);
 
       if (vRes.status === "fulfilled" && vRes.value.data.vehicles) {
@@ -282,6 +286,9 @@ export const CarReleaseList: React.FC = () => {
         setAccountingStatuses(
           aRes.value.data.statuses || aRes.value.data.accounting_statuses,
         );
+      }
+      if (rtRes.status === "fulfilled" && rtRes.value.data.releaseTypes) {
+        setReleaseTypes(rtRes.value.data.releaseTypes);
       }
     } catch (err) {
       console.error("Fetch master options error:", err);
@@ -377,14 +384,19 @@ export const CarReleaseList: React.FC = () => {
     }));
   }, [drivers]);
 
-  const releaseTypeOptions = useMemo(
-    () => [
+  const releaseTypeOptions = useMemo(() => {
+    if (releaseTypes.length > 0) {
+      return releaseTypes.map((rt) => ({
+        value: String(rt.car_release_type_id),
+        label: rt.type,
+      }));
+    }
+    return [
       { value: "1", label: "ปล่อยรถปกติ (ประจำวัน)", badge: "ปกติ" },
       { value: "2", label: "ปล่อยรถพิเศษ (งานด่วน)", badge: "พิเศษ" },
       { value: "3", label: "รับ-ส่งสินค้า / ตะเวนรับ", badge: "รับ-ส่ง" },
-    ],
-    [],
-  );
+    ];
+  }, [releaseTypes]);
 
   const pdaOptions = useMemo(() => {
     return pdaDevices.map((p) => ({
@@ -431,8 +443,8 @@ export const CarReleaseList: React.FC = () => {
           totalStores: r.total_stores || 0,
           allowance: r.allowance || "-",
           allowance_paid: r.allowance_paid || "-",
-          accounting_status_name: r.accounting_status || "-",
-          accounting_status_id: r.accounting_status_id || r.accounting_status,
+          accounting_status_name: r.accounting_status_name || "-",
+          accounting_status_id: r.accounting_status_id || undefined,
           mileage: r.mileage || 0,
           driver_avatar: r.user_image || "https://cdn-icons-png.flaticon.com/512/9055/9055398.png",
           driver_name: r.driver_name || "ไม่ระบุ",
@@ -475,8 +487,8 @@ export const CarReleaseList: React.FC = () => {
     setEditingId(null);
     const firstOpt = groupOptions[0];
     const initialGid = firstOpt ? String(firstOpt.value) : "";
-    setFormGroupStoreId(initialGid);
-    setFormUserId(drivers[0]?.user_id || "");
+    setFormGroupStoreId("");
+    setFormUserId("");
     setFormReleaseTypeId("1");
     setFormDriverName(drivers[0]?.name || "");
     setFormFollowers([]);
@@ -516,7 +528,7 @@ export const CarReleaseList: React.FC = () => {
     setFormCarId(rel.car_id || "");
     setFormUserId(rel.user_id || "");
     setFormGroupStoreId(rel.group_store_id || "");
-    setFormReleaseTypeId(rel.car_release_type_id || "1");
+    setFormReleaseTypeId(rel.car_release_type_id || 1);
     setFormPlateText(rel.license_plate || "");
     setFormCarBrandModel(rel.brand_model || "");
     setFormDriverName(rel.driver_name || "");
@@ -535,12 +547,10 @@ export const CarReleaseList: React.FC = () => {
     }
     setFormFollowers(initialFollowers);
     setFollowerSearch("");
-
     setFormMileage(rel.mileage || 0);
     setFormAllowance(rel.allowance !== "-" ? rel.allowance : "");
     setFormPda(rel.pda_device || "");
-    setFormAccountingStatus(rel.accounting_status || "");
-    setFormControlledType(rel.controlled_type || "กระบะ");
+    setFormAccountingStatus(rel.accounting_status_id || 0);
     setFormDescription(rel.description || "");
 
     // Pre-fill images
@@ -950,7 +960,7 @@ export const CarReleaseList: React.FC = () => {
 
                           {/* 7. สถานะทางบัญชี */}
                           <td className="py-1 px-3 text-slate-600 font-medium">
-                            {rel.accounting_status || "-"}
+                            {rel.accounting_status_name || "-"}
                           </td>
 
                           {/* 8. เลขไมล์ */}
@@ -1058,7 +1068,7 @@ export const CarReleaseList: React.FC = () => {
                 {/* เลือกกรุ๊ปรถ / สายจัดส่ง (SearchableSelect - ขยายความกว้าง sm:col-span-7) */}
                 <div className="sm:col-span-7">
                   <SearchableSelect
-                    label="กรุ๊ปรถ / สายจัดส่ง *"
+                    label="กรุ๊ปรถ / สายจัดส่ง"
                     options={groupOptions}
                     value={formGroupStoreId}
                     onChange={(val) => handleGroupChange(String(val))}
@@ -1071,7 +1081,7 @@ export const CarReleaseList: React.FC = () => {
                 {/* เลือกพนักงานขับรถ (SearchableSelect - sm:col-span-5) */}
                 <div className="sm:col-span-5">
                   <SearchableSelect
-                    label="พนักงานขับรถ *"
+                    label="พนักงานขับรถ"
                     options={driverOptions}
                     value={formUserId}
                     onChange={(val) => {
@@ -1083,6 +1093,7 @@ export const CarReleaseList: React.FC = () => {
                     }}
                     placeholder="-- ค้นหาคนขับ --"
                     searchPlaceholder="พิมพ์ค้นหาชื่อคนขับ..."
+                    required
                   />
                 </div>
               </div>
@@ -1214,13 +1225,14 @@ export const CarReleaseList: React.FC = () => {
                   value={String(formReleaseTypeId)}
                   onChange={(val) => setFormReleaseTypeId(val)}
                   placeholder="-- เลือกประเภทการปล่อยรถ --"
+                  required
                 />
 
                 <div className="sm:col-span-2">
                   <label className="text-slate-700 font-semibold block mb-1 flex items-center justify-between">
-                    <span>ผู้ติดตาม (เลือกพนักงานเป็นผู้ติดตามได้หลายคน)</span>
+                    <span>ผู้ติดตาม (เลือกพนักงานเป็นผู้ติดตามได้หลายคน) *</span>
                     <span className="text-[10px] text-blue-600 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded font-semibold">
-                      เลือกแล้ว {formFollowers.length} คน
+                      เลือกแล้ว {formFollowers.length} คน 
                     </span>
                   </label>
 
@@ -1278,6 +1290,7 @@ export const CarReleaseList: React.FC = () => {
                                   }
                                 }}
                                 className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 shrink-0 cursor-pointer"
+                                required
                               />
                               <img
                                 src={getImageUrl(
@@ -1502,6 +1515,18 @@ export const CarReleaseList: React.FC = () => {
               >
                 <Truck className="w-4 h-4 text-emerald-600 animate-pulse" />
                 <span>ติดตาม GPS (Live)</span>
+              </button>
+
+              <button
+                onClick={() => setActiveDetailTab("chat")}
+                className={`py-2.5 px-4 font-bold text-xs border-b-2 flex items-center gap-2 transition-colors ${
+                  activeDetailTab === "chat"
+                    ? "border-slate-900 text-slate-900 bg-white"
+                    : "border-transparent text-slate-500 hover:text-slate-800"
+                }`}
+              >
+                <MessageSquare className="w-4 h-4 text-blue-600" />
+                <span>แชทสื่อสาร (Chat)</span>
               </button>
             </div>
 
@@ -1738,9 +1763,7 @@ export const CarReleaseList: React.FC = () => {
                         สถานะทางบัญชี
                       </span>
                       <span className="font-semibold text-amber-700">
-                        {selectedRelease.accounting_status_name ||
-                          selectedRelease.accounting_status ||
-                          "-"}
+                        {selectedRelease.accounting_status_name || "-"}
                       </span>
                     </div>
 
@@ -2278,6 +2301,15 @@ export const CarReleaseList: React.FC = () => {
               <ReleaseGpsMapTab
                 release={selectedRelease}
                 stores={selectedRelease.stores || []}
+              />
+            )}
+
+            {/* TAB 3: CAR RELEASE CHAT */}
+            {activeDetailTab === "chat" && (
+              <ReleaseChatTab
+                carReleaseId={selectedRelease.car_release_id}
+                driverName={selectedRelease.driver_name}
+                carReleaseNo={selectedRelease.car_release_no}
               />
             )}
           </div>

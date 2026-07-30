@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useMemo, useCallback } from "react";
 import api from "../../services/api";
 import { useToast } from "../../context/ToastContext";
+import { useAuth } from "../../context/AuthContext";
 import { ConfirmModal } from "../../components/ConfirmModal";
 import { AnimatedDrawer } from "../../components/AnimatedDrawer";
 import { UsersSubNav } from "../../components/UsersSubNav";
@@ -203,6 +204,8 @@ export const PermissionsPage: React.FC = () => {
     );
   };
 
+  const { refreshUser } = useAuth();
+
   const handleToggleRolePermission = async (level_user_id: number, permission_id: number) => {
     try {
       const res = await api.post("/manage/role-permissions/toggle", {
@@ -212,6 +215,7 @@ export const PermissionsPage: React.FC = () => {
       if (res.data.success) {
         showSuccess(res.data.message || "อัปเดตสิทธิ์เรียบร้อยแล้ว");
         fetchRolePermissions();
+        if (refreshUser) refreshUser();
       }
     } catch (err: any) {
       showError(err?.response?.data?.message || "ไม่สามารถเปลี่ยนสิทธิ์ใช้งานได้");

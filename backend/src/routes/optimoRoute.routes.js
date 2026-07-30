@@ -7,43 +7,6 @@ const { authenticateToken } = require('../middleware/auth');
 // =========================================================
 
 
-
-// Auto-migration for OptimoRoute Tracking columns and delivery_settings table
-(async () => {
-  try {
-    const { query } = require('../config/db');
-    const cols = [
-      "ALTER TABLE list_store ADD COLUMN scheduled_time TIME NULL",
-      "ALTER TABLE list_store ADD COLUMN start_service_time DATETIME NULL",
-      "ALTER TABLE list_store ADD COLUMN end_service_time DATETIME NULL",
-      "ALTER TABLE list_store ADD COLUMN priority VARCHAR(20) DEFAULT 'medium'",
-      "ALTER TABLE list_store ADD COLUMN pod_image VARCHAR(500) NULL"
-    ];
-    for (const sql of cols) {
-      try { await query(sql); } catch (e) {}
-    }
-
-    await query(`
-      CREATE TABLE IF NOT EXISTS delivery_settings (
-        id INT PRIMARY KEY AUTO_INCREMENT,
-        service_time_per_stop INT DEFAULT 10,
-        priority_strategy VARCHAR(50) DEFAULT 'fastest_time',
-        depot_start_time VARCHAR(10) DEFAULT '08:00',
-        buffer_time_per_route INT DEFAULT 15,
-        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-      )
-    `);
-
-    const rows = await query(`SELECT COUNT(*) as cnt FROM delivery_settings`);
-    if (!rows || rows[0].cnt === 0) {
-      await query(`
-        INSERT INTO delivery_settings (id, service_time_per_stop, priority_strategy, depot_start_time, buffer_time_per_route)
-        VALUES (1, 10, 'fastest_time', '08:00', 15)
-      `);
-    }
-  } catch (err) {}
-})();
-
 // GET /api/optimoroute/routes?date=YYYY-MM-DD
 // ดึงข้อมูลเส้นทางและจุดหยุดแวะโดยตรงจากฐานข้อมูลระบบ (group_store, list_store, store)
 router.get('/routes', authenticateToken, async (req, res) => {
@@ -1170,8 +1133,171 @@ router.delete('/unassigned/clear', authenticateToken, async (req, res) => {
   }
 });
 
+// ─── UTILITY FUNCTIONS: Haversine, Clustering, 2-opt ───
+
+/**
+ * Haversine distance between two GPS coordinates (returns km)
+ * ใช้แทน Math.hypot ที่คำนวณผิด — สูตรนี้คำนวณระยะบนพื้นผิวทรงกลมจริง
+ */
+function haversineKm(lat1, lng1, lat2, lng2) {
+  const R = 6371; // Earth radius in km
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLng = (lng2 - lng1) * Math.PI / 180;
+  const a = Math.sin(dLat / 2) * Math.sin(dLat / 2)
+    + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180)
+    * Math.sin(dLng / 2) * Math.sin(dLng / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
+
+/**
+ * Estimate travel time in minutes based on distance
+ * ความเร็วแยกตามระยะทาง: ใกล้ = ในเมือง (25 km/h), กลาง = ชานเมือง (40 km/h), ไกล = ทางหลวง (60 km/h)
+ */
+function estimateTravelMinutes(distKm) {
+  if (distKm <= 0.5) return 3; // minimum 3 min
+  if (distKm <= 5) return Math.round((distKm / 25) * 60);    // ในเมือง: 25 km/h
+  if (distKm <= 30) return Math.round((distKm / 40) * 60);   // ชานเมือง: 40 km/h
+  return Math.round((distKm / 60) * 60);                     // ทางหลวง: 60 km/h
+}
+
+/**
+ * Calculate total route distance (Haversine) including depot->first and last->depot
+ */
+function totalRouteDistance(stops, depot) {
+  if (stops.length === 0) return 0;
+  let total = haversineKm(depot.lat, depot.lng, stops[0].lat, stops[0].lng);
+  for (let i = 0; i < stops.length - 1; i++) {
+    total += haversineKm(stops[i].lat, stops[i].lng, stops[i + 1].lat, stops[i + 1].lng);
+  }
+  total += haversineKm(stops[stops.length - 1].lat, stops[stops.length - 1].lng, depot.lat, depot.lng);
+  return total;
+}
+
+/**
+ * 2-opt Route Improvement — สลับลำดับจุดจัดส่งเพื่อลดระยะทางรวม
+ * ลดเส้นทางตัดกัน (crossing routes) อย่างมีประสิทธิภาพ
+ */
+function twoOptImprove(stops, depot, maxIterations = 100) {
+  if (stops.length < 3) return stops;
+
+  let improved = [...stops];
+  let bestDist = totalRouteDistance(improved, depot);
+  let iteration = 0;
+  let hasImproved = true;
+
+  while (hasImproved && iteration < maxIterations) {
+    hasImproved = false;
+    iteration++;
+    for (let i = 0; i < improved.length - 1; i++) {
+      for (let j = i + 1; j < improved.length; j++) {
+        // Reverse the segment between i and j
+        const newRoute = [
+          ...improved.slice(0, i),
+          ...improved.slice(i, j + 1).reverse(),
+          ...improved.slice(j + 1)
+        ];
+        const newDist = totalRouteDistance(newRoute, depot);
+        if (newDist < bestDist - 0.01) { // 10m threshold
+          improved = newRoute;
+          bestDist = newDist;
+          hasImproved = true;
+        }
+      }
+    }
+  }
+  return improved;
+}
+
+/**
+ * Simple K-means Geographic Clustering
+ * จัดกลุ่มจุดจัดส่งตามพื้นที่ภูมิศาสตร์ เพื่อให้แต่ละรถรับผิดชอบพื้นที่เฉพาะ ไม่เส้นทางตัดกัน
+ */
+function kMeansCluster(items, k, maxIter = 50) {
+  if (items.length <= k) {
+    return items.map((item, idx) => ({ ...item, cluster: idx }));
+  }
+
+  // Initialize centroids: pick k items spread evenly
+  const sortedByLat = [...items].sort((a, b) => a.lat - b.lat);
+  let centroids = [];
+  for (let i = 0; i < k; i++) {
+    const idx = Math.min(Math.floor((i / k) * items.length + items.length / (2 * k)), items.length - 1);
+    centroids.push({ lat: sortedByLat[idx].lat, lng: sortedByLat[idx].lng });
+  }
+
+  let assignments = new Array(items.length).fill(0);
+
+  for (let iter = 0; iter < maxIter; iter++) {
+    let changed = false;
+
+    // Assign each item to nearest centroid
+    for (let i = 0; i < items.length; i++) {
+      let bestCluster = 0;
+      let bestDist = Infinity;
+      for (let c = 0; c < k; c++) {
+        const dist = haversineKm(items[i].lat, items[i].lng, centroids[c].lat, centroids[c].lng);
+        if (dist < bestDist) {
+          bestDist = dist;
+          bestCluster = c;
+        }
+      }
+      if (assignments[i] !== bestCluster) {
+        assignments[i] = bestCluster;
+        changed = true;
+      }
+    }
+
+    if (!changed) break;
+
+    // Update centroids
+    for (let c = 0; c < k; c++) {
+      const members = items.filter((_, idx) => assignments[idx] === c);
+      if (members.length > 0) {
+        centroids[c] = {
+          lat: members.reduce((s, m) => s + m.lat, 0) / members.length,
+          lng: members.reduce((s, m) => s + m.lng, 0) / members.length
+        };
+      }
+    }
+  }
+
+  return items.map((item, idx) => ({ ...item, cluster: assignments[idx] }));
+}
+
+/**
+ * OSRM Travel Time Matrix — ดึงระยะเวลาเดินทางจริง (road network) จาก OSRM
+ * Returns matrix[i][j] = travel time in seconds from point i to point j
+ * Fallback: returns null if OSRM fails
+ */
+async function fetchOsrmTravelTimeMatrix(points) {
+  try {
+    if (points.length < 2 || points.length > 25) return null;
+
+    const coordString = points.map(p => `${p.lng},${p.lat}`).join(';');
+    const url = `https://router.project-osrm.org/table/v1/driving/${coordString}?annotations=duration`;
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 8000);
+
+    const res = await fetch(url, { signal: controller.signal });
+    clearTimeout(timeoutId);
+
+    if (!res.ok) return null;
+    const data = await res.json();
+
+    if (data.code === 'Ok' && data.durations) {
+      return data.durations; // matrix[i][j] = seconds
+    }
+    return null;
+  } catch (err) {
+    console.warn('OSRM Table API fallback:', err.message || err);
+    return null;
+  }
+}
+
 // POST /api/optimoroute/auto-route
-// ระบบคำนวณจัดสายรถอัตโนมัติ (เริ่มจากคลังสินค้า 17.1266642, 102.9635667 + ตรวจความจุรถ + ห้ามใช้ซ้ำวัน)
+// ระบบคำนวณจัดสายรถอัตโนมัติ (Haversine + K-means Clustering + 2-opt + OSRM Travel Time)
 router.post('/auto-route', authenticateToken, async (req, res) => {
   try {
     const { query } = require('../config/db');
@@ -1228,7 +1354,6 @@ router.post('/auto-route', authenticateToken, async (req, res) => {
     );
     const alreadyAssignedCarIds = new Set((assignedRows || []).map((r) => String(r.car_id)));
 
-    // กรองเอารถที่ยังไม่ถูกใช้ในวันนี้
     const availableVehicleIds = (selectedVehicleIds || []).filter(
       (id) => !alreadyAssignedCarIds.has(String(id))
     );
@@ -1240,7 +1365,6 @@ router.post('/auto-route', authenticateToken, async (req, res) => {
       });
     }
 
-    // ดึงข้อมูลความจุ (quantity / max_load) ของรถแต่ละคันที่เลือกรวม
     let selectedVehicles = [];
     try {
       const placeholders = availableVehicleIds.map(() => '?').join(',');
@@ -1263,7 +1387,7 @@ router.post('/auto-route', authenticateToken, async (req, res) => {
 
     const totalSelectedCapacity = selectedVehicles.reduce((sum, v) => sum + v.capacity, 0);
 
-    // 3. แจ้งเตือนหากความจุของรถที่เลือกรับสินค้าทั้งหมดไม่พอ
+    // 3. แจ้งเตือนหากความจุรถไม่พอ
     if (totalUnassignedQuantity > totalSelectedCapacity) {
       return res.status(400).json({
         success: false,
@@ -1272,124 +1396,273 @@ router.post('/auto-route', authenticateToken, async (req, res) => {
     }
 
     const effectivePriority = req.body.priorityStrategy || req.body.strategy || 'fastest_time';
+    const bufferTimeMins = parseInt(req.body.bufferTimePerRoute || 0, 10);
 
-    // จัดลำดับความสำคัญของรถตาม strategy
+    // จัดลำดับรถตาม strategy
     if (effectivePriority === 'max_load_first') {
       selectedVehicles.sort((a, b) => b.capacity - a.capacity);
     }
 
-    // 4. คำนวณจัดสายโดยเริ่มจากคลังสินค้า (17.1266642, 102.9635667) -> จุดที่ 1 -> จุดที่ 2...
+    // ─── Phase 2: Geographic Clustering (K-means) ───
+    // จัดกลุ่มจุดจัดส่งตามพื้นที่ก่อนจัดลงรถ เพื่อลดเส้นทางตัดกัน
+    const numVehicles = selectedVehicles.length;
+    let clusteredItems;
+
+    if (effectivePriority === 'order_fifo') {
+      // FIFO ไม่ต้อง cluster — ใช้ลำดับเดิม
+      clusteredItems = items.map((item, idx) => ({ ...item, cluster: Math.floor(idx / Math.ceil(items.length / numVehicles)) }));
+    } else if (numVehicles >= 2 && items.length >= numVehicles * 2) {
+      clusteredItems = kMeansCluster(items, numVehicles);
+    } else {
+      clusteredItems = items.map((item) => ({ ...item, cluster: 0 }));
+    }
+
+    // จัดกลุ่ม items ตาม cluster
+    const clusterGroups = {};
+    clusteredItems.forEach((item) => {
+      if (!clusterGroups[item.cluster]) clusterGroups[item.cluster] = [];
+      clusterGroups[item.cluster].push(item);
+    });
+
+    // จับคู่ cluster กับ vehicle (เรียงตาม cluster ID)
+    const clusterKeys = Object.keys(clusterGroups).sort((a, b) => Number(a) - Number(b));
+
+    // ถ้ามี cluster มากกว่ารถ ให้ merge cluster ที่มีน้อยที่สุดเข้ากัน
+    while (clusterKeys.length > numVehicles && clusterKeys.length > 1) {
+      // หา 2 cluster ที่ centroid ใกล้กันที่สุด แล้ว merge
+      let minPairDist = Infinity;
+      let mergeA = 0, mergeB = 1;
+      for (let i = 0; i < clusterKeys.length; i++) {
+        for (let j = i + 1; j < clusterKeys.length; j++) {
+          const groupA = clusterGroups[clusterKeys[i]];
+          const groupB = clusterGroups[clusterKeys[j]];
+          const centA = { lat: groupA.reduce((s, m) => s + m.lat, 0) / groupA.length, lng: groupA.reduce((s, m) => s + m.lng, 0) / groupA.length };
+          const centB = { lat: groupB.reduce((s, m) => s + m.lat, 0) / groupB.length, lng: groupB.reduce((s, m) => s + m.lng, 0) / groupB.length };
+          const d = haversineKm(centA.lat, centA.lng, centB.lat, centB.lng);
+          if (d < minPairDist) { minPairDist = d; mergeA = i; mergeB = j; }
+        }
+      }
+      clusterGroups[clusterKeys[mergeA]].push(...clusterGroups[clusterKeys[mergeB]]);
+      delete clusterGroups[clusterKeys[mergeB]];
+      clusterKeys.splice(mergeB, 1);
+    }
+
+    // ─── Phase 3: OSRM Travel Time Matrix (Best-effort) ───
+    // สร้าง travel time matrix จาก OSRM สำหรับทุกจุด (depot + items)
+    let osrmMatrix = null;
+    let osrmPointsMap = null; // map from list_id -> index in matrix
+    try {
+      const allPoints = [DEPOT, ...items];
+      if (allPoints.length <= 25) {
+        const matrix = await fetchOsrmTravelTimeMatrix(allPoints);
+        if (matrix) {
+          osrmMatrix = matrix;
+          osrmPointsMap = new Map();
+          osrmPointsMap.set('DEPOT', 0);
+          items.forEach((item, idx) => osrmPointsMap.set(String(item.list_id), idx + 1));
+        }
+      }
+    } catch (osrmErr) {
+      console.warn('OSRM matrix fetch skipped:', osrmErr.message || osrmErr);
+    }
+
+    /**
+     * Get travel time between two points (minutes)
+     * ใช้ OSRM matrix ถ้ามี มิฉะนั้น fallback เป็น Haversine + speed estimate
+     */
+    function getTravelMinutes(fromId, fromLat, fromLng, toId, toLat, toLng) {
+      if (osrmMatrix && osrmPointsMap) {
+        const fromIdx = osrmPointsMap.get(fromId);
+        const toIdx = osrmPointsMap.get(toId);
+        if (fromIdx !== undefined && toIdx !== undefined) {
+          const seconds = osrmMatrix[fromIdx][toIdx];
+          if (seconds !== null && seconds !== undefined && seconds > 0) {
+            return Math.max(2, Math.round(seconds / 60));
+          }
+        }
+      }
+      // Fallback: Haversine + speed estimate
+      const distKm = haversineKm(fromLat, fromLng, toLat, toLng);
+      return estimateTravelMinutes(distKm);
+    }
+
+    // ─── Phase 1+2: Build Routes with Nearest Neighbor + 2-opt + Clustering ───
     const colors = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#64748b'];
     const createdRoutes = [];
 
-    let remainingItems = [...items];
-
     for (let vIdx = 0; vIdx < selectedVehicles.length; vIdx++) {
-      if (remainingItems.length === 0) break;
-
       const vehicle = selectedVehicles[vIdx];
       const vehicleCap = vehicle.capacity;
+
+      // ดึง items จาก cluster ที่จับคู่กับรถคันนี้
+      let clusterItems;
+      if (vIdx < clusterKeys.length) {
+        clusterItems = [...clusterGroups[clusterKeys[vIdx]]];
+      } else {
+        // ถ้ารถคันนี้ไม่มี cluster → ไม่มี stops
+        continue;
+      }
+
+      if (clusterItems.length === 0) continue;
+
+      // ─── Nearest Neighbor Construction (ใช้ Haversine) ───
       const routeStops = [];
       let currentLoad = 0;
       let currentPos = { lat: DEPOT.lat, lng: DEPOT.lng };
 
-      while (remainingItems.length > 0) {
+      // สร้าง remainingClusterItems แยกต่างหากเพื่อไม่กระทบ cluster อื่น
+      let remainingClusterItems = [...clusterItems];
+
+      while (remainingClusterItems.length > 0) {
         let nearestIdx = -1;
-        let minDist = Infinity;
+        let minMetric = Infinity;
 
         if (effectivePriority === 'order_fifo') {
-          // เลือกรายการแรกตามลำดับออเดอร์ที่บรรจุได้
-          for (let i = 0; i < remainingItems.length; i++) {
-            if (currentLoad + remainingItems[i].quantity <= vehicleCap) {
+          for (let i = 0; i < remainingClusterItems.length; i++) {
+            if (currentLoad + remainingClusterItems[i].quantity <= vehicleCap) {
               nearestIdx = i;
               break;
             }
           }
         } else {
-          // เลือกจุดที่ใกล้ที่สุดจากตำแหน่งปัจจุบัน
-          for (let i = 0; i < remainingItems.length; i++) {
-            const item = remainingItems[i];
+          for (let i = 0; i < remainingClusterItems.length; i++) {
+            const item = remainingClusterItems[i];
             if (currentLoad + item.quantity <= vehicleCap) {
-              const dist = Math.hypot(item.lat - currentPos.lat, item.lng - currentPos.lng);
-              if (dist < minDist) {
-                minDist = dist;
+              let metric;
+              if (effectivePriority === 'fastest_time') {
+                // Optimize for travel time (use OSRM if available)
+                metric = getTravelMinutes(
+                  routeStops.length === 0 ? 'DEPOT' : String(routeStops[routeStops.length - 1].list_id),
+                  currentPos.lat, currentPos.lng,
+                  String(item.list_id), item.lat, item.lng
+                );
+              } else {
+                // distance_first / default — optimize for Haversine distance
+                metric = haversineKm(currentPos.lat, currentPos.lng, item.lat, item.lng);
+              }
+              if (metric < minMetric) {
+                minMetric = metric;
                 nearestIdx = i;
               }
             }
           }
         }
 
-        // หากไม่มีจุดใดใส่ลงรถคันนี้ได้แล้ว ให้จบคันนี้
         if (nearestIdx === -1) break;
 
-        const pickedItem = remainingItems[nearestIdx];
+        const pickedItem = remainingClusterItems[nearestIdx];
         routeStops.push(pickedItem);
         currentLoad += pickedItem.quantity;
         currentPos = { lat: pickedItem.lat, lng: pickedItem.lng };
-        remainingItems.splice(nearestIdx, 1);
+        remainingClusterItems.splice(nearestIdx, 1);
       }
 
-      if (routeStops.length > 0) {
-        const groupName = `Auto-Route${String(createdRoutes.length + 1).padStart(3, '0')}`;
-        const groupColor = colors[createdRoutes.length % colors.length];
+      // ถ้ามี items เหลือที่ใส่ไม่ได้ → ใส่กลับ remaining ของ cluster ถัดไป
+      if (remainingClusterItems.length > 0 && vIdx + 1 < clusterKeys.length) {
+        const nextClusterKey = clusterKeys[vIdx + 1];
+        if (clusterGroups[nextClusterKey]) {
+          clusterGroups[nextClusterKey].push(...remainingClusterItems);
+        }
+      }
 
-        const groupRes = await query(
-          `INSERT INTO group_store (group_store_name, group_color, car_id, load1, date, created_at)
-           VALUES (?, ?, ?, ?, ?, NOW())`,
-          [groupName, groupColor, vehicle.car_id, currentLoad, targetDate]
+      if (routeStops.length === 0) continue;
+
+      // ─── 2-opt Route Improvement ───
+      // ไม่ทำ 2-opt สำหรับ FIFO mode (ต้องรักษาลำดับเดิม)
+      let optimizedStops = routeStops;
+      if (effectivePriority !== 'order_fifo' && routeStops.length >= 3) {
+        optimizedStops = twoOptImprove(routeStops, DEPOT);
+      }
+
+      // ─── Save to DB ───
+      const groupName = `Auto-Route${String(createdRoutes.length + 1).padStart(3, '0')}`;
+      const groupColor = colors[createdRoutes.length % colors.length];
+
+      const groupRes = await query(
+        `INSERT INTO group_store (group_store_name, group_color, car_id, load1, date, created_at)
+         VALUES (?, ?, ?, ?, ?, NOW())`,
+        [groupName, groupColor, vehicle.car_id, currentLoad, targetDate]
+      );
+      const newGroupId = groupRes.insertId;
+
+      // ─── Calculate ETAs (ใช้ OSRM duration หรือ Haversine + variable speed) ───
+      let currentMinutes = 8 * 60; // default 08:00
+      if (req.body.depotStartTime && typeof req.body.depotStartTime === 'string' && req.body.depotStartTime.includes(':')) {
+        const parts = req.body.depotStartTime.split(':');
+        currentMinutes = (parseInt(parts[0], 10) || 8) * 60 + (parseInt(parts[1], 10) || 0);
+      }
+
+      // เพิ่ม buffer time ก่อนออกเดินทาง (เวลาเตรียมตัวรถ)
+      currentMinutes += bufferTimeMins;
+
+      const serviceTimeMins = parseInt(req.body.serviceTimeMinutes || 10, 10);
+      let prevId = 'DEPOT';
+      let prevPos = { lat: DEPOT.lat, lng: DEPOT.lng };
+      let totalDistKm = 0;
+
+      for (let orderIndex = 0; orderIndex < optimizedStops.length; orderIndex++) {
+        const item = optimizedStops[orderIndex];
+
+        const travelMins = getTravelMinutes(prevId, prevPos.lat, prevPos.lng, String(item.list_id), item.lat, item.lng);
+        const legDistKm = haversineKm(prevPos.lat, prevPos.lng, item.lat, item.lng);
+        totalDistKm += legDistKm;
+
+        currentMinutes += travelMins;
+
+        const hh = String(Math.floor(currentMinutes / 60) % 24).padStart(2, '0');
+        const mm = String(currentMinutes % 60).padStart(2, '0');
+        const scheduledTimeStr = `${hh}:${mm}:00`;
+
+        await query(
+          `UPDATE list_store
+           SET group_store_id = ?,
+               row_order = ?,
+               scheduled_time = ?,
+               priority = COALESCE(priority, 'medium'),
+               status = 'in_progress'
+           WHERE list_id = ?`,
+          [newGroupId, orderIndex + 1, scheduledTimeStr, item.list_id]
         );
-        const newGroupId = groupRes.insertId;
 
-        // Calculate scheduled ETAs starting from depotStartTime
-        let currentMinutes = 8 * 60; // default 08:00
-        if (req.body.depotStartTime && typeof req.body.depotStartTime === 'string' && req.body.depotStartTime.includes(':')) {
-          const parts = req.body.depotStartTime.split(':');
-          currentMinutes = (parseInt(parts[0], 10) || 8) * 60 + (parseInt(parts[1], 10) || 0);
-        }
-        const serviceTimeMins = parseInt(req.body.serviceTimeMinutes || 10, 10);
-        let prevPos = { lat: DEPOT.lat, lng: DEPOT.lng };
-
-        for (let orderIndex = 0; orderIndex < routeStops.length; orderIndex++) {
-          const item = routeStops[orderIndex];
-
-          const distDeg = Math.hypot(item.lat - prevPos.lat, item.lng - prevPos.lng);
-          const distKm = distDeg * 111;
-          const travelMins = Math.max(3, Math.round((distKm / 35) * 60));
-          currentMinutes += travelMins;
-
-          const hh = String(Math.floor(currentMinutes / 60) % 24).padStart(2, '0');
-          const mm = String(currentMinutes % 60).padStart(2, '0');
-          const scheduledTimeStr = `${hh}:${mm}:00`;
-
-          await query(
-            `UPDATE list_store
-             SET group_store_id = ?,
-                 row_order = ?,
-                 scheduled_time = ?,
-                 priority = COALESCE(priority, 'medium'),
-                 status = 'in_progress'
-             WHERE list_id = ?`,
-            [newGroupId, orderIndex + 1, scheduledTimeStr, item.list_id]
-          );
-
-          currentMinutes += serviceTimeMins;
-          prevPos = { lat: item.lat, lng: item.lng };
-        }
-
-        createdRoutes.push({
-          group_store_id: newGroupId,
-          group_store_name: groupName,
-          vehiclePlate: vehicle.license_plate,
-          stopsCount: routeStops.length,
-          totalQuantity: currentLoad
-        });
+        currentMinutes += serviceTimeMins;
+        prevId = String(item.list_id);
+        prevPos = { lat: item.lat, lng: item.lng };
       }
+
+      // คำนวณเวลากลับ Depot
+      const returnTravelMins = getTravelMinutes(prevId, prevPos.lat, prevPos.lng, 'DEPOT', DEPOT.lat, DEPOT.lng);
+      const returnDistKm = haversineKm(prevPos.lat, prevPos.lng, DEPOT.lat, DEPOT.lng);
+      totalDistKm += returnDistKm;
+      const estReturnMinutes = currentMinutes + returnTravelMins;
+      const returnHh = String(Math.floor(estReturnMinutes / 60) % 24).padStart(2, '0');
+      const returnMm = String(estReturnMinutes % 60).padStart(2, '0');
+
+      createdRoutes.push({
+        group_store_id: newGroupId,
+        group_store_name: groupName,
+        vehiclePlate: vehicle.license_plate,
+        stopsCount: optimizedStops.length,
+        totalQuantity: currentLoad,
+        totalDistanceKm: Math.round(totalDistKm * 10) / 10,
+        estimatedReturnTime: `${returnHh}:${returnMm}`,
+        usedOsrm: !!osrmMatrix
+      });
     }
+
+    const totalDist = createdRoutes.reduce((s, r) => s + (r.totalDistanceKm || 0), 0);
+    const algorithmUsed = osrmMatrix ? 'K-means + Nearest Neighbor + 2-opt + OSRM' : 'K-means + Nearest Neighbor + 2-opt + Haversine';
 
     res.json({
       success: true,
-      message: `คำนวณจัดสายรถสำเร็จ! สร้าง ${createdRoutes.length} สายจัดส่ง (เริ่มต้นจากคลังสินค้า 17.1266642, 102.9635667)`,
-      createdRoutes
+      message: `คำนวณจัดสายรถสำเร็จ! สร้าง ${createdRoutes.length} สายจัดส่ง (ระยะทางรวม ~${Math.round(totalDist)} km) | Algorithm: ${algorithmUsed}`,
+      createdRoutes,
+      summary: {
+        totalRoutes: createdRoutes.length,
+        totalDistanceKm: Math.round(totalDist * 10) / 10,
+        algorithm: algorithmUsed,
+        strategy: effectivePriority,
+        usedOsrm: !!osrmMatrix
+      }
     });
   } catch (err) {
     console.error('POST /auto-route error:', err);

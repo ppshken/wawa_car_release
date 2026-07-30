@@ -1,14 +1,32 @@
 import React from "react";
 import { NavLink } from "react-router-dom";
+import { useAuth } from "../context/AuthContext";
 import { Users as UsersIcon, Layers, KeyRound, Shield } from "lucide-react";
 
 export const UsersSubNav: React.FC = () => {
+  const { user } = useAuth();
+
+  let permissions: Record<string, boolean> = {};
+  if (user?.menu_permissions) {
+    if (typeof user.menu_permissions === 'string') {
+      try { permissions = JSON.parse(user.menu_permissions); } catch (e) {}
+    } else if (typeof user.menu_permissions === 'object') {
+      permissions = user.menu_permissions as Record<string, boolean>;
+    }
+  }
+
+  const isAllowed = (key: string) => {
+    if (Object.keys(permissions).length > 0) return !!permissions[key];
+    if (user?.level_user_id === 1) return true;
+    return false;
+  };
+
   const tabs = [
-    { to: "/users", label: "ผู้ใช้งาน", icon: UsersIcon },
-    { to: "/user-levels", label: "ระดับผู้ใช้งาน", icon: Layers },
-    { to: "/permissions", label: "สิทธิ์ระบบ", icon: KeyRound },
-    { to: "/user-access", label: "กลุ่มการเข้าถึง", icon: Shield },
-  ];
+    { to: "/users", label: "ผู้ใช้งาน", icon: UsersIcon, key: "users" },
+    { to: "/user-levels", label: "ระดับผู้ใช้งาน", icon: Layers, key: "user_levels" },
+    { to: "/permissions", label: "สิทธิ์ระบบ", icon: KeyRound, key: "permissions" },
+    { to: "/user-access", label: "กลุ่มการเข้าถึง", icon: Shield, key: "user_access" },
+  ].filter((t) => isAllowed(t.key));
 
   return (
     <div className="flex bg-slate-100/80 p-1 rounded-lg gap-1 text-xs w-fit border border-slate-200/60 flex-wrap mb-4">
