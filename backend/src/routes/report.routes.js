@@ -6,79 +6,280 @@ const { authenticateToken } = require('../middleware/auth');
 // GET /api/reports/dashboard
 router.get('/reports/dashboard', authenticateToken, async (req, res) => {
   try {
-    const today = new Date().toISOString().slice(0, 10);
+    const { range = 'today' } = req.query;
 
-    // 1. Total releases today
-    const releasesToday = await query(`SELECT COUNT(*) as count FROM car_release WHERE DATE(created_at) = ?`, [today]);
+    let dateWhereClause = 'DATE(cr.created_at) = CURDATE()';
+    let checkOutWhereClause = 'DATE(co.date_time_check_out) = CURDATE()';
+
+    if (range === 'this_week') {
+      dateWhereClause = 'cr.created_at >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)';
+      checkOutWhereClause = 'co.date_time_check_out >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)';
+    } else if (range === 'this_month') {
+      dateWhereClause = 'cr.created_at >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)';
+      checkOutWhereClause = 'co.date_time_check_out >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)';
+    }
+
+    const hasPhoneCol = await hasColumn('user', 'phone_number_1');
+    const phoneField = hasPhoneCol ? 'u.phone_number_1' : (await hasColumn('user', 'tel_number') ? 'u.tel_number' : "''");
+
+    const hasCarCodeCol = await hasColumn('car', 'car_code');
+    const carCodeField = hasCarCodeCol ? 'c.car_code' : "''";
+
+    const hasCarReturnTable = await hasColumn('car_return', 'car_release_id');
+    const isReturnedExpr = hasCarReturnTable
+      ? `(SELECT COUNT(*) FROM car_return crt WHERE crt.car_release_id = cr.car_release_id) > 0`
+      : `0`;
+
+    // 1. Total releases breakdown
+    let totalReleases = 0;
+    let runningReleases = 0;
+    let returnedReleases = 0;
+    try {
+      const releasesStats = await query(`
+        SELECT 
+          COUNT(*) as total_releases,
+          SUM(CASE WHEN ${isReturnedExpr} THEN 0 ELSE 1 END) as running_releases,
+          SUM(CASE WHEN ${isReturnedExpr} THEN 1 ELSE 0 END) as returned_releases
+        FROM car_release cr
+        WHERE ${dateWhereClause}
+      `);
+      totalReleases = Number(releasesStats[0]?.total_releases || 0);
+      runningReleases = Number(releasesStats[0]?.running_releases || 0);
+      returnedReleases = Number(releasesStats[0]?.returned_releases || 0);
+    } catch (e) {
+      console.warn('Dashboard releasesStats query warning:', e.message);
+    }
 
     // 2. Financial Metrics
-    const salesSummary = await query(`
-      SELECT 
-        SUM(co.cash) as total_cash,
-        SUM(CASE WHEN co.transfer_according = 0 THEN co.transfer ELSE 0 END) as total_transfer_received,
-        SUM(CASE WHEN co.transfer_according = 1 THEN co.transfer ELSE 0 END) as pending_transfer_amount,
-        COUNT(CASE WHEN co.transfer_according = 1 THEN 1 END) as pending_transfer_count,
-        SUM(co.amount) as grand_total_amount
-      FROM check_out co
-      JOIN list_store ls ON co.list_id = ls.list_id
-      WHERE ls.bypass = 0
-    `);
+    let totalCash = 0;
+    let totalTransferReceived = 0;
+    let pendingTransferAmount = 0;
+    let pendingTransferCount = 0;
+    let grandTotalAmount = 0;
+    try {
+      const salesSummary = await query(`
+        SELECT 
+          SUM(co.cash) as total_cash,
+          SUM(CASE WHEN co.transfer_according = 0 THEN co.transfer ELSE 0 END) as total_transfer_received,
+          SUM(CASE WHEN co.transfer_according = 1 THEN co.transfer ELSE 0 END) as pending_transfer_amount,
+          COUNT(CASE WHEN co.transfer_according = 1 THEN 1 END) as pending_transfer_count,
+          SUM(co.amount) as grand_total_amount
+        FROM check_out co
+        JOIN list_store ls ON co.list_id = ls.list_id
+        WHERE ls.bypass = 0 AND ${checkOutWhereClause}
+      `);
+      totalCash = Number(salesSummary[0]?.total_cash || 0);
+      totalTransferReceived = Number(salesSummary[0]?.total_transfer_received || 0);
+      pendingTransferAmount = Number(salesSummary[0]?.pending_transfer_amount || 0);
+      pendingTransferCount = Number(salesSummary[0]?.pending_transfer_count || 0);
+      grandTotalAmount = Number(salesSummary[0]?.grand_total_amount || 0);
+    } catch (e) {
+      console.warn('Dashboard salesSummary query warning:', e.message);
+    }
 
-    // 3. Off-site checks count
-    const offSiteSummary = await query(`
-      SELECT COUNT(*) as off_site_count 
-      FROM check_out 
-      WHERE off_site = 1
-    `);
+    // 3. Store targets vs completed (Filtered by dateRange of car_release)
+    let targetStores = 0;
+    let completedStores = 0;
+    try {
+      const hasCarReleaseId = await hasColumn('list_store', 'car_release_id');
+      const releaseStoreJoin = hasCarReleaseId
+        ? `JOIN list_store ls ON (ls.car_release_id = cr.car_release_id OR ls.group_store_id = cr.group_store_id)`
+        : `JOIN list_store ls ON ls.group_store_id = cr.group_store_id`;
 
-    // 4. Problems count
-    const problemSummary = await query(`SELECT COUNT(*) as problem_count FROM problem`);
+      const storeStats = await query(`
+        SELECT 
+          COUNT(DISTINCT ls.list_id) as stores_target,
+          COUNT(DISTINCT CASE 
+            WHEN ls.status = 'completed' OR ls.status = 'problem' OR co.check_out_id IS NOT NULL OR prob.problem_id IS NOT NULL 
+            THEN ls.list_id 
+          END) as stores_completed
+        FROM car_release cr
+        ${releaseStoreJoin}
+        LEFT JOIN check_out co ON ls.list_id = co.list_id
+        LEFT JOIN problem prob ON ls.list_id = prob.list_id
+        WHERE ${dateWhereClause}
+      `);
+      targetStores = Number(storeStats[0]?.stores_target || 0);
+      completedStores = Number(storeStats[0]?.stores_completed || 0);
+    } catch (e) {
+      console.warn('Dashboard storeStats query warning:', e.message);
+    }
 
-    // 5. Daily sales chart (last 7 days)
-    const dailyStats = await query(`
-      SELECT 
-        DATE(co.date_time_check_out) as date,
-        SUM(co.cash) as cash,
-        SUM(CASE WHEN co.transfer_according = 0 THEN co.transfer ELSE 0 END) as transfer,
-        SUM(CASE WHEN co.transfer_according = 1 THEN co.transfer ELSE 0 END) as pending_transfer
-      FROM check_out co
-      JOIN list_store ls ON co.list_id = ls.list_id
-      WHERE ls.bypass = 0 AND co.date_time_check_out >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)
-      GROUP BY DATE(co.date_time_check_out)
-      ORDER BY date ASC
-    `);
+    // 4. Off-site checks count
+    let offSiteCount = 0;
+    try {
+      const offSiteSummary = await query(`
+        SELECT COUNT(*) as off_site_count 
+        FROM check_out co
+        WHERE co.off_site = 1 AND ${checkOutWhereClause}
+      `);
+      offSiteCount = Number(offSiteSummary[0]?.off_site_count || 0);
+    } catch (e) {
+      console.warn('Dashboard offSiteSummary query warning:', e.message);
+    }
 
-    // 6. Recent Releases
-    const hasCarReleaseId = await hasColumn('list_store', 'car_release_id');
-    const storeCountSubquery = hasCarReleaseId
-      ? `(SELECT COUNT(*) FROM list_store ls WHERE ls.car_release_id = cr.car_release_id OR ls.group_store_id = cr.group_store_id)`
-      : `(SELECT COUNT(*) FROM list_store ls WHERE ls.group_store_id = cr.group_store_id)`;
+    // 5. Problems count
+    let problemCount = 0;
+    try {
+      const problemSummary = await query(`SELECT COUNT(*) as problem_count FROM problem`);
+      problemCount = Number(problemSummary[0]?.problem_count || 0);
+    } catch (e) {
+      console.warn('Dashboard problemSummary query warning:', e.message);
+    }
 
-    const recentReleases = await query(`
-      SELECT cr.car_release_id, cr.car_release_no, cr.created_at, cr.accounting_status,
-             c.license_plate, u.name as driver_name,
-             ${storeCountSubquery} as store_count
-      FROM car_release cr
-      LEFT JOIN car c ON cr.car_id = c.car_id
-      LEFT JOIN user u ON cr.user_id = u.user_id
-      ORDER BY cr.car_release_id DESC
-      LIMIT 5
-    `);
+    // 6. Daily sales chart (last 7 days)
+    let dailyStats = [];
+    try {
+      const dailyRows = await query(`
+        SELECT 
+          DATE(co.date_time_check_out) as date,
+          SUM(co.cash) as cash,
+          SUM(CASE WHEN co.transfer_according = 0 THEN co.transfer ELSE 0 END) as transfer,
+          SUM(CASE WHEN co.transfer_according = 1 THEN co.transfer ELSE 0 END) as pending_transfer
+        FROM check_out co
+        JOIN list_store ls ON co.list_id = ls.list_id
+        WHERE ls.bypass = 0 AND co.date_time_check_out >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)
+        GROUP BY DATE(co.date_time_check_out)
+        ORDER BY date ASC
+      `);
+      dailyStats = dailyRows.map(row => ({
+        date: row.date ? new Date(row.date).toLocaleDateString('th-TH', { month: 'short', day: 'numeric' }) : '',
+        cash: Number(row.cash || 0),
+        transfer: Number(row.transfer || 0),
+        pending_transfer: Number(row.pending_transfer || 0),
+        total: Number((row.cash || 0) + (row.transfer || 0))
+      }));
+    } catch (e) {
+      console.warn('Dashboard dailyStats query warning:', e.message);
+    }
+
+    // 7. Recent Releases / Operations (Top 10)
+    let recentReleases = [];
+    try {
+      const hasCarReleaseId = await hasColumn('list_store', 'car_release_id');
+      const storeCountSubquery = hasCarReleaseId
+        ? `(SELECT COUNT(*) FROM list_store ls WHERE (ls.car_release_id = cr.car_release_id OR ls.group_store_id = cr.group_store_id))`
+        : `(SELECT COUNT(*) FROM list_store ls WHERE ls.group_store_id = cr.group_store_id)`;
+
+      const storeDoneSubquery = hasCarReleaseId
+        ? `(SELECT COUNT(DISTINCT ls.list_id) FROM list_store ls LEFT JOIN check_out co ON ls.list_id = co.list_id LEFT JOIN problem prob ON ls.list_id = prob.list_id WHERE (ls.car_release_id = cr.car_release_id OR ls.group_store_id = cr.group_store_id) AND (ls.status = 'completed' OR ls.status = 'problem' OR co.check_out_id IS NOT NULL OR prob.problem_id IS NOT NULL))`
+        : `(SELECT COUNT(DISTINCT ls.list_id) FROM list_store ls LEFT JOIN check_out co ON ls.list_id = co.list_id LEFT JOIN problem prob ON ls.list_id = prob.list_id WHERE ls.group_store_id = cr.group_store_id AND (ls.status = 'completed' OR ls.status = 'problem' OR co.check_out_id IS NOT NULL OR prob.problem_id IS NOT NULL))`;
+
+      const storeAmountSubquery = hasCarReleaseId
+        ? `(SELECT COALESCE(SUM(co.amount), 0) FROM check_out co JOIN list_store ls ON co.list_id = ls.list_id WHERE (ls.car_release_id = cr.car_release_id OR ls.group_store_id = cr.group_store_id))`
+        : `(SELECT COALESCE(SUM(co.amount), 0) FROM check_out co JOIN list_store ls ON co.list_id = ls.list_id WHERE ls.group_store_id = cr.group_store_id)`;
+
+      const rows = await query(`
+        SELECT 
+          cr.car_release_id, 
+          cr.car_release_no, 
+          cr.created_at, 
+          cr.accounting_status,
+          cr.mileage,
+          c.license_plate, 
+          c.brand,
+          c.model,
+          c.car_image,
+          gs.group_store_name,
+          gs.group_color,
+          acc.status_name as accounting_status_name,
+          ${carCodeField} as car_code,
+          u.name as driver_name, 
+          ${phoneField} as driver_phone,
+          ${storeCountSubquery} as stores_total,
+          ${storeDoneSubquery} as stores_done,
+          ${storeAmountSubquery} as total_amount,
+          ${isReturnedExpr} as is_returned
+        FROM car_release cr
+        LEFT JOIN car c ON cr.car_id = c.car_id
+        LEFT JOIN user u ON cr.user_id = u.user_id
+        LEFT JOIN group_store gs ON cr.group_store_id = gs.group_store_id
+        LEFT JOIN accounting_status acc ON (cr.accounting_status = acc.status_id OR cr.accounting_status = acc.status_name OR cr.accounting_status = acc.status_code)
+        ORDER BY cr.car_release_id DESC
+        LIMIT 10
+      `);
+
+      recentReleases = rows.map(op => ({
+        id: op.car_release_no || `RELEASE-${op.car_release_id}`,
+        carReleaseId: op.car_release_id,
+        carReleaseNo: op.car_release_no,
+        licensePlate: op.license_plate || '-',
+        carImg: op.car_image || 'https://images.unsplash.com/photo-1533473359331-0135ef1b58bf?w=100&q=80',
+        brandModel: `${op.brand || ''} ${op.model || ''}`.trim() || '-',
+        groupStoreName: op.group_store_name || '-',
+        groupColor: op.group_color || '#94a3b8',
+        driver: op.driver_name || 'ไม่ระบุคนขับ',
+        phone: op.driver_phone || '-',
+        followerName: '-',
+        storesDone: Number(op.stores_done || 0),
+        storesTotal: Number(op.stores_total || 0),
+        status: Boolean(op.is_returned) ? 'คืนรถแล้ว' : 'กำลังวิ่งงาน',
+        accounting: op.accounting_status_name || op.accounting_status || 'รอตรวจ',
+        mileage: Number(op.mileage || 0),
+        amount: Number(op.total_amount || 0),
+        isReturned: Boolean(op.is_returned),
+        hasIssue: false
+      }));
+    } catch (e) {
+      console.warn('Dashboard recentReleases query warning:', e.message);
+    }
+
+    // 8. Driver Leaderboard
+    let driverLeaderboard = [];
+    try {
+      const hasCarReleaseId = await hasColumn('list_store', 'car_release_id');
+      const driverStoreJoin = hasCarReleaseId
+        ? `JOIN list_store ls ON (ls.car_release_id = cr.car_release_id OR ls.group_store_id = cr.group_store_id)`
+        : `JOIN list_store ls ON ls.group_store_id = cr.group_store_id`;
+
+      const driverRows = await query(`
+        SELECT 
+          u.user_id,
+          u.name as driver_name,
+          COUNT(DISTINCT co.list_id) as completed_stores,
+          SUM(co.amount) as revenue
+        FROM user u
+        JOIN car_release cr ON u.user_id = cr.user_id
+        ${driverStoreJoin}
+        JOIN check_out co ON ls.list_id = co.list_id
+        WHERE ls.bypass = 0
+        GROUP BY u.user_id, u.name
+        ORDER BY revenue DESC
+        LIMIT 5
+      `);
+      driverLeaderboard = driverRows.map(d => ({
+        userId: d.user_id,
+        name: d.driver_name || 'ไม่ระบุชื่อ',
+        completedStores: Number(d.completed_stores || 0),
+        revenue: Number(d.revenue || 0),
+        active: true
+      }));
+    } catch (e) {
+      console.warn('Dashboard driverLeaderboard query warning:', e.message);
+    }
+
+    const completionPercent = targetStores > 0 ? ((completedStores / targetStores) * 100).toFixed(1) : '0';
 
     res.json({
       success: true,
       summary: {
-        total_releases_today: releasesToday[0].count || 0,
-        total_cash: Number(salesSummary[0].total_cash || 0),
-        total_transfer_received: Number(salesSummary[0].total_transfer_received || 0),
-        pending_transfer_amount: Number(salesSummary[0].pending_transfer_amount || 0),
-        pending_transfer_count: Number(salesSummary[0].pending_transfer_count || 0),
-        grand_total_amount: Number(salesSummary[0].grand_total_amount || 0),
-        off_site_count: offSiteSummary[0].off_site_count || 0,
-        problem_count: problemSummary[0].problem_count || 0
+        total_releases: totalReleases,
+        running_releases: runningReleases,
+        returned_releases: returnedReleases,
+        stores_target: targetStores,
+        stores_completed: completedStores,
+        stores_completion_percent: Number(completionPercent),
+        total_cash: totalCash,
+        total_transfer_received: totalTransferReceived,
+        pending_transfer_amount: pendingTransferAmount,
+        pending_transfer_count: pendingTransferCount,
+        grand_total_amount: grandTotalAmount,
+        off_site_count: offSiteCount,
+        problem_count: problemCount
       },
       dailyStats,
-      recentReleases
+      recentReleases,
+      driverLeaderboard
     });
   } catch (err) {
     console.error('Dashboard stats error:', err);

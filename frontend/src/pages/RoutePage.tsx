@@ -4836,6 +4836,7 @@ export const RoutePage: React.FC = () => {
             : `ยืนยันนำเข้าข้อมูล (${excelPreviewStops.length} รายการ)`
         }
         maxWidthClass="max-w-4xl sm:max-w-6xl"
+        isDirty={true}
       >
         <div className="space-y-3 text-xs">
           {importingExcelStops && (
@@ -4854,7 +4855,7 @@ export const RoutePage: React.FC = () => {
           )}
 
           <div className="text-[11px] text-slate-700 bg-emerald-50 p-2.5 rounded-lg border border-emerald-200 leading-relaxed">
-            💡 <strong>ไฟล์นำเข้าใช้ 3 ฟิลด์หลัก</strong> (<code>รหัสร้านค้า</code>, <code>จำนวนสินค้า</code>, <code>รหัสออเดอร์</code>) โดยระบบดึง <strong>ชื่อร้านค้า</strong>, <strong>ที่อยู่จัดส่ง</strong> และ <strong>พิกัด GPS</strong> จากฐานข้อมูลมาสเตอร์ร้านค้าให้อัตโนมัติ! (สามารถตรวจสอบและแก้ไขข้อมูลก่อนกดบันทึกได้ครับ)
+            <strong>ไฟล์นำเข้าใช้ 3 ฟิลด์หลัก</strong> (<code>รหัสร้านค้า</code>, <code>จำนวนสินค้า</code>, <code>รหัสออเดอร์</code>) โดยระบบดึง <strong>ชื่อร้านค้า</strong>, <strong>ที่อยู่จัดส่ง</strong> และ <strong>พิกัด GPS</strong> จากฐานข้อมูลมาสเตอร์ร้านค้าให้อัตโนมัติ! (สามารถตรวจสอบและแก้ไขข้อมูลก่อนกดบันทึกได้ครับ)
           </div>
 
           <div className="max-h-[75vh] min-h-[480px] overflow-auto border border-slate-200 rounded-lg shadow-inner bg-white">
@@ -5105,6 +5106,7 @@ export const RoutePage: React.FC = () => {
             : `ยืนยันบันทึก (${multiAddStops.filter((s) => s.store_id && String(s.store_id).trim()).length} รายการ)`
         }
         maxWidthClass="max-w-4xl sm:max-w-6xl"
+        isDirty={true}
       >
         <div className="space-y-3 text-xs">
           {importingMultiAddStops && (
@@ -5123,7 +5125,7 @@ export const RoutePage: React.FC = () => {
           )}
 
           <div className="text-[11px] text-slate-700 bg-violet-50 p-2.5 rounded-lg border border-violet-200 leading-relaxed">
-            💡 <strong>เพิ่มรายการจัดส่งหลายรายการพร้อมกัน</strong> — เลือก <code>ร้านค้า</code> จากมาสเตอร์ กรอก <code>จำนวน</code> และ <code>รหัสออเดอร์</code> ได้เลย ข้อมูลชื่อร้าน / ที่อยู่ / พิกัด GPS จะถูกดึงมาให้อัตโนมัติ (แถวที่ไม่ได้เลือกร้านค้าจะถูกข้ามไป)
+            <strong>เพิ่มรายการจัดส่งหลายรายการพร้อมกัน</strong> — เลือก <code>ร้านค้า</code> จากมาสเตอร์ กรอก <code>จำนวน</code> และ <code>รหัสออเดอร์</code> ได้เลย ข้อมูลชื่อร้าน / ที่อยู่ / พิกัด GPS จะถูกดึงมาให้อัตโนมัติ (แถวที่ไม่ได้เลือกร้านค้าจะถูกข้ามไป)
           </div>
 
           <div className="max-h-[75vh] min-h-[480px] overflow-auto border border-slate-200 rounded-lg shadow-inner bg-white">
@@ -5135,7 +5137,7 @@ export const RoutePage: React.FC = () => {
                   <th className="p-2 w-36">ชื่อร้านค้า</th>
                   <th className="p-2 min-w-[200px]">ที่อยู่</th>
                   <th className="p-2 w-20 text-center">จำนวน (ลัง)</th>
-                  <th className="p-2 w-40">ตำแหน่งวางสินค้า</th>
+                  <th className="p-2 w-30">ตำแหน่งวางสินค้า</th>
                   <th className="p-2 w-16 text-center">แถว</th>
                   <th className="p-2 w-32">รหัสออเดอร์</th>
                   <th className="p-2 w-32">พิกัด GPS</th>
@@ -5222,7 +5224,7 @@ export const RoutePage: React.FC = () => {
                         className="w-full border border-slate-200 rounded px-1.5 py-1 text-xs text-center font-bold text-amber-700"
                       />
                     </td>
-                    <td className="p-1 min-w-[150px]">
+                    <td className="p-1">
                       <select
                         value={item.position_product_id || ""}
                         onChange={(e) => {

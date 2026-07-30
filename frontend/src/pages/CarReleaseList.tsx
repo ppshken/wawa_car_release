@@ -32,6 +32,22 @@ import {
   AlertTriangle,
   Clock,
 } from "lucide-react";
+import { ColumnToggleDropdown, ColumnItem } from "../components/ColumnToggleDropdown";
+
+const CAR_RELEASE_TABLE_COLUMNS: ColumnItem[] = [
+  { id: "car_release_no", label: "เลขที่ปล่อยรถ" },
+  { id: "license_plate", label: "ทะเบียนรถ" },
+  { id: "progress", label: "ความคืบหน้า" },
+  { id: "group_store", label: "กรุ๊ปรถ" },
+  { id: "release_status", label: "สถานะปล่อยรถ" },
+  { id: "return_status", label: "คืนรถ" },
+  { id: "allowance", label: "เบี้ยเลี้ยง" },
+  { id: "accounting_status", label: "สถานะทางบัญชี" },
+  { id: "mileage", label: "เลขไมล์" },
+  { id: "driver_name", label: "คนขับ" },
+  { id: "follower_name", label: "ผู้ติดตาม" },
+  { id: "actions", label: "จัดการ" },
+];
 
 interface CarReleaseData {
   car_release_id: number;
@@ -131,6 +147,33 @@ export const CarReleaseList: React.FC = () => {
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [itemsPerPage, setItemsPerPage] = useState<number>(10);
   const [totalItems, setTotalItems] = useState<number>(0);
+
+  // Column Visibility State
+  const [visibleColumns, setVisibleColumns] = useState<Record<string, boolean>>(() => {
+    const saved = localStorage.getItem("wawa_car_release_visible_cols");
+    if (saved) {
+      try { return JSON.parse(saved); } catch (e) {}
+    }
+    return {
+      car_release_no: true,
+      license_plate: true,
+      progress: true,
+      group_store: true,
+      release_status: true,
+      return_status: true,
+      allowance: true,
+      accounting_status: true,
+      mileage: true,
+      driver_name: true,
+      follower_name: true,
+      actions: true,
+    };
+  });
+
+  const handleColumnChange = (updated: Record<string, boolean>) => {
+    setVisibleColumns(updated);
+    localStorage.setItem("wawa_car_release_visible_cols", JSON.stringify(updated));
+  };
 
   // Delete Modal
   const [releaseToDelete, setReleaseToDelete] = useState<any | null>(null);
@@ -296,77 +339,101 @@ export const CarReleaseList: React.FC = () => {
   }, []);
 
   // Option lists for SearchableSelect
+  const todayDateStr = useMemo(() => new Date().toLocaleDateString("th-TH"), []);
+
+  // Today's releases (excluding currently edited release)
+  const todayReleases = useMemo(() => {
+    return releases.filter((r) => {
+      if (editingId && String(r.car_release_id) === String(editingId)) return false;
+      return r.dateGroup === todayDateStr || !selectedDate;
+    });
+  }, [releases, editingId, todayDateStr, selectedDate]);
+
+  // Set of group_store_ids used today
+  const usedGroupIds = useMemo(() => {
+    const set = new Set<string>();
+    todayReleases.forEach((r) => {
+      if (r.group_store_id) set.add(String(r.group_store_id));
+    });
+    return set;
+  }, [todayReleases]);
+
+  // Set of driver user_ids used today
+  const usedDriverIds = useMemo(() => {
+    const set = new Set<string>();
+    todayReleases.forEach((r) => {
+      if (r.user_id) set.add(String(r.user_id));
+    });
+    return set;
+  }, [todayReleases]);
+
+  // Set of follower names used today or driver names used today
+  const usedFollowerNames = useMemo(() => {
+    const set = new Set<string>();
+    todayReleases.forEach((r) => {
+      if (r.driver_name && r.driver_name !== "ไม่ระบุ") {
+        set.add(r.driver_name.trim().toLowerCase());
+      }
+      if (Array.isArray(r.followers)) {
+        r.followers.forEach((f: any) => {
+          const name = typeof f === "string" ? f : f.follower_name;
+          if (name) set.add(name.trim().toLowerCase());
+        });
+      } else if (r.follower_name && r.follower_name !== "-") {
+        r.follower_name.split(",").forEach((s: string) => {
+          if (s.trim()) set.add(s.trim().toLowerCase());
+        });
+      }
+    });
+    return set;
+  }, [todayReleases]);
+
+  const todayYmd = useMemo(() => {
+    const d = new Date();
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  }, []);
+
   const groupOptions = useMemo(() => {
-    const toLocalDateStr = (d: any) => {
-      if (!d) return "";
-      const dateObj = new Date(d);
-      if (isNaN(dateObj.getTime())) return String(d).slice(0, 10);
+    const toLocalDateStr = (val: any) => {
+      if (!val) return "";
+      const dateObj = new Date(val);
+      if (isNaN(dateObj.getTime())) return String(val).slice(0, 10);
       const year = dateObj.getFullYear();
       const month = String(dateObj.getMonth() + 1).padStart(2, "0");
       const day = String(dateObj.getDate()).padStart(2, "0");
       return `${year}-${month}-${day}`;
     };
 
-    const todayStr = toLocalDateStr(new Date());
-    const targetDate = selectedDate || todayStr;
-
-    // Get group_store_ids already used in car releases
-    const usedGroupIds = new Set(
-      releases
-        .filter(
-          (r) => !editingId || String(r.car_release_id) !== String(editingId),
-        )
-        .map((r) => String(r.group_store_id))
-        .filter(Boolean),
-    );
-
-    // 1. Filter groupStores matching today / selected date if date is specified
-    let dateMatchedGroups = groupStores.filter((g) => {
-      if (!g.date && !g.group_date) return true;
-      const gDate = toLocalDateStr(g.date || g.group_date);
-      return gDate === targetDate;
-    });
-
-    // Fallback: If no groups match targetDate strictly, show all groupStores
-    if (dateMatchedGroups.length === 0) {
-      dateMatchedGroups = groupStores;
-    }
-
-    // 2. Filter out groups that have ALREADY been selected/released
-    const availableGroups = dateMatchedGroups.filter((g) => {
-      if (
-        formGroupStoreId &&
-        String(g.group_store_id) === String(formGroupStoreId)
-      ) {
+    // Filter groupStores to include ONLY those created / scheduled for TODAY
+    const todayGroups = groupStores.filter((g) => {
+      // If editing, always allow the currently selected group store
+      if (formGroupStoreId && String(g.group_store_id) === String(formGroupStoreId)) {
         return true;
       }
-      return !usedGroupIds.has(String(g.group_store_id));
+      const gDateRaw = g.date || g.group_date || g.created_at;
+      if (!gDateRaw) return true;
+      return toLocalDateStr(gDateRaw) === todayYmd;
     });
 
-    const finalGroups =
-      availableGroups.length > 0 ? availableGroups : dateMatchedGroups;
-
-    return finalGroups.map((g) => {
+    return todayGroups.map((g) => {
       const veh = vehicles.find((v) => String(v.car_id) === String(g.car_id));
       const plate = veh ? veh.license_plate : g.license_plate || "";
-      const isReleased =
-        g.status === 1 ||
-        g.status === true ||
-        !!g.is_released ||
-        usedGroupIds.has(String(g.group_store_id));
+      const isUsed = usedGroupIds.has(String(g.group_store_id));
+      const isSelectedInForm = String(g.group_store_id) === String(formGroupStoreId);
+
       return {
         value: g.group_store_id,
         label: g.group_store_name,
+        colorDot: g.group_color,
+        subLabel: plate ? `ทะเบียน: ${plate}` : undefined,
+        disabled: isUsed && !isSelectedInForm,
+        badge: isUsed ? "ปล่อยรถวันนี้แล้ว" : undefined,
       };
     });
-  }, [
-    groupStores,
-    vehicles,
-    releases,
-    selectedDate,
-    formGroupStoreId,
-    editingId,
-  ]);
+  }, [groupStores, vehicles, usedGroupIds, formGroupStoreId, todayYmd]);
 
   const selectedGroupObj = useMemo(() => {
     if (!formGroupStoreId) return null;
@@ -378,11 +445,37 @@ export const CarReleaseList: React.FC = () => {
   }, [groupStores, formGroupStoreId]);
 
   const driverOptions = useMemo(() => {
-    return drivers.map((d) => ({
-      value: d.user_id,
-      label: d.name,
-    }));
-  }, [drivers]);
+    return drivers.map((d) => {
+      const driverNameLower = (d.name || "").trim().toLowerCase();
+      const isUsedAsDriver = usedDriverIds.has(String(d.user_id));
+      const isUsedAsFollower = usedFollowerNames.has(driverNameLower);
+      const isSelectedAsFollower = formFollowers.some(
+        (f) => f.trim().toLowerCase() === driverNameLower
+      );
+      const isSelectedInForm = String(d.user_id) === String(formUserId);
+
+      const isForbidden =
+        (isUsedAsDriver || isUsedAsFollower || isSelectedAsFollower) &&
+        !isSelectedInForm;
+
+      let badge: string | undefined;
+      if (isSelectedAsFollower) {
+        badge = "เลือกเป็นผู้ติดตามแล้ว";
+      } else if (isUsedAsDriver) {
+        badge = "ขับรถคันอื่นวันนี้แล้ว";
+      } else if (isUsedAsFollower) {
+        badge = "เป็นผู้ติดตามคันอื่นวันนี้แล้ว";
+      }
+
+      return {
+        value: d.user_id,
+        label: d.name,
+        subLabel: d.phone_number_1 || d.phone_number || d.tel_number || undefined,
+        disabled: isForbidden,
+        badge: badge,
+      };
+    });
+  }, [drivers, usedDriverIds, usedFollowerNames, formFollowers, formUserId]);
 
   const releaseTypeOptions = useMemo(() => {
     if (releaseTypes.length > 0) {
@@ -485,12 +578,13 @@ export const CarReleaseList: React.FC = () => {
 
   const handleOpenAdd = () => {
     setEditingId(null);
-    const firstOpt = groupOptions[0];
-    const initialGid = firstOpt ? String(firstOpt.value) : "";
     setFormGroupStoreId("");
+    setFormCarId("");
+    setFormPlateText("");
+    setFormCarBrandModel("");
     setFormUserId("");
+    setFormDriverName("");
     setFormReleaseTypeId("1");
-    setFormDriverName(drivers[0]?.name || "");
     setFormFollowers([]);
     setFollowerSearch("");
     setFormMileage(0);
@@ -499,17 +593,7 @@ export const CarReleaseList: React.FC = () => {
     setFormAccountingStatus(accountingStatuses[0]?.status_id || "");
     setFormControlledType("กระบะ");
     setFormDescription("");
-
-    // Auto-select car from group
-    if (initialGid) {
-      handleGroupChange(initialGid);
-    } else if (vehicles.length > 0) {
-      setFormCarId(vehicles[0].car_id);
-      setFormPlateText(vehicles[0].license_plate);
-      setFormCarBrandModel(
-        `${vehicles[0].brand || ""} ${vehicles[0].model || ""}`.trim(),
-      );
-    }
+    setGroupStoresPreview([]);
 
     // Clear Images
     setImgMileage("");
@@ -744,6 +828,13 @@ export const CarReleaseList: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-2">
+          {/* Column Visibility Customizer */}
+          <ColumnToggleDropdown
+            columns={CAR_RELEASE_TABLE_COLUMNS}
+            visibleColumns={visibleColumns}
+            onChange={handleColumnChange}
+          />
+
           {/* + Button opens Right Create Form Drawer */}
           <button
             onClick={handleOpenAdd}
@@ -751,10 +842,6 @@ export const CarReleaseList: React.FC = () => {
           >
             <Truck className="w-3.5 h-3.5" />
             <span>สร้างใบปล่อยรถใหม่</span>
-          </button>
-
-          <button className="p-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50">
-            <Filter className="w-4 h-4" />
           </button>
         </div>
       </div>
@@ -832,29 +919,30 @@ export const CarReleaseList: React.FC = () => {
           <table className="w-full text-left text-xs border-collapse">
             <thead>
               <tr className="bg-slate-100/90 border-b border-slate-200 text-slate-700 font-bold uppercase text-[10px] tracking-wider whitespace-nowrap">
-                <th className="py-2.5 px-3">เลขที่ปล่อยรถ</th>
-                <th className="py-2.5 px-3">ทะเบียนรถ</th>
-                <th className="py-2.5 px-3">ความคืบหน้า</th>
-                <th className="py-2.5 px-3">กรุ๊ปรถ</th>
-                <th className="py-2.5 px-3 text-center">สถานะปล่อยรถ</th>
-                <th className="py-2.5 px-3 text-center">คืนรถ</th>
-                <th className="py-2.5 px-3 text-center">เบี้ยเลี้ยง</th>
-                <th className="py-2.5 px-3">สถานะทางบัญชี</th>
-                <th className="py-2.5 px-3 text-right">เลขไมล์</th>
-                <th className="py-2.5 px-3">คนขับ</th>
-                <th className="py-2.5 px-3">ผู้ติดตาม</th>
-                <th className="py-2.5 px-3 text-right">จัดการ</th>
+                {visibleColumns.car_release_no !== false && <th className="py-2.5 px-3">เลขที่ปล่อยรถ</th>}
+                {visibleColumns.license_plate !== false && <th className="py-2.5 px-3">ทะเบียนรถ</th>}
+                {visibleColumns.progress !== false && <th className="py-2.5 px-3">ความคืบหน้า</th>}
+                {visibleColumns.group_store !== false && <th className="py-2.5 px-3">กรุ๊ปรถ</th>}
+                {visibleColumns.release_status !== false && <th className="py-2.5 px-3 text-center">สถานะปล่อยรถ</th>}
+                {visibleColumns.return_status !== false && <th className="py-2.5 px-3 text-center">คืนรถ</th>}
+                {visibleColumns.allowance !== false && <th className="py-2.5 px-3 text-center">เบี้ยเลี้ยง</th>}
+                {visibleColumns.accounting_status !== false && <th className="py-2.5 px-3">สถานะทางบัญชี</th>}
+                {visibleColumns.mileage !== false && <th className="py-2.5 px-3 text-right">เลขไมล์</th>}
+                {visibleColumns.driver_name !== false && <th className="py-2.5 px-3">คนขับ</th>}
+                {visibleColumns.follower_name !== false && <th className="py-2.5 px-3">ผู้ติดตาม</th>}
+                {visibleColumns.actions !== false && <th className="py-2.5 px-3 text-right">จัดการ</th>}
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200/60 text-slate-800 whitespace-nowrap">
               {Object.entries(groupedReleases).map(([dateStr, itemsList]) => {
                 const items = itemsList as any[];
+                const activeColCount = Object.values(visibleColumns).filter(v => v !== false).length || 1;
                 return (
                   <React.Fragment key={dateStr}>
                     {/* Date Header Row */}
                     <tr className="bg-slate-50 border-y border-slate-200/80">
                       <td
-                        colSpan={11}
+                        colSpan={activeColCount}
                         className="py-1 px-3 font-bold text-[11px] text-slate-700"
                       >
                         <div className="flex items-center gap-2">
@@ -880,137 +968,160 @@ export const CarReleaseList: React.FC = () => {
                           }`}
                         >
                           {/* 1. เลขที่ปล่อยรถ */}
-                          <td className="py-2 px-3 font-bold text-slate-900 font-mono">
-                            {rel.car_release_no}
-                          </td>
+                          {visibleColumns.car_release_no !== false && (
+                            <td className="py-2 px-3 font-bold text-slate-900 font-mono">
+                              {rel.car_release_no}
+                            </td>
+                          )}
 
                           {/* 2. ทะเบียนรถ */}
-                          <td className="py-1 px-3">
-                            <div className="flex items-center gap-2">
-                              <img
-                                src={getImageUrl(
-                                  rel.car_img ||
-                                    "https://images.unsplash.com/photo-1533473359331-0135ef1b58bf?w=100&q=80",
-                                )}
-                                alt="car"
-                                className="w-7 h-7 rounded-full object-cover border border-slate-200 shrink-0"
-                              />
-                              <span className="font-semibold text-slate-800 text-[11px]">
-                                {rel.license_plate}
-                              </span>
-                            </div>
-                          </td>
+                          {visibleColumns.license_plate !== false && (
+                            <td className="py-1 px-3">
+                              <div className="flex items-center gap-2">
+                                <img
+                                  src={getImageUrl(
+                                    rel.car_img ||
+                                      "https://images.unsplash.com/photo-1533473359331-0135ef1b58bf?w=100&q=80",
+                                  )}
+                                  alt="car"
+                                  className="w-7 h-7 rounded-full object-cover border border-slate-200 shrink-0"
+                                />
+                                <span className="font-semibold text-slate-800 text-[11px]">
+                                  {rel.license_plate}
+                                </span>
+                              </div>
+                            </td>
+                          )}
 
                           {/* 3. ความคืบหน้า */}
-                          <td className="py-1 px-3">
-                            <span className="font-medium text-slate-700 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded text-[11px]">
-                              {rel.completedStores + "/" + rel.totalStores}
-                            </span>
-                          </td>
+                          {visibleColumns.progress !== false && (
+                            <td className="py-1 px-3">
+                              <span className="font-medium text-slate-700 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded text-[11px]">
+                                {rel.completedStores + "/" + rel.totalStores}
+                              </span>
+                            </td>
+                          )}
 
                           {/* 4. กรุ๊ปรถ */}
-                          <td className="py-1 px-3">
-                            <div className="flex items-center gap-2 font-medium text-slate-700 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded text-[11px]">
-                              <div
-                                className="w-2.5 h-2.5 rounded-full border border-white shadow-2xs shrink-0"
-                                style={{ background: rel.group_color }}
-                              />
-                              <span>
-                                {rel.group_store_name !== "-"
-                                  ? rel.group_store_name
-                                  : rel.brand_model || "-"}
-                              </span>                                
-                            </div>
-
-                          </td>
+                          {visibleColumns.group_store !== false && (
+                            <td className="py-1 px-3">
+                              <div className="flex items-center gap-2 font-medium text-slate-700 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded text-[11px]">
+                                <div
+                                  className="w-2.5 h-2.5 rounded-full border border-white shadow-2xs shrink-0"
+                                  style={{ background: rel.group_color }}
+                                />
+                                <span>
+                                  {rel.group_store_name !== "-"
+                                    ? rel.group_store_name
+                                    : rel.brand_model || "-"}
+                                </span>                                
+                              </div>
+                            </td>
+                          )}
 
                           {/* 5. สถานะปล่อยรถ */}
-                          <td className="py-1 px-3 text-center">
-                            {(rel.completedStores === rel.totalStores &&
-                              rel.totalStores > 0) ||
-                            rel.is_returned ? (
-                              <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
-                                <CheckCircle2 className="w-3 h-3" /> เสร็จสิ้น
-                              </span>
-                            ) : (
-                              <span className="inline-flex items-center gap-1 text-[10px] font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded-md border border-blue-200">
-                                <Truck className="w-3 h-3" /> ดำเนินการอยู่
-                              </span>
-                            )}
-                          </td>
+                          {visibleColumns.release_status !== false && (
+                            <td className="py-1 px-3 text-center">
+                              {(rel.completedStores === rel.totalStores &&
+                                rel.totalStores > 0) ||
+                              rel.is_returned ? (
+                                <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
+                                  <CheckCircle2 className="w-3 h-3" /> เสร็จสิ้น
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 text-[10px] font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded-md border border-blue-200">
+                                  <Truck className="w-3 h-3" /> ดำเนินการอยู่
+                                </span>
+                              )}
+                            </td>
+                          )}
 
                           {/* 6. คืนรถ */}
-                          <td className="py-1 px-3 text-center">
-                            {rel.is_returned ? (
-                              <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200/60">
-                                <CheckCircle2 className="w-3 h-3" /> คืนรถแล้ว
-                              </span>
-                            ) : (
-                              <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-rose-600 bg-rose-50 px-2 py-0.5 rounded-md border border-rose-200/60">
-                                <XCircle className="w-3 h-3 text-rose-600" />{" "}
-                                ยังไม่คืนรถ
-                              </span>
-                            )}
-                          </td>
+                          {visibleColumns.return_status !== false && (
+                            <td className="py-1 px-3 text-center">
+                              {rel.is_returned ? (
+                                <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200/60">
+                                  <CheckCircle2 className="w-3 h-3" /> คืนรถแล้ว
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-rose-600 bg-rose-50 px-2 py-0.5 rounded-md border border-rose-200/60">
+                                  <XCircle className="w-3 h-3 text-rose-600" />{" "}
+                                  ยังไม่คืนรถ
+                                </span>
+                              )}
+                            </td>
+                          )}
 
                           {/* 7. เบี้ยเลี้ยง */}
-                          <td className="py-1 px-3 text-center text-slate-600 font-mono">
-                            {rel.allowance || "-"}
-                          </td>
+                          {visibleColumns.allowance !== false && (
+                            <td className="py-1 px-3 text-center text-slate-600 font-mono">
+                              {rel.allowance || "-"}
+                            </td>
+                          )}
 
-                          {/* 7. สถานะทางบัญชี */}
-                          <td className="py-1 px-3 text-slate-600 font-medium">
-                            {rel.accounting_status_name || "-"}
-                          </td>
+                          {/* 8. สถานะทางบัญชี */}
+                          {visibleColumns.accounting_status !== false && (
+                            <td className="py-1 px-3 text-slate-600 font-medium">
+                              {rel.accounting_status_name || "-"}
+                            </td>
+                          )}
 
-                          {/* 8. เลขไมล์ */}
-                          <td className="py-1 px-3 text-right font-bold text-slate-900 font-mono">
-                            {rel.mileage?.toLocaleString() || "0"}
-                          </td>
+                          {/* 9. เลขไมล์ */}
+                          {visibleColumns.mileage !== false && (
+                            <td className="py-1 px-3 text-right font-bold text-slate-900 font-mono">
+                              {rel.mileage?.toLocaleString() || "0"}
+                            </td>
+                          )}
 
-                          {/* 9. คนขับ */}
-                          <td className="py-1 px-3 font-semibold text-slate-900">
-                            {rel.driver_name}
-                          </td>
+                          {/* 10. คนขับ */}
+                          {visibleColumns.driver_name !== false && (
+                            <td className="py-1 px-3 font-semibold text-slate-900">
+                              {rel.driver_name}
+                            </td>
+                          )}
 
-                          {/* 10. ผู้ติดตาม */}
-                          <td className="py-1 px-3 text-slate-700">
-                            {rel.follower_name || "-"}
-                          </td>
+                          {/* 11. ผู้ติดตาม */}
+                          {visibleColumns.follower_name !== false && (
+                            <td className="py-1 px-3 text-slate-700">
+                              {rel.follower_name || "-"}
+                            </td>
+                          )}
 
-                          {/* จัดการ */}
-                          <td className="py-1 px-3 text-right space-x-1">
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleViewDetail(rel);
-                              }}
-                              className="p-1 rounded-md text-slate-600 hover:text-slate-900 hover:bg-slate-100"
-                              title="ดูรายละเอียด"
-                            >
-                              <Eye className="w-3.5 h-3.5" />
-                            </button>
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleOpenEdit(rel);
-                              }}
-                              className="p-1 rounded-md text-slate-600 hover:text-amber-600 hover:bg-amber-50"
-                              title="แก้ไขใบปล่อยรถ"
-                            >
-                              <Edit2 className="w-3.5 h-3.5" />
-                            </button>
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setReleaseToDelete(rel);
-                              }}
-                              className="p-1 rounded-md text-slate-400 hover:text-rose-600 hover:bg-rose-50"
-                              title="ลบใบปล่อยรถ"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          </td>
+                          {/* 12. จัดการ */}
+                          {visibleColumns.actions !== false && (
+                            <td className="py-1 px-3 text-right space-x-1">
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleViewDetail(rel);
+                                }}
+                                className="p-1 rounded-md text-slate-600 hover:text-slate-900 hover:bg-slate-100"
+                                title="ดูรายละเอียด"
+                              >
+                                <Eye className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleOpenEdit(rel);
+                                }}
+                                className="p-1 rounded-md text-slate-600 hover:text-amber-600 hover:bg-amber-50"
+                                title="แก้ไขใบปล่อยรถ"
+                              >
+                                <Edit2 className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setReleaseToDelete(rel);
+                                }}
+                                className="p-1 rounded-md text-slate-400 hover:text-rose-600 hover:bg-rose-50"
+                                title="ลบใบปล่อยรถ"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </td>
+                          )}
                         </tr>
                       );
                     })}
@@ -1019,7 +1130,7 @@ export const CarReleaseList: React.FC = () => {
               })}
               {releases.length === 0 && (
                 <tr>
-                  <td colSpan={11} className="py-8 text-center text-slate-400">
+                  <td colSpan={Object.values(visibleColumns).filter(v => v !== false).length || 1} className="py-8 text-center text-slate-400">
                     ไม่พบข้อมูลรายการปล่อยรถ
                   </td>
                 </tr>
@@ -1263,21 +1374,46 @@ export const CarReleaseList: React.FC = () => {
                         );
                       })
                       .map((u) => {
+                        const uNameLower = (u.name || "").trim().toLowerCase();
+                        const isUsedAsDriver = usedDriverIds.has(String(u.user_id));
+                        const isUsedAsFollower = usedFollowerNames.has(uNameLower);
+                        const isSelectedAsMainDriver =
+                          String(u.user_id) === String(formUserId) ||
+                          Boolean(formDriverName && formDriverName.trim().toLowerCase() === uNameLower);
                         const isChecked = formFollowers.includes(u.name);
+
+                        const isForbidden = Boolean(
+                          (isUsedAsDriver || isUsedAsFollower || isSelectedAsMainDriver) &&
+                          !isChecked
+                        );
+
+                        let badgeText: string | undefined;
+                        if (isSelectedAsMainDriver) {
+                          badgeText = "เลือกเป็นคนขับแล้ว";
+                        } else if (isUsedAsDriver) {
+                          badgeText = "เป็นคนขับคันอื่นวันนี้แล้ว";
+                        } else if (isUsedAsFollower) {
+                          badgeText = "เป็นผู้ติดตามคันอื่นวันนี้แล้ว";
+                        }
+
                         return (
                           <label
                             key={u.user_id}
-                            className={`flex items-center justify-between p-1.5 rounded-md cursor-pointer transition-colors text-xs ${
-                              isChecked
-                                ? "bg-blue-50/90 text-blue-900 border border-blue-200 font-semibold"
-                                : "hover:bg-slate-100 text-slate-700"
+                            className={`flex items-center justify-between p-1.5 rounded-md transition-colors text-xs ${
+                              isForbidden
+                                ? "opacity-50 cursor-not-allowed bg-slate-100/80"
+                                : isChecked
+                                ? "bg-blue-50/90 text-blue-900 border border-blue-200 font-semibold cursor-pointer"
+                                : "hover:bg-slate-100 text-slate-700 cursor-pointer"
                             }`}
                           >
                             <div className="flex items-center gap-2 min-w-0">
                               <input
                                 type="checkbox"
                                 checked={isChecked}
+                                disabled={isForbidden}
                                 onChange={(e) => {
+                                  if (isForbidden) return;
                                   if (e.target.checked) {
                                     setFormFollowers((prev) => [
                                       ...prev,
@@ -1289,8 +1425,7 @@ export const CarReleaseList: React.FC = () => {
                                     );
                                   }
                                 }}
-                                className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 shrink-0 cursor-pointer"
-                                required
+                                className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 shrink-0 cursor-pointer disabled:cursor-not-allowed"
                               />
                               <img
                                 src={getImageUrl(
@@ -1302,11 +1437,18 @@ export const CarReleaseList: React.FC = () => {
                               />
                               <span className="truncate">{u.name}</span>
                             </div>
-                            {u.level_user_name && (
-                              <span className="text-[10px] text-slate-400 font-normal shrink-0 ml-1">
-                                ({u.level_user_name})
-                              </span>
-                            )}
+                            <div className="flex items-center gap-1.5 shrink-0 ml-1">
+                              {badgeText && (
+                                <span className="text-[9px] font-semibold text-rose-600 bg-rose-50 px-1.5 py-0.5 rounded border border-rose-200 font-mono">
+                                  {badgeText}
+                                </span>
+                              )}
+                              {u.level_user_name && !badgeText && (
+                                <span className="text-[10px] text-slate-400 font-normal">
+                                  ({u.level_user_name})
+                                </span>
+                              )}
+                            </div>
                           </label>
                         );
                       })}

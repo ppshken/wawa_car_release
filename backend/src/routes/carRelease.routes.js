@@ -162,7 +162,7 @@ router.get('/car-release', authenticateToken, async (req, res) => {
              gs.group_store_name, gs.group_color,
              acc.status_name as accounting_status_name, acc.status_id as accounting_status_id,
              (SELECT COUNT(*) FROM list_store ls WHERE ls.group_store_id = cr.group_store_id) as total_stores,
-             (SELECT COUNT(*) FROM list_store ls WHERE ls.group_store_id = cr.group_store_id AND ls.status = 'completed' OR ls.status = 'problem') as completed_stores,
+             (SELECT COUNT(*) FROM list_store ls WHERE ls.group_store_id = cr.group_store_id AND (ls.status = 'completed' OR ls.status = 'problem')) as completed_stores,
              (SELECT COUNT(*) FROM car_return crt WHERE crt.car_release_id = cr.car_release_id) > 0 as is_returned
       ${baseSql}
       ORDER BY cr.car_release_id DESC
