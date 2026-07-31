@@ -215,10 +215,10 @@ export const ReleaseTypesPage: React.FC = () => {
           <table className="w-full text-left text-xs border-collapse">
             <thead>
               <tr className="bg-slate-100/90 border-b border-slate-200 text-slate-700 font-bold uppercase text-[10px] tracking-wider whitespace-nowrap">
-                <th className="py-2.5 px-4 text-center w-16">ID</th>
-                <th className="py-2.5 px-4">ชื่อประเภทการปล่อยรถ</th>
-                <th className="py-2.5 px-4 text-center">สถานะ</th>
-                <th className="py-2.5 px-4 text-right">จัดการ</th>
+                <th className="py-1.5 px-3 text-center w-16">ID</th>
+                <th className="py-1.5 px-3">ชื่อประเภทการปล่อยรถ</th>
+                <th className="py-1.5 px-3 text-center">วันที่สร้าง</th>
+                <th className="py-1.5 px-3 text-right">จัดการ</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200/60 text-slate-800 whitespace-nowrap">
@@ -227,33 +227,31 @@ export const ReleaseTypesPage: React.FC = () => {
                   key={t.car_release_type_id}
                   className="hover:bg-slate-50/80 transition-colors"
                 >
-                  <td className="py-2 px-4 text-center text-slate-400 font-mono font-bold">
+                  <td className="py-1 px-3 text-center text-slate-400 font-mono font-bold text-[11px]">
                     {t.car_release_type_id}
                   </td>
-                  <td className="py-2 px-4">
+                  <td className="py-1 px-3">
                     <div className="flex items-center gap-2">
-                      <Package className="w-4 h-4 text-blue-500 shrink-0" />
-                      <span className="font-bold text-slate-900">
+                      <Package className="w-3.5 h-3.5 text-blue-500 shrink-0" />
+                      <span className="font-bold text-slate-900 text-[11px]">
                         {t.type}
                       </span>
                     </div>
                   </td>
-                  <td className="py-2 px-4 text-center">
-                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                      <CheckCircle2 className="w-3 h-3" /> ใช้งานอยู่
-                    </span>
+                  <td className="py-1 px-3 text-center text-slate-500 font-mono text-[11px]">
+                    {t.created_at ? new Date(t.created_at).toLocaleDateString("th-TH") : "-"}
                   </td>
-                  <td className="py-2 px-4 text-right space-x-1">
+                  <td className="py-1 px-3 text-right space-x-1">
                     <button
                       onClick={() => handleOpenEdit(t)}
-                      className="p-1 rounded-md text-slate-600 hover:text-slate-900 hover:bg-slate-100"
+                      className="p-0.5 rounded-md text-slate-600 hover:text-slate-900 hover:bg-slate-100"
                       title="แก้ไข"
                     >
                       <Edit2 className="w-3.5 h-3.5" />
                     </button>
                     <button
                       onClick={() => setTypeToDelete(t)}
-                      className="p-1 rounded-md text-slate-400 hover:text-rose-600 hover:bg-rose-50"
+                      className="p-0.5 rounded-md text-slate-400 hover:text-rose-600 hover:bg-rose-50"
                       title="ลบ"
                     >
                       <Trash2 className="w-3.5 h-3.5" />

@@ -235,36 +235,40 @@ export const PdaDevicesPage: React.FC = () => {
           <table className="w-full text-left text-xs border-collapse">
             <thead>
               <tr className="bg-slate-100/90 border-b border-slate-200 text-slate-700 font-bold uppercase text-[10px] tracking-wider whitespace-nowrap">
-                <th className="py-2.5 px-4 text-center w-10">#</th>
-                <th className="py-2.5 px-4">รหัสเครื่อง PDA</th>
-                <th className="py-2.5 px-4">ชื่ออุปกรณ์</th>
-                <th className="py-2.5 px-4">Serial Number</th>
-                <th className="py-2.5 px-4">ผู้ดูแล</th>
-                <th className="py-2.5 px-4 text-right">จัดการ</th>
+                <th className="py-1.5 px-3 text-center w-10">#</th>
+                <th className="py-1.5 px-3">รหัสเครื่อง PDA</th>
+                <th className="py-1.5 px-3">ชื่ออุปกรณ์</th>
+                <th className="py-1.5 px-3">Serial Number</th>
+                <th className="py-1.5 px-3">ผู้ดูแล</th>
+                <th className="py-1.5 px-3 text-center">วันที่สร้าง</th>
+                <th className="py-1.5 px-3 text-right">จัดการ</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200/60 text-slate-800 whitespace-nowrap">
               {paginatedPdas.map((p, idx) => (
                 <tr key={p.pda_id} className="hover:bg-slate-50/80 transition-colors">
-                  <td className="py-2 px-4 text-center text-slate-400 font-medium">{(currentPage - 1) * itemsPerPage + idx + 1}</td>
-                  <td className="py-2 px-4">
-                    <code className="bg-slate-100 border border-slate-200 text-slate-700 px-2 py-0.5 rounded text-[10px] font-mono font-bold">{p.device_code}</code>
+                  <td className="py-1 px-3 text-center text-slate-400 font-medium text-[11px]">{(currentPage - 1) * itemsPerPage + idx + 1}</td>
+                  <td className="py-1 px-3">
+                    <code className="bg-slate-100 border border-slate-200 text-slate-700 px-1.5 py-0.2 rounded text-[10px] font-mono font-bold">{p.device_code}</code>
                   </td>
-                  <td className="py-2 px-4 font-bold text-slate-900">{p.device_name}</td>
-                  <td className="py-2 px-4 text-slate-600 font-mono text-[11px]">{p.serial_number || "-"}</td>
-                  <td className="py-2 px-4 text-slate-700 font-medium">{p.assigned_user || "ยังไม่ระบุผู้ดูแล"}</td>
-                  <td className="py-2 px-4 text-right space-x-1">
-                    <button onClick={() => handleOpenEditPda(p)} className="p-1 rounded-md text-slate-600 hover:text-slate-900 hover:bg-slate-100" title="แก้ไข">
+                  <td className="py-1 px-3 font-bold text-slate-900 text-[11px]">{p.device_name}</td>
+                  <td className="py-1 px-3 text-slate-600 font-mono text-[11px]">{p.serial_number || "-"}</td>
+                  <td className="py-1 px-3 text-slate-700 font-medium text-[11px]">{p.assigned_user || "ยังไม่ระบุผู้ดูแล"}</td>
+                  <td className="py-1 px-3 text-center text-slate-500 font-mono text-[11px]">
+                    {(p as any).created_at ? new Date((p as any).created_at).toLocaleDateString("th-TH") : "-"}
+                  </td>
+                  <td className="py-1 px-3 text-right space-x-1">
+                    <button onClick={() => handleOpenEditPda(p)} className="p-0.5 rounded-md text-slate-600 hover:text-slate-900 hover:bg-slate-100" title="แก้ไข">
                       <Edit2 className="w-3.5 h-3.5" />
                     </button>
-                    <button onClick={() => setPdaToDelete(p)} className="p-1 rounded-md text-slate-400 hover:text-rose-600 hover:bg-rose-50" title="ลบ">
+                    <button onClick={() => setPdaToDelete(p)} className="p-0.5 rounded-md text-slate-400 hover:text-rose-600 hover:bg-rose-50" title="ลบ">
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
                   </td>
                 </tr>
               ))}
               {filteredPdas.length === 0 && (
-                <tr><td colSpan={6} className="py-8 text-center text-slate-400">ยังไม่มีข้อมูลเครื่อง PDA</td></tr>
+                <tr><td colSpan={7} className="py-6 text-center text-slate-400">ยังไม่มีข้อมูลเครื่อง PDA</td></tr>
               )}
             </tbody>
           </table>

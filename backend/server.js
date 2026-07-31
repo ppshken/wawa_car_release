@@ -11,6 +11,7 @@ const reportRoutes = require('./src/routes/report.routes');
 const userManagementRoutes = require('./src/routes/userManagement.routes');
 const masterDataRoutes = require('./src/routes/masterData.routes');
 const optimoRouteRoutes = require('./src/routes/optimoRoute.routes');
+const apiKeyRoutes = require('./src/routes/apiKey.routes');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -35,6 +36,7 @@ app.use('/api/master', masterDataRoutes);
 app.use('/api', masterDataRoutes);
 app.use('/api/optimoroute', optimoRouteRoutes);
 app.use('/api', optimoRouteRoutes);
+app.use('/api', apiKeyRoutes);
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {

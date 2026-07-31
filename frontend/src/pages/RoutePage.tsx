@@ -19,6 +19,7 @@ import { useToast } from "../context/ToastContext";
 import { AnimatedDrawer } from "../components/AnimatedDrawer";
 import { SearchableSelect } from "../components/SearchableSelect";
 import { ConfirmModal } from "../components/ConfirmModal";
+import { CustomDatePicker } from "../components/CustomDatePicker";
 import * as XLSX from "xlsx";
 import {
   Map as MapIcon,
@@ -69,7 +70,11 @@ import {
 
 interface DeliverySettings {
   serviceTimePerStop: number;
-  priorityStrategy: "fastest_time" | "distance_first" | "max_load_first" | "order_fifo";
+  priorityStrategy:
+    | "fastest_time"
+    | "distance_first"
+    | "max_load_first"
+    | "order_fifo";
   depotStartTime: string;
   bufferTimePerRoute: number;
 }
@@ -90,6 +95,7 @@ interface StopData {
   data_store_no?: string;
   locationNo?: string;
   storeName: string;
+  store_id?: string;
   address: string;
   quantity?: number;
   sum_quantity?: number;
@@ -107,9 +113,18 @@ interface StopData {
   position_product_id?: number | string;
   position_production_order?: number;
   position_product_name?: string;
+  loads?: Array<{
+    loading_type_id: number;
+    type_name: string;
+    unit_name: string;
+    quantity: number;
+  }>;
 }
 
-const getEarlyDelayBadge = (scheduledTime?: string, startServiceTime?: string) => {
+const getEarlyDelayBadge = (
+  scheduledTime?: string,
+  startServiceTime?: string,
+) => {
   if (!scheduledTime) return null;
   const formattedScheduled = scheduledTime.slice(0, 5);
 
@@ -152,7 +167,9 @@ const getEarlyDelayBadge = (scheduledTime?: string, startServiceTime?: string) =
   }
 
   const schedParts = scheduledTime.split(":");
-  const schedMins = (parseInt(schedParts[0], 10) || 0) * 60 + (parseInt(schedParts[1], 10) || 0);
+  const schedMins =
+    (parseInt(schedParts[0], 10) || 0) * 60 +
+    (parseInt(schedParts[1], 10) || 0);
   const actMins = startHour * 60 + startMin;
   const diff = actMins - schedMins;
 
@@ -229,12 +246,13 @@ const getPriorityBadge = (p?: string) => {
 
 const renderPositionBadge = (stop: any, positionProductsList: any[]) => {
   const posId = stop.position_product_id || stop.positionProductId;
-  const posOrder = stop.position_production_order || stop.positionProductionOrder || 1;
+  const posOrder =
+    stop.position_production_order || stop.positionProductionOrder || 1;
   let posName = stop.position_product_name || stop.positionProductName;
 
   if (!posName && posId) {
     const found = positionProductsList.find(
-      (p) => String(p.position_product_id) === String(posId)
+      (p) => String(p.position_product_id) === String(posId),
     );
     if (found) posName = found.position_product_name;
   }
@@ -521,6 +539,18 @@ export const RoutePage: React.FC = () => {
   const [selectedDate, setSelectedDate] = useState(() =>
     new Date().toISOString().slice(0, 10),
   );
+  const [activeRouteDates, setActiveRouteDates] = useState<string[]>([]);
+
+  const fetchActiveRouteDates = useCallback(async () => {
+    try {
+      const res = await api.get("/optimoroute/active-dates");
+      if (res.data.success && Array.isArray(res.data.activeDates)) {
+        setActiveRouteDates(res.data.activeDates);
+      }
+    } catch (err) {
+      console.error("Fetch active route dates error:", err);
+    }
+  }, []);
   const [checkedRoutes, setCheckedRoutes] = useState<Set<string>>(new Set());
   const [selectedRouteId, setSelectedRouteId] = useState<string | null>(null);
 
@@ -555,15 +585,37 @@ export const RoutePage: React.FC = () => {
   const [unassignedStops, setUnassignedStops] = useState<any[]>([]);
   const [loadingUnassigned, setLoadingUnassigned] = useState(false);
 
+  // Master Cargo Loading Types State
+  const [loadingTypesList, setLoadingTypesList] = useState<
+    {
+      loading_type_id: number;
+      type_code: string;
+      type_name: string;
+      unit_name: string;
+    }[]
+  >([]);
+  const [unassignedLoads, setUnassignedLoads] = useState<
+    Record<number, number>
+  >({});
+  const [unassignedEditLoads, setUnassignedEditLoads] = useState<
+    Record<number, number>
+  >({});
+
   // Master Position Products List State
-  const [positionProductsList, setPositionProductsList] = useState<{ position_product_id: number; position_product_name: string }[]>([]);
+  const [positionProductsList, setPositionProductsList] = useState<
+    { position_product_id: number; position_product_name: string }[]
+  >([]);
 
   // Create Stop Drawer position state
-  const [formStopPositionProductId, setFormStopPositionProductId] = useState<string | number>("");
+  const [formStopPositionProductId, setFormStopPositionProductId] = useState<
+    string | number
+  >("");
   const [formStopPositionOrder, setFormStopPositionOrder] = useState<number>(1);
 
   // Edit Stop Drawer position state
-  const [editFormPositionProductId, setEditFormPositionProductId] = useState<string | number>("");
+  const [editFormPositionProductId, setEditFormPositionProductId] = useState<
+    string | number
+  >("");
   const [editFormPositionOrder, setEditFormPositionOrder] = useState<number>(1);
 
   // Create Unassigned Stop Modal State
@@ -575,23 +627,32 @@ export const RoutePage: React.FC = () => {
   const [unassignedQuantity, setUnassignedQuantity] = useState(1);
   const [unassignedLatLong, setUnassignedLatLong] = useState("");
   const [unassignedOrderNo, setUnassignedOrderNo] = useState("");
-  const [unassignedPriority, setUnassignedPriority] = useState<string>("medium");
-  const [unassignedPositionProductId, setUnassignedPositionProductId] = useState<string | number>("");
-  const [unassignedPositionOrder, setUnassignedPositionOrder] = useState<number>(1);
+  const [unassignedPriority, setUnassignedPriority] =
+    useState<string>("medium");
+  const [unassignedPositionProductId, setUnassignedPositionProductId] =
+    useState<string | number>("");
+  const [unassignedPositionOrder, setUnassignedPositionOrder] =
+    useState<number>(1);
   const [creatingUnassigned, setCreatingUnassigned] = useState(false);
 
   // Edit Unassigned Stop Modal State
-  const [isEditUnassignedModalOpen, setIsEditUnassignedModalOpen] = useState(false);
-  const [editingUnassignedStop, setEditingUnassignedStop] = useState<any | null>(null);
+  const [isEditUnassignedModalOpen, setIsEditUnassignedModalOpen] =
+    useState(false);
+  const [editingUnassignedStop, setEditingUnassignedStop] = useState<
+    any | null
+  >(null);
   const [unassignedEditStoreId, setUnassignedEditStoreId] = useState("");
   const [unassignedEditStoreName, setUnassignedEditStoreName] = useState("");
   const [unassignedEditAddress, setUnassignedEditAddress] = useState("");
   const [unassignedEditQuantity, setUnassignedEditQuantity] = useState(1);
   const [unassignedEditLatLong, setUnassignedEditLatLong] = useState("");
   const [unassignedEditOrderNo, setUnassignedEditOrderNo] = useState("");
-  const [unassignedEditPriority, setUnassignedEditPriority] = useState<string>("medium");
-  const [unassignedEditPositionProductId, setUnassignedEditPositionProductId] = useState<string | number>("");
-  const [unassignedEditPositionOrder, setUnassignedEditPositionOrder] = useState<number>(1);
+  const [unassignedEditPriority, setUnassignedEditPriority] =
+    useState<string>("medium");
+  const [unassignedEditPositionProductId, setUnassignedEditPositionProductId] =
+    useState<string | number>("");
+  const [unassignedEditPositionOrder, setUnassignedEditPositionOrder] =
+    useState<number>(1);
   const [updatingUnassigned, setUpdatingUnassigned] = useState(false);
 
   // Excel Import Preview Left Drawer State
@@ -615,21 +676,27 @@ export const RoutePage: React.FC = () => {
   const [calculatingAutoRoute, setCalculatingAutoRoute] = useState(false);
 
   // Delivery Settings State
-  const [deliverySettings, setDeliverySettings] = useState<DeliverySettings>(() => {
-    try {
-      const saved = localStorage.getItem("wawa_delivery_settings");
-      if (saved) return JSON.parse(saved);
-    } catch (e) {}
-    return DEFAULT_DELIVERY_SETTINGS;
-  });
-  const [isDeliverySettingsDrawerOpen, setIsDeliverySettingsDrawerOpen] = useState(false);
+  const [deliverySettings, setDeliverySettings] = useState<DeliverySettings>(
+    () => {
+      try {
+        const saved = localStorage.getItem("wawa_delivery_settings");
+        if (saved) return JSON.parse(saved);
+      } catch (e) {}
+      return DEFAULT_DELIVERY_SETTINGS;
+    },
+  );
+  const [isDeliverySettingsDrawerOpen, setIsDeliverySettingsDrawerOpen] =
+    useState(false);
 
   const fetchDeliverySettings = useCallback(async () => {
     try {
       const res = await api.get("/optimoroute/delivery-settings");
       if (res.data.success && res.data.settings) {
         setDeliverySettings(res.data.settings);
-        localStorage.setItem("wawa_delivery_settings", JSON.stringify(res.data.settings));
+        localStorage.setItem(
+          "wawa_delivery_settings",
+          JSON.stringify(res.data.settings),
+        );
       }
     } catch (err) {
       console.error("Fetch delivery settings from DB error:", err);
@@ -641,7 +708,10 @@ export const RoutePage: React.FC = () => {
   }, [fetchDeliverySettings]);
 
   // Clear Unassigned Stops State
-  const [isConfirmClearUnassignedModalOpen, setIsConfirmClearUnassignedModalOpen] = useState(false);
+  const [
+    isConfirmClearUnassignedModalOpen,
+    setIsConfirmClearUnassignedModalOpen,
+  ] = useState(false);
   const [clearingUnassigned, setClearingUnassigned] = useState(false);
 
   // Resizable Bottom Panel State
@@ -723,7 +793,9 @@ export const RoutePage: React.FC = () => {
 
   const selectedMasterStoreObj = useMemo(() => {
     if (!selectedMasterStoreId) return null;
-    return storesMap.get(String(selectedMasterStoreId).trim().toLowerCase()) || null;
+    return (
+      storesMap.get(String(selectedMasterStoreId).trim().toLowerCase()) || null
+    );
   }, [storesMap, selectedMasterStoreId]);
 
   // Group store dropdown state
@@ -757,9 +829,7 @@ export const RoutePage: React.FC = () => {
 
   const totalSelectedCapacity = useMemo(() => {
     return autoRouteSelectedVehicles.reduce((sum, vId) => {
-      const found = vehiclesList.find(
-        (v) => String(v.car_id) === String(vId),
-      );
+      const found = vehiclesList.find((v) => String(v.car_id) === String(vId));
       return sum + (found?.quantity || 100);
     }, 0);
   }, [autoRouteSelectedVehicles, vehiclesList]);
@@ -839,48 +909,89 @@ export const RoutePage: React.FC = () => {
     }
   }, []);
 
+  const fetchLoadingTypes = useCallback(async () => {
+    try {
+      const res = await api.get("/master/loading-types", {
+        params: { activeOnly: "true" },
+      });
+      if (res.data && res.data.success) {
+        setLoadingTypesList(res.data.loadingTypes || []);
+      }
+    } catch (err) {
+      console.warn("Fetch loading types warning:", err);
+    }
+  }, []);
+
   useEffect(() => {
     fetchUnassignedStops(selectedDate);
     fetchPositionProducts();
-  }, [fetchUnassignedStops, fetchPositionProducts, selectedDate]);
+    fetchLoadingTypes();
+    fetchActiveRouteDates();
+  }, [
+    fetchUnassignedStops,
+    fetchPositionProducts,
+    fetchLoadingTypes,
+    fetchActiveRouteDates,
+    selectedDate,
+  ]);
 
   const handleDownloadSampleExcel = () => {
     try {
       const sampleData = [
         {
-          "รหัสร้านค้า": "ST-001",
-          "จำนวนสินค้า": 50,
-          "ตำแหน่งวางสินค้า": "E",
-          "แถว": 1,
-          "รหัสออเดอร์": "ORD-2026-001",
+          รหัสร้านค้า: "ST-001",
+          จำนวนลัง: 50,
+          จำนวนกะบะ: 2,
+          จำนวนพาเลท: 3,
+          จำนวนกล่อง: 0,
+          จำนวนกรงเหล็ก: 2,
+          ตำแหน่งวางสินค้า: "E",
+          แถว: 1,
+          รหัสออเดอร์: "ORD-2026-001",
         },
         {
-          "รหัสร้านค้า": "ST-002",
-          "จำนวนสินค้า": 35,
-          "ตำแหน่งวางสินค้า": "A",
-          "แถว": 2,
-          "รหัสออเดอร์": "ORD-2026-002",
+          รหัสร้านค้า: "ST-002",
+          จำนวนลัง: 50,
+          จำนวนกะบะ: 2,
+          จำนวนพาเลท: 3,
+          จำนวนกล่อง: 0,
+          จำนวนกรงเหล็ก: 2,
+          ตำแหน่งวางสินค้า: "A",
+          แถว: 2,
+          รหัสออเดอร์: "ORD-2026-002",
         },
         {
-          "รหัสร้านค้า": "ST-003",
-          "จำนวนสินค้า": 60,
-          "ตำแหน่งวางสินค้า": "R",
-          "แถว": 4,
-          "รหัสออเดอร์": "ORD-2026-003",
+          รหัสร้านค้า: "ST-003",
+          จำนวนลัง: 50,
+          จำนวนกะบะ: 2,
+          จำนวนพาเลท: 3,
+          จำนวนกล่อง: 0,
+          จำนวนกรงเหล็ก: 2,
+          ตำแหน่งวางสินค้า: "R",
+          แถว: 4,
+          รหัสออเดอร์: "ORD-2026-003",
         },
         {
-          "รหัสร้านค้า": "ST-004",
-          "จำนวนสินค้า": 40,
-          "ตำแหน่งวางสินค้า": "B",
-          "แถว": 8,
-          "รหัสออเดอร์": "ORD-2026-004",
+          รหัสร้านค้า: "ST-004",
+          จำนวนลัง: 50,
+          จำนวนกะบะ: 2,
+          จำนวนพาเลท: 3,
+          จำนวนกล่อง: 0,
+          จำนวนกรงเหล็ก: 2,
+          ตำแหน่งวางสินค้า: "B",
+          แถว: 8,
+          รหัสออเดอร์: "ORD-2026-004",
         },
         {
-          "รหัสร้านค้า": "ST-005",
-          "จำนวนสินค้า": 80,
-          "ตำแหน่งวางสินค้า": "C",
-          "แถว": 7,
-          "รหัสออเดอร์": "ORD-2026-005",
+          รหัสร้านค้า: "ST-005",
+          จำนวนลัง: 50,
+          จำนวนกะบะ: 2,
+          จำนวนพาเลท: 3,
+          จำนวนกล่อง: 0,
+          จำนวนกรงเหล็ก: 2,
+          ตำแหน่งวางสินค้า: "C",
+          แถว: 7,
+          รหัสออเดอร์: "ORD-2026-005",
         },
       ];
 
@@ -936,16 +1047,50 @@ export const RoutePage: React.FC = () => {
               `ORD-${Date.now().toString().slice(-4)}-${idx + 1}`,
           ).trim();
 
+          // Dynamic Cargo Loading Type Detection from Excel Columns
+          const loadsMap: Record<number, number> = {};
+          loadingTypesList.forEach((lt) => {
+            const possibleKeys = [
+              `จำนวน${lt.type_name}`,
+              `จำนวน (${lt.type_name})`,
+              lt.type_name,
+              lt.type_name === "กระบะ" ? "จำนวนกะบะ" : "",
+              lt.type_name === "กะบะ" ? "จำนวนกระบะ" : "",
+            ].filter(Boolean);
+
+            let qtyVal = 0;
+            for (const key of possibleKeys) {
+              if (row[key] !== undefined && row[key] !== "") {
+                const parsed = parseInt(String(row[key]), 10);
+                if (!isNaN(parsed) && parsed >= 0) {
+                  qtyVal = parsed;
+                  break;
+                }
+              }
+            }
+
+            if (qtyVal > 0) {
+              loadsMap[lt.loading_type_id] = qtyVal;
+            }
+          });
+
+          const totalLoadsSum = Object.values(loadsMap).reduce<number>(
+            (a, b) => a + (Number(b) || 0),
+            0,
+          );
+
           const quantity =
-            parseInt(
-              row["จำนวนสินค้า"] ||
-                row["จำนวน"] ||
-                row["sum_quantity"] ||
-                row["quantity"] ||
-                row["Qty"] ||
-                "1",
-              10,
-            ) || 1;
+            totalLoadsSum > 0
+              ? totalLoadsSum
+              : parseInt(
+                  row["จำนวนสินค้า"] ||
+                    row["จำนวน"] ||
+                    row["sum_quantity"] ||
+                    row["quantity"] ||
+                    row["Qty"] ||
+                    "1",
+                  10,
+                ) || 1;
 
           const positionValue = String(
             row["ตำแหน่งวางสินค้า"] ||
@@ -957,7 +1102,8 @@ export const RoutePage: React.FC = () => {
           const matchedPosition = positionProductsList.find(
             (position) =>
               String(position.position_product_id) === positionValue ||
-              String(position.position_product_name).trim().toLowerCase() === positionValue.toLowerCase(),
+              String(position.position_product_name).trim().toLowerCase() ===
+                positionValue.toLowerCase(),
           );
           const positionOrder =
             parseInt(
@@ -968,10 +1114,10 @@ export const RoutePage: React.FC = () => {
               10,
             ) || 1;
 
-
           // Map ข้อมูลกับ Master Store Database จาก store_id
           const foundMaster = storesList.find(
-            (s) => String(s.store_id).trim().toLowerCase() === storeId.toLowerCase(),
+            (s) =>
+              String(s.store_id).trim().toLowerCase() === storeId.toLowerCase(),
           );
 
           const storeName = String(
@@ -1006,9 +1152,11 @@ export const RoutePage: React.FC = () => {
             address: address,
             data_store_no: orderNo,
             sum_quantity: quantity,
+            loads: loadsMap,
             lat_long: latLong,
             position_product_id: matchedPosition?.position_product_id || "",
-            position_product_name: matchedPosition?.position_product_name || positionValue,
+            position_product_name:
+              matchedPosition?.position_product_name || positionValue,
             position_production_order: positionOrder,
             is_mapped_master: !!foundMaster,
           };
@@ -1103,11 +1251,33 @@ export const RoutePage: React.FC = () => {
       return;
     }
 
+    const stopsWithLoads = validStops.map((item) => {
+      let loadsArray: Array<{ loading_type_id: number; quantity: number }> = [];
+      if (Array.isArray(item.loads)) {
+        loadsArray = item.loads;
+      } else if (item.loads && typeof item.loads === "object") {
+        loadsArray = Object.entries(item.loads)
+          .map(([id, qty]) => ({
+            loading_type_id: parseInt(id, 10),
+            quantity: parseInt(String(qty), 10),
+          }))
+          .filter((l) => l.quantity > 0);
+      }
+
+      const totalLoadsQty = loadsArray.reduce((sum, l) => sum + l.quantity, 0);
+
+      return {
+        ...item,
+        sum_quantity: totalLoadsQty > 0 ? totalLoadsQty : (item.sum_quantity || 1),
+        loads: loadsArray,
+      };
+    });
+
     setImportingMultiAddStops(true);
     try {
       const res = await api.post("/optimoroute/unassigned/import", {
         date: selectedDate,
-        stops: validStops,
+        stops: stopsWithLoads,
       });
 
       if (res.data.success) {
@@ -1139,7 +1309,9 @@ export const RoutePage: React.FC = () => {
       (s) => !s.store_id || !String(s.store_id).trim(),
     );
     if (missingStore) {
-      showError("กรุณาเลือกร้านค้าในแถวที่มีขอบสีแดงให้ครบทุกรายการก่อนกดบันทึก");
+      showError(
+        "กรุณาเลือกร้านค้าในแถวที่มีขอบสีแดงให้ครบทุกรายการก่อนกดบันทึก",
+      );
       return;
     }
 
@@ -1147,15 +1319,31 @@ export const RoutePage: React.FC = () => {
       (s) => !s.data_store_no || !String(s.data_store_no).trim(),
     );
     if (missingOrderNo) {
-      showError("กรุณากรอกรหัสออเดอร์ในแถวที่มีขอบสีแดงให้ครบทุกรายการก่อนกดบันทึก");
+      showError(
+        "กรุณากรอกรหัสออเดอร์ในแถวที่มีขอบสีแดงให้ครบทุกรายการก่อนกดบันทึก",
+      );
       return;
     }
 
     setImportingExcelStops(true);
     try {
+      const stopsWithLoads = excelPreviewStops.map((item) => {
+        const loadsArray = Object.entries(item.loads || {})
+          .map(([id, qty]) => ({ loading_type_id: parseInt(id, 10), quantity: parseInt(String(qty), 10) }))
+          .filter((l) => l.quantity > 0);
+
+        const totalLoadsQty = loadsArray.reduce((sum, l) => sum + l.quantity, 0);
+
+        return {
+          ...item,
+          sum_quantity: totalLoadsQty > 0 ? totalLoadsQty : item.sum_quantity,
+          loads: loadsArray
+        };
+      });
+
       const res = await api.post("/optimoroute/unassigned/import", {
         date: selectedDate,
-        stops: excelPreviewStops,
+        stops: stopsWithLoads,
       });
 
       if (res.data.success) {
@@ -1581,8 +1769,12 @@ export const RoutePage: React.FC = () => {
       stop.lat_long || (stop.lat && stop.lng ? `${stop.lat},${stop.lng}` : ""),
     );
     setEditFormStatus(stop.status || "unassigned");
-    setEditFormPositionProductId(stop.position_product_id || stop.positionProductId || "");
-    setEditFormPositionOrder(stop.position_production_order || stop.positionProductionOrder || 1);
+    setEditFormPositionProductId(
+      stop.position_product_id || stop.positionProductId || "",
+    );
+    setEditFormPositionOrder(
+      stop.position_production_order || stop.positionProductionOrder || 1,
+    );
     setIsEditStopDrawerOpen(true);
   };
 
@@ -1650,16 +1842,30 @@ export const RoutePage: React.FC = () => {
     setUnassignedEditStoreId(stop.store_id || stop.locationNo || "");
     setUnassignedEditOrderNo(stop.data_store_no || stop.orderNo || "");
     setUnassignedEditStoreName(
-      stop.storeName || stop.store_name || stop.store_name_result || ""
+      stop.storeName || stop.store_name || stop.store_name_result || "",
     );
     setUnassignedEditAddress(stop.address || stop.store_address || "");
     setUnassignedEditQuantity(stop.sum_quantity ?? stop.quantity ?? 1);
     setUnassignedEditLatLong(
-      stop.lat_long || (stop.lat && stop.lng ? `${stop.lat},${stop.lng}` : "")
+      stop.lat_long || (stop.lat && stop.lng ? `${stop.lat},${stop.lng}` : ""),
     );
     setUnassignedEditPriority(stop.priority || "medium");
-    setUnassignedEditPositionProductId(stop.position_product_id || stop.positionProductId || "");
-    setUnassignedEditPositionOrder(stop.position_production_order || stop.positionProductionOrder || 1);
+    setUnassignedEditPositionProductId(
+      stop.position_product_id || stop.positionProductId || "",
+    );
+    setUnassignedEditPositionOrder(
+      stop.position_production_order || stop.positionProductionOrder || 1,
+    );
+
+    const initLoads: Record<number, number> = {};
+    if (Array.isArray(stop.loads)) {
+      stop.loads.forEach((l: any) => {
+        if (l.loading_type_id) {
+          initLoads[l.loading_type_id] = l.quantity || 0;
+        }
+      });
+    }
+    setUnassignedEditLoads(initLoads);
     setIsEditUnassignedModalOpen(true);
   };
 
@@ -1675,18 +1881,33 @@ export const RoutePage: React.FC = () => {
 
     setUpdatingUnassigned(true);
     try {
+      const loadsPayload = Object.entries(unassignedEditLoads)
+        .map(([id, qty]) => ({
+          loading_type_id: parseInt(id, 10),
+          quantity: parseInt(String(qty), 10),
+        }))
+        .filter((item) => item.quantity > 0);
+
+      const totalLoadsQty = loadsPayload.reduce(
+        (sum, item) => sum + item.quantity,
+        0,
+      );
+      const finalQuantity =
+        totalLoadsQty > 0 ? totalLoadsQty : unassignedEditQuantity;
+
       const res = await api.put(`/optimoroute/stops/${targetListId}`, {
         group_store_id: null,
         store_id: unassignedEditStoreId || undefined,
         data_store_no: unassignedEditOrderNo.trim(),
         store_name: unassignedEditStoreName.trim(),
         address: unassignedEditAddress.trim(),
-        sum_quantity: unassignedEditQuantity,
+        sum_quantity: finalQuantity,
         lat_long: unassignedEditLatLong.trim(),
         priority: unassignedEditPriority,
         status: "unassigned",
         position_product_id: unassignedEditPositionProductId || null,
         position_production_order: unassignedEditPositionOrder || 1,
+        loads: loadsPayload,
       });
 
       if (res.data.success) {
@@ -1699,7 +1920,7 @@ export const RoutePage: React.FC = () => {
       }
     } catch (err: any) {
       showError(
-        err?.response?.data?.message || "เกิดข้อผิดพลาดในการอัปเดตรายการจัดส่ง"
+        err?.response?.data?.message || "เกิดข้อผิดพลาดในการอัปเดตรายการจัดส่ง",
       );
     } finally {
       setUpdatingUnassigned(false);
@@ -2144,7 +2365,7 @@ export const RoutePage: React.FC = () => {
       style={{ height: "calc(100vh - 52px)" }}
     >
       {/* ═══ TOP BAR ═══ */}
-      <div className="bg-white border-b border-slate-200 px-3 py-2 flex flex-wrap items-center justify-between gap-2 shrink-0">
+      <div className="bg-white border-b border-slate-200 px-3 py-2 flex flex-wrap items-center justify-between gap-2 shrink-0 relative z-30">
         {/* Left — Stats + Mobile Toggle */}
         <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
           <button
@@ -2235,15 +2456,12 @@ export const RoutePage: React.FC = () => {
               API
             </span>
           )}
-          <div className="relative">
-            <Calendar className="w-3.5 h-3.5 text-slate-400 absolute left-2 top-2" />
-            <input
-              type="date"
-              value={selectedDate}
-              onChange={(e) => setSelectedDate(e.target.value)}
-              className="bg-white border border-slate-300 rounded-md pl-7 pr-2 py-1 text-xs text-slate-800 focus:outline-none focus:border-blue-400"
-            />
-          </div>
+          <CustomDatePicker
+            value={selectedDate}
+            onChange={(d) => setSelectedDate(d)}
+            activeDates={activeRouteDates}
+            label="เลือกวันที่:"
+          />
           <button
             onClick={() => fetchRoutes(selectedDate)}
             disabled={loading}
@@ -2318,382 +2536,434 @@ export const RoutePage: React.FC = () => {
 
           {(!isLeftPanelCollapsed || isMobileSidebarOpen) && (
             <div className="flex-1 overflow-y-auto custom-scrollbar flex flex-col divide-y divide-slate-100">
-            {/* ── SECTION 1: กรุ๊ปสายจัดส่ง (Route Groups) ── */}
-            <div className="flex flex-col">
-              {/* Header */}
-              <button
-                type="button"
-                onClick={() => setIsRoutesSectionOpen(!isRoutesSectionOpen)}
-                className="w-full bg-slate-100/90 hover:bg-slate-200/80 px-2.5 py-2 flex items-center justify-between transition-colors select-none sticky top-0 z-10 border-b border-slate-200/60"
-              >
-                <div className="flex items-center gap-1.5">
-                  <Layers className="w-3.5 h-3.5 text-blue-600" />
-                  <span className="font-extrabold text-slate-800 text-xs">
-                    กรุ๊ปสายจัดส่ง
-                  </span>
-                  <span className="bg-blue-100 text-blue-800 font-bold px-1.5 py-0.2 rounded-full text-[10px]">
-                    {filteredRoutes.length}
-                  </span>
-                </div>
-                <div className="flex items-center gap-2">
-                  {checkedRoutes.size > 0 && (
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setCheckedRoutes(new Set());
-                      }}
-                      className="text-[10px] text-rose-600 hover:text-rose-800 font-bold hover:underline"
-                      title="ยกเลิกการกรองสายรถ และแสดงสายรถทั้งหมดบนแผนที่"
-                    >
-                      ล้างการเลือก ({checkedRoutes.size})
-                    </button>
-                  )}
-                  {isRoutesSectionOpen ? (
+              {/* ── SECTION 1: กรุ๊ปสายจัดส่ง (Route Groups) ── */}
+              <div className="flex flex-col">
+                {/* Header */}
+                <button
+                  type="button"
+                  onClick={() => setIsRoutesSectionOpen(!isRoutesSectionOpen)}
+                  className="w-full bg-slate-100/90 hover:bg-slate-200/80 px-2.5 py-2 flex items-center justify-between transition-colors select-none sticky top-0 z-10 border-b border-slate-200/60"
+                >
+                  <div className="flex items-center gap-1.5">
+                    <Layers className="w-3.5 h-3.5 text-blue-600" />
+                    <span className="font-extrabold text-slate-800 text-xs">
+                      กรุ๊ปสายจัดส่ง
+                    </span>
+                    <span className="bg-blue-100 text-blue-800 font-bold px-1.5 py-0.2 rounded-full text-[10px]">
+                      {filteredRoutes.length}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {checkedRoutes.size > 0 && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setCheckedRoutes(new Set());
+                        }}
+                        className="text-[10px] text-rose-600 hover:text-rose-800 font-bold hover:underline"
+                        title="ยกเลิกการกรองสายรถ และแสดงสายรถทั้งหมดบนแผนที่"
+                      >
+                        ล้างการเลือก ({checkedRoutes.size})
+                      </button>
+                    )}
+                    {isRoutesSectionOpen ? (
+                      <ChevronUp className="w-4 h-4 text-slate-500" />
+                    ) : (
+                      <ChevronDown className="w-4 h-4 text-slate-500" />
+                    )}
+                  </div>
+                </button>
+
+                {/* Body */}
+                {isRoutesSectionOpen && (
+                  <div className="divide-y divide-slate-100">
+                    {filteredRoutes.map((route) => {
+                      const isSelected = selectedRouteId === route.routeId;
+                      const isChecked = checkedRoutes.has(route.routeId);
+                      const processedCount = route.stops.filter(
+                        (s) =>
+                          s.type !== "depot" &&
+                          (s.status === "completed" ||
+                            s.status === "problem" ||
+                            s.status === "failed"),
+                      ).length;
+                      const deliveryStops = route.stops.filter(
+                        (s) => s.type !== "depot",
+                      ).length;
+                      const estimatedTime = `${Math.floor((deliveryStops * 25) / 60)}ชม. ${(deliveryStops * 25) % 60}น.`;
+                      const estimatedDist = `${(deliveryStops * 12.5).toFixed(0)}km`;
+
+                      return (
+                        <div
+                          key={route.routeId}
+                          className={`border-b border-slate-100 cursor-pointer transition-colors ${isSelected ? "bg-blue-50/70" : "hover:bg-slate-50"}`}
+                        >
+                          {/* Compact Route Header Row */}
+                          <div
+                            className="px-2 py-1.5"
+                            onClick={() => {
+                              if (isSelected) {
+                                setSelectedRouteId(null);
+                                setCheckedRoutes(new Set());
+                              } else {
+                                setSelectedRouteId(route.routeId);
+                                setCheckedRoutes(new Set([route.routeId]));
+                              }
+                            }}
+                          >
+                            {/* Line 1: Checkbox + Color + Name + Plate + Load + Actions */}
+                            <div className="flex items-center justify-between gap-1">
+                              <div className="flex items-center gap-1.5 min-w-0">
+                                <div
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    if (isChecked) {
+                                      setCheckedRoutes(new Set());
+                                      setSelectedRouteId(null);
+                                    } else {
+                                      setCheckedRoutes(
+                                        new Set([route.routeId]),
+                                      );
+                                      setSelectedRouteId(route.routeId);
+                                    }
+                                  }}
+                                  className={`w-3.5 h-3.5 rounded border flex items-center justify-center cursor-pointer transition-all shrink-0 ${
+                                    isChecked
+                                      ? "bg-blue-600 border-blue-600 text-white shadow-2xs"
+                                      : "bg-white border-slate-300 hover:border-blue-400 text-transparent"
+                                  }`}
+                                  title={
+                                    isChecked
+                                      ? "แสดงเฉพาะสายนี้บนแผนที่"
+                                      : "แสดงบนแผนที่"
+                                  }
+                                >
+                                  <Check className="w-2.5 h-2.5 stroke-[3]" />
+                                </div>
+                                <div
+                                  className="w-2.5 h-2.5 rounded-full border border-white shadow-2xs shrink-0"
+                                  style={{ background: route.color }}
+                                />
+                                <span className="font-bold text-slate-900 text-[11px] truncate">
+                                  {route.driverName}
+                                </span>
+                              </div>
+
+                              {/* Action buttons */}
+                              <div className="flex items-center gap-0.5 shrink-0">
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleOpenEditGroupModal(route);
+                                  }}
+                                  className="p-0.5 rounded text-slate-400 hover:text-slate-900 hover:bg-slate-200/70 transition-colors"
+                                  title="แก้ไขข้อมูลสายจัดส่ง"
+                                >
+                                  <Edit2 className="w-3 h-3" />
+                                </button>
+
+                                {route.status === 0 && (
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setGroupToDelete(route);
+                                    }}
+                                    className="p-0.5 rounded text-slate-400 hover:text-rose-600 hover:bg-rose-100/70 transition-colors"
+                                    title="ลบสายจัดส่ง"
+                                  >
+                                    <Trash2 className="w-3 h-3" />
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* Line 2: Badges (Plate, Status, Crate Capacity) */}
+                            <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                              {route.vehiclePlate &&
+                                route.vehiclePlate !== "-" && (
+                                  <span className="text-[9px] bg-slate-100 text-slate-700 font-mono font-bold px-1 py-0.2 rounded border border-slate-200 shrink-0">
+                                    {route.vehiclePlate}
+                                  </span>
+                                )}
+
+                              {/* Group Status Badge */}
+                              <span
+                                className={`text-[9px] font-bold px-1.5 py-0.2 rounded border shrink-0 ${
+                                  route.status === 1 || route.is_released
+                                    ? "bg-emerald-50 text-emerald-800 border-emerald-300"
+                                    : "bg-red-50 text-red-800 border-red-300"
+                                }`}
+                              >
+                                {route.status === 1 || route.is_released
+                                  ? "ปล่อยแล้ว"
+                                  : "ยังไม่ปล่อย"}
+                              </span>
+
+                              {(() => {
+                                const totalBoxes =
+                                  route.stops && route.stops.length > 0
+                                    ? route.stops.reduce(
+                                        (sum, s) => sum + (s.quantity || 0),
+                                        0,
+                                      )
+                                    : route.load1 || 0;
+
+                                const matchedVehicle = vehiclesList.find(
+                                  (v) =>
+                                    (route.car_id &&
+                                      String(v.car_id) ===
+                                        String(route.car_id)) ||
+                                    (route.vehiclePlate &&
+                                      v.license_plate === route.vehiclePlate),
+                                );
+                                const cap =
+                                  route.vehicleCapacity ||
+                                  matchedVehicle?.quantity ||
+                                  100;
+
+                                // Compute loading type breakdown summary across all stops in this route
+                                const loadBreakdownMap: Record<
+                                  string,
+                                  {
+                                    type_name: string;
+                                    unit_name: string;
+                                    total: number;
+                                  }
+                                > = {};
+                                (route.stops || []).forEach((s) => {
+                                  if (
+                                    Array.isArray(s.loads) &&
+                                    s.loads.length > 0
+                                  ) {
+                                    s.loads.forEach((l: any) => {
+                                      const key =
+                                        l.type_name ||
+                                        `type_${l.loading_type_id}`;
+                                      if (!loadBreakdownMap[key]) {
+                                        loadBreakdownMap[key] = {
+                                          type_name: l.type_name,
+                                          unit_name: l.unit_name || "ชิ้น",
+                                          total: 0,
+                                        };
+                                      }
+                                      loadBreakdownMap[key].total +=
+                                        l.quantity || 0;
+                                    });
+                                  }
+                                });
+                                const loadBreakdownList = Object.values(
+                                  loadBreakdownMap,
+                                ).filter((item) => item.total > 0);
+
+                                if (
+                                  totalBoxes <= 0 &&
+                                  (!route.load1 || route.load1 <= 0) &&
+                                  loadBreakdownList.length === 0
+                                )
+                                  return null;
+
+                                return (
+                                  <div className="flex items-center gap-1 flex-wrap shrink-0">
+                                    <span
+                                      className="text-[9px] bg-amber-50 text-amber-800 font-mono font-bold px-1 py-0.2 rounded border border-amber-200/80 shrink-0"
+                                      title={`จัดใส่รถแล้ว ${totalBoxes} ลัง / รถรับได้สูงสุด ${cap} ลัง`}
+                                    >
+                                      {totalBoxes}/{cap}ลัง
+                                    </span>
+                                    {loadBreakdownList.map((item, bIdx) => (
+                                      <span
+                                        key={bIdx}
+                                        className="text-[9px] text-slate-800 font-bold px-1 py-0.2 rounded border  shrink-0"
+                                        title={`โหลดสินค้าประเภท ${item.type_name} รวมทั้งสิ้น ${item.total} ${item.unit_name}`}
+                                      >
+                                        {item.type_name}: {item.total}
+                                      </span>
+                                    ))}
+                                  </div>
+                                );
+                              })()}
+                            </div>
+
+                            {/* Line 3: Stats & Progress Bar Inline */}
+                            <div className="flex items-center justify-between gap-1.5 mt-0.5 text-[10px] text-slate-500 font-medium">
+                              <div className="flex items-center gap-2 shrink-0">
+                                <span className="flex items-center gap-0.5">
+                                  <MapPin className="w-2.5 h-2.5 text-slate-400" />
+                                  {deliveryStops} จุด
+                                </span>
+                                <span className="text-slate-300">·</span>
+                                <span className="flex items-center gap-0.5">
+                                  <Clock className="w-2.5 h-2.5 text-slate-400" />
+                                  {estimatedTime}
+                                </span>
+                                <span className="flex items-center gap-0.5">
+                                  <Route className="w-2.5 h-2.5 text-slate-400" />
+                                  {estimatedDist}
+                                </span>
+                              </div>
+
+                              {/* Progress Bar & Counter */}
+                              <div className="flex items-center gap-1.5 shrink-0">
+                                <div className="w-20 bg-slate-200 rounded-full h-1 overflow-hidden">
+                                  <div
+                                    className="h-1 rounded-full transition-all"
+                                    style={{
+                                      width: `${deliveryStops > 0 ? (processedCount / deliveryStops) * 100 : 0}%`,
+                                      background: route.color,
+                                    }}
+                                  />
+                                </div>
+                                <span className="text-[9px] text-slate-500 font-mono font-bold">
+                                  {processedCount}/{deliveryStops}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+
+                    {filteredRoutes.length === 0 && !loading && (
+                      <div className="p-4 text-center text-slate-400">
+                        <Route className="w-5 h-5 mx-auto mb-1 text-slate-300" />
+                        <div className="text-[10px]">ไม่พบสายรถ</div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* ── SECTION 2: มอนิเตอร์ (Live Vehicles Monitor) ── */}
+              <div className="flex flex-col">
+                {/* Header */}
+                <button
+                  type="button"
+                  onClick={() => setIsGpsSectionOpen(!isGpsSectionOpen)}
+                  className="w-full bg-slate-100/90 hover:bg-slate-200/80 px-2.5 py-2 flex items-center justify-between transition-colors select-none sticky top-0 z-10 border-b border-slate-200/60"
+                >
+                  <div className="flex items-center gap-1.5">
+                    <span className="relative flex h-2 w-2">
+                      <span
+                        className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${gpsLoading ? "bg-amber-400" : "bg-emerald-400"}`}
+                      ></span>
+                      <span
+                        className={`relative inline-flex rounded-full h-2 w-2 ${gpsLoading ? "bg-amber-500" : "bg-emerald-500"}`}
+                      ></span>
+                    </span>
+                    <span className="font-extrabold text-slate-800 text-xs">
+                      มอนิเตอร์
+                    </span>
+                    <span className="bg-emerald-100 text-emerald-800 font-bold px-1.5 py-0.2 rounded-full text-[10px]">
+                      {gpsDevices.length}
+                    </span>
+                  </div>
+                  {isGpsSectionOpen ? (
                     <ChevronUp className="w-4 h-4 text-slate-500" />
                   ) : (
                     <ChevronDown className="w-4 h-4 text-slate-500" />
                   )}
-                </div>
-              </button>
+                </button>
 
-              {/* Body */}
-              {isRoutesSectionOpen && (
-                <div className="divide-y divide-slate-100">
-                  {filteredRoutes.map((route) => {
-                    const isSelected = selectedRouteId === route.routeId;
-                    const isChecked = checkedRoutes.has(route.routeId);
-                    const processedCount = route.stops.filter(
-                      (s) =>
-                        s.type !== "depot" &&
-                        (s.status === "completed" ||
-                          s.status === "problem" ||
-                          s.status === "failed"),
-                    ).length;
-                    const deliveryStops = route.stops.filter(
-                      (s) => s.type !== "depot",
-                    ).length;
-                    const estimatedTime = `${Math.floor((deliveryStops * 25) / 60)}ชม. ${(deliveryStops * 25) % 60}น.`;
-                    const estimatedDist = `${(deliveryStops * 12.5).toFixed(0)}km`;
-
-                    return (
-                      <div
-                        key={route.routeId}
-                        className={`border-b border-slate-100 cursor-pointer transition-colors ${isSelected ? "bg-blue-50/70" : "hover:bg-slate-50"}`}
-                      >
-                        {/* Compact Route Header Row */}
-                        <div
-                          className="px-2 py-1.5"
-                          onClick={() => {
-                            if (isSelected) {
-                              setSelectedRouteId(null);
-                              setCheckedRoutes(new Set());
-                            } else {
-                              setSelectedRouteId(route.routeId);
-                              setCheckedRoutes(new Set([route.routeId]));
-                            }
-                          }}
-                        >
-                          {/* Line 1: Checkbox + Color + Name + Plate + Load + Actions */}
-                          <div className="flex items-center justify-between gap-1">
-                            <div className="flex items-center gap-1.5 min-w-0">
-                              <div
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  if (isChecked) {
-                                    setCheckedRoutes(new Set());
-                                    setSelectedRouteId(null);
-                                  } else {
-                                    setCheckedRoutes(new Set([route.routeId]));
-                                    setSelectedRouteId(route.routeId);
-                                  }
-                                }}
-                                className={`w-3.5 h-3.5 rounded border flex items-center justify-center cursor-pointer transition-all shrink-0 ${
-                                  isChecked
-                                    ? "bg-blue-600 border-blue-600 text-white shadow-2xs"
-                                    : "bg-white border-slate-300 hover:border-blue-400 text-transparent"
-                                }`}
-                                title={
-                                  isChecked
-                                    ? "แสดงเฉพาะสายนี้บนแผนที่"
-                                    : "แสดงบนแผนที่"
-                                }
-                              >
-                                <Check className="w-2.5 h-2.5 stroke-[3]" />
-                              </div>
-                              <div
-                                className="w-2.5 h-2.5 rounded-full border border-white shadow-2xs shrink-0"
-                                style={{ background: route.color }}
-                              />
-                              <span className="font-bold text-slate-900 text-[11px] truncate">
-                                {route.driverName}
-                              </span>
-                            </div>
-
-                            {/* Action buttons */}
-                            <div className="flex items-center gap-0.5 shrink-0">
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleOpenEditGroupModal(route);
-                                }}
-                                className="p-0.5 rounded text-slate-400 hover:text-slate-900 hover:bg-slate-200/70 transition-colors"
-                                title="แก้ไขข้อมูลสายจัดส่ง"
-                              >
-                                <Edit2 className="w-3 h-3" />
-                              </button>
-
-                              {route.status === 0 && (
-                                <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setGroupToDelete(route);
-                                }}
-                                className="p-0.5 rounded text-slate-400 hover:text-rose-600 hover:bg-rose-100/70 transition-colors"
-                                title="ลบสายจัดส่ง"
-                              >
-                                <Trash2 className="w-3 h-3" />
-                              </button>
-                              )}    
-                            </div>
-                          </div>
-
-                          {/* Line 2: Badges (Plate, Status, Crate Capacity) */}
-                          <div className="flex items-center gap-1.5 mt-1 flex-wrap">
-                            {route.vehiclePlate &&
-                              route.vehiclePlate !== "-" && (
-                                <span className="text-[9px] bg-slate-100 text-slate-700 font-mono font-bold px-1 py-0.2 rounded border border-slate-200 shrink-0">
-                                  {route.vehiclePlate}
-                                </span>
-                              )}
-
-                            {/* Group Status Badge */}
-                            <span
-                              className={`text-[9px] font-bold px-1.5 py-0.2 rounded border shrink-0 ${
-                                route.status === 1 || route.is_released
-                                  ? "bg-emerald-50 text-emerald-800 border-emerald-300"
-                                  : "bg-red-50 text-red-800 border-red-300"
-                              }`}
-                            >
-                              {route.status === 1 || route.is_released
-                                ? "ปล่อยแล้ว"
-                                : "ยังไม่ปล่อย"}
-                            </span>
-
-                            {(() => {
-                              const totalBoxes =
-                                route.stops && route.stops.length > 0
-                                  ? route.stops.reduce(
-                                      (sum, s) => sum + (s.quantity || 0),
-                                      0,
-                                    )
-                                  : route.load1 || 0;
-
-                              const matchedVehicle = vehiclesList.find(
-                                (v) =>
-                                  (route.car_id &&
-                                    String(v.car_id) ===
-                                      String(route.car_id)) ||
-                                  (route.vehiclePlate &&
-                                    v.license_plate ===
-                                      route.vehiclePlate),
-                              );
-                              const cap =
-                                route.vehicleCapacity ||
-                                matchedVehicle?.quantity ||
-                                100;
-
-                              if (totalBoxes <= 0 && (!route.load1 || route.load1 <= 0)) return null;
-
-                              return (
-                                <span
-                                  className="text-[9px] bg-amber-50 text-amber-800 font-mono font-bold px-1 py-0.2 rounded border border-amber-200/80 shrink-0"
-                                  title={`จัดใส่รถแล้ว ${totalBoxes} ลัง / รถรับได้สูงสุด ${cap} ลัง`}
-                                >
-                                  {totalBoxes}/{cap}ลัง
-                                </span>
-                              );
-                            })()}
-                          </div>
-
-                          {/* Line 3: Stats & Progress Bar Inline */}
-                          <div className="flex items-center justify-between gap-1.5 mt-0.5 text-[10px] text-slate-500 font-medium">
-                            <div className="flex items-center gap-2 shrink-0">
-                              <span className="flex items-center gap-0.5">
-                                <MapPin className="w-2.5 h-2.5 text-slate-400" />
-                                {deliveryStops} จุด
-                              </span>
-                              <span className="text-slate-300">·</span>
-                              <span className="flex items-center gap-0.5">
-                                <Clock className="w-2.5 h-2.5 text-slate-400" />
-                                {estimatedTime}
-                              </span>
-                              <span className="flex items-center gap-0.5">
-                                <Route className="w-2.5 h-2.5 text-slate-400" />
-                                {estimatedDist}
-                              </span>
-                            </div>
-                            
-
-                            {/* Progress Bar & Counter */}
-                            <div className="flex items-center gap-1.5 shrink-0">
-                              <div className="w-20 bg-slate-200 rounded-full h-1 overflow-hidden">
-                                <div
-                                  className="h-1 rounded-full transition-all"
-                                  style={{
-                                    width: `${deliveryStops > 0 ? (processedCount / deliveryStops) * 100 : 0}%`,
-                                    background: route.color,
-                                  }}
-                                />
-                              </div>
-                              <span className="text-[9px] text-slate-500 font-mono font-bold">
-                                {processedCount}/{deliveryStops}
-                              </span>
-                            </div>
-                          </div>
-                        </div>
+                {/* Body */}
+                {isGpsSectionOpen && (
+                  <div className="divide-y divide-slate-100 bg-slate-50/20">
+                    {gpsDevices.length === 0 ? (
+                      <div className="p-4 text-center text-slate-400 text-xs">
+                        {gpsLoading
+                          ? "กำลังโหลดข้อมูล..."
+                          : "ไม่พบข้อมูลรถ GPS"}
                       </div>
-                    );
-                  })}
+                    ) : (
+                      gpsDevices
+                        .filter((dev) => {
+                          if (!searchRouteText.trim()) return true;
+                          const q = searchRouteText.trim().toLowerCase();
+                          return (
+                            (dev.name && dev.name.toLowerCase().includes(q)) ||
+                            (dev.number &&
+                              dev.number.toLowerCase().includes(q)) ||
+                            (dev.detail &&
+                              dev.detail.toLowerCase().includes(q)) ||
+                            (dev.address &&
+                              dev.address.toLowerCase().includes(q)) ||
+                            String(dev.id).includes(q)
+                          );
+                        })
+                        .map((device) => {
+                          const isEngined = device.engined ?? false;
+                          const speed = device.speed || 0;
+                          const isMoving = isEngined && speed > 0;
+                          const badgeColor = isMoving
+                            ? "bg-emerald-100 text-emerald-800 border-emerald-200"
+                            : isEngined
+                              ? "bg-amber-100 text-amber-800 border-amber-200"
+                              : "bg-slate-100 text-slate-600 border-slate-200";
+                          const dotColor = isMoving
+                            ? "bg-emerald-500"
+                            : isEngined
+                              ? "bg-amber-500"
+                              : "bg-slate-400";
+                          const statusText = isMoving
+                            ? `วิ่ง ${speed}km/h`
+                            : isEngined
+                              ? "ติดเครื่อง 0km/h"
+                              : "ดับเครื่อง";
 
-                  {filteredRoutes.length === 0 && !loading && (
-                    <div className="p-4 text-center text-slate-400">
-                      <Route className="w-5 h-5 mx-auto mb-1 text-slate-300" />
-                      <div className="text-[10px]">ไม่พบสายรถ</div>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-
-            {/* ── SECTION 2: มอนิเตอร์ (Live Vehicles Monitor) ── */}
-            <div className="flex flex-col">
-              {/* Header */}
-              <button
-                type="button"
-                onClick={() => setIsGpsSectionOpen(!isGpsSectionOpen)}
-                className="w-full bg-slate-100/90 hover:bg-slate-200/80 px-2.5 py-2 flex items-center justify-between transition-colors select-none sticky top-0 z-10 border-b border-slate-200/60"
-              >
-                <div className="flex items-center gap-1.5">
-                  <span className="relative flex h-2 w-2">
-                    <span
-                      className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${gpsLoading ? "bg-amber-400" : "bg-emerald-400"}`}
-                    ></span>
-                    <span
-                      className={`relative inline-flex rounded-full h-2 w-2 ${gpsLoading ? "bg-amber-500" : "bg-emerald-500"}`}
-                    ></span>
-                  </span>
-                  <span className="font-extrabold text-slate-800 text-xs">
-                    มอนิเตอร์
-                  </span>
-                  <span className="bg-emerald-100 text-emerald-800 font-bold px-1.5 py-0.2 rounded-full text-[10px]">
-                    {gpsDevices.length}
-                  </span>
-                </div>
-                {isGpsSectionOpen ? (
-                  <ChevronUp className="w-4 h-4 text-slate-500" />
-                ) : (
-                  <ChevronDown className="w-4 h-4 text-slate-500" />
-                )}
-              </button>
-
-              {/* Body */}
-              {isGpsSectionOpen && (
-                <div className="divide-y divide-slate-100 bg-slate-50/20">
-                  {gpsDevices.length === 0 ? (
-                    <div className="p-4 text-center text-slate-400 text-xs">
-                      {gpsLoading ? "กำลังโหลดข้อมูล..." : "ไม่พบข้อมูลรถ GPS"}
-                    </div>
-                  ) : (
-                    gpsDevices
-                      .filter((dev) => {
-                        if (!searchRouteText.trim()) return true;
-                        const q = searchRouteText.trim().toLowerCase();
-                        return (
-                          (dev.name && dev.name.toLowerCase().includes(q)) ||
-                          (dev.number &&
-                            dev.number.toLowerCase().includes(q)) ||
-                          (dev.detail &&
-                            dev.detail.toLowerCase().includes(q)) ||
-                          (dev.address &&
-                            dev.address.toLowerCase().includes(q)) ||
-                          String(dev.id).includes(q)
-                        );
-                      })
-                      .map((device) => {
-                        const isEngined = device.engined ?? false;
-                        const speed = device.speed || 0;
-                        const isMoving = isEngined && speed > 0;
-                        const badgeColor = isMoving
-                          ? "bg-emerald-100 text-emerald-800 border-emerald-200"
-                          : isEngined
-                            ? "bg-amber-100 text-amber-800 border-amber-200"
-                            : "bg-slate-100 text-slate-600 border-slate-200";
-                        const dotColor = isMoving
-                          ? "bg-emerald-500"
-                          : isEngined
-                            ? "bg-amber-500"
-                            : "bg-slate-400";
-                        const statusText = isMoving
-                          ? `วิ่ง ${speed}km/h`
-                          : isEngined
-                            ? "ติดเครื่อง 0km/h"
-                            : "ดับเครื่อง";
-
-                        return (
-                          <div
-                            key={`gps-sidebar-${device.id}`}
-                            onClick={() => {
-                              if (device.latitude && device.longitude) {
-                                setActiveStop(null);
-                                setActiveGpsTarget({
-                                  lat: device.latitude,
-                                  lng: device.longitude,
-                                });
-                              }
-                            }}
-                            className="p-2 hover:bg-emerald-50/60 cursor-pointer transition-colors"
-                          >
-                            <div className="flex items-center justify-between gap-1 mb-1">
-                              <div className="flex items-center gap-1.5 min-w-0">
+                          return (
+                            <div
+                              key={`gps-sidebar-${device.id}`}
+                              onClick={() => {
+                                if (device.latitude && device.longitude) {
+                                  setActiveStop(null);
+                                  setActiveGpsTarget({
+                                    lat: device.latitude,
+                                    lng: device.longitude,
+                                  });
+                                }
+                              }}
+                              className="p-2 hover:bg-emerald-50/60 cursor-pointer transition-colors"
+                            >
+                              <div className="flex items-center justify-between gap-1 mb-1">
+                                <div className="flex items-center gap-1.5 min-w-0">
+                                  <span
+                                    className={`w-2 h-2 rounded-full shrink-0 ${dotColor}`}
+                                  />
+                                  <span className="font-bold text-slate-800 text-xs truncate">
+                                    {device.name ||
+                                      device.number ||
+                                      `ID ${device.id}`}
+                                  </span>
+                                </div>
                                 <span
-                                  className={`w-2 h-2 rounded-full shrink-0 ${dotColor}`}
-                                />
-                                <span className="font-bold text-slate-800 text-xs truncate">
-                                  {device.name ||
-                                    device.number ||
-                                    `ID ${device.id}`}
+                                  className={`text-[9px] font-bold font-mono px-1.5 py-0.5 rounded border shrink-0 ${badgeColor}`}
+                                >
+                                  {statusText}
                                 </span>
                               </div>
-                              <span
-                                className={`text-[9px] font-bold font-mono px-1.5 py-0.5 rounded border shrink-0 ${badgeColor}`}
-                              >
-                                {statusText}
-                              </span>
-                            </div>
 
-                            {device.address && (
-                              <div className="text-[10px] text-slate-500 line-clamp-1 truncate pl-3.5">
-                                📍 {device.address}
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })
-                  )}
-                </div>
-              )}
+                              {device.address && (
+                                <div className="text-[10px] text-slate-500 line-clamp-1 truncate pl-3.5">
+                                  📍 {device.address}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
-          </div>
-        )}
+          )}
         </div>
 
         {/* ─── MAP + BOTTOM PANEL ─── */}
         <div className="flex-1 flex flex-col overflow-hidden relative">
           {/* MAP */}
-          <div className="flex-1 relative">
+          <div className="flex-1 relative z-0">
             <MapContainer
               center={[17.1266642, 102.9635667]}
               zoom={12}
@@ -3010,20 +3280,26 @@ export const RoutePage: React.FC = () => {
                   if (activeRouteVehicles && activeRouteVehicles.size > 0) {
                     const devName = (device.name || "").toLowerCase().trim();
                     const devNum = (device.number || "").toLowerCase().trim();
-                    const devDetail = (device.detail || "").toLowerCase().trim();
-                    const devId = String(device.id || "").toLowerCase().trim();
+                    const devDetail = (device.detail || "")
+                      .toLowerCase()
+                      .trim();
+                    const devId = String(device.id || "")
+                      .toLowerCase()
+                      .trim();
 
-                    const isMatch = Array.from(activeRouteVehicles).some((target) => {
-                      if (!target) return false;
-                      return (
-                        target === devName ||
-                        target === devNum ||
-                        target === devId ||
-                        devName.includes(target) ||
-                        target.includes(devName) ||
-                        devDetail.includes(target)
-                      );
-                    });
+                    const isMatch = Array.from(activeRouteVehicles).some(
+                      (target) => {
+                        if (!target) return false;
+                        return (
+                          target === devName ||
+                          target === devNum ||
+                          target === devId ||
+                          devName.includes(target) ||
+                          target.includes(devName) ||
+                          devDetail.includes(target)
+                        );
+                      },
+                    );
 
                     if (!isMatch) return null;
                   }
@@ -3295,7 +3571,9 @@ export const RoutePage: React.FC = () => {
                     <button
                       type="button"
                       onClick={toggleMaximize}
-                      title={isMaximized ? "ย่อขนาดตาราง" : "ขยายตารางเต็มหน้าจอ"}
+                      title={
+                        isMaximized ? "ย่อขนาดตาราง" : "ขยายตารางเต็มหน้าจอ"
+                      }
                       className="p-1 rounded text-slate-500 hover:text-slate-900 hover:bg-slate-200 transition-colors"
                     >
                       {isMaximized ? (
@@ -3325,16 +3603,31 @@ export const RoutePage: React.FC = () => {
                           onClick={() => {
                             let autoGroupId = "";
                             if (selectedRouteId) {
-                              const matched = routes.find((r) => r.routeId === selectedRouteId);
-                              if (matched) autoGroupId = String(matched.groupStoreId || matched.routeId.replace("ROUTE-", ""));
+                              const matched = routes.find(
+                                (r) => r.routeId === selectedRouteId,
+                              );
+                              if (matched)
+                                autoGroupId = String(
+                                  matched.groupStoreId ||
+                                    matched.routeId.replace("ROUTE-", ""),
+                                );
                             }
                             if (!autoGroupId && checkedRoutes.size > 0) {
                               const firstChecked = Array.from(checkedRoutes)[0];
-                              const matched = routes.find((r) => r.routeId === firstChecked);
-                              if (matched) autoGroupId = String(matched.groupStoreId || matched.routeId.replace("ROUTE-", ""));
+                              const matched = routes.find(
+                                (r) => r.routeId === firstChecked,
+                              );
+                              if (matched)
+                                autoGroupId = String(
+                                  matched.groupStoreId ||
+                                    matched.routeId.replace("ROUTE-", ""),
+                                );
                             }
                             if (!autoGroupId && routes.length > 0) {
-                              autoGroupId = String(routes[0].groupStoreId || routes[0].routeId.replace("ROUTE-", ""));
+                              autoGroupId = String(
+                                routes[0].groupStoreId ||
+                                  routes[0].routeId.replace("ROUTE-", ""),
+                              );
                             }
                             setFormStopGroupId(autoGroupId);
                             setFormStopOrderNo("");
@@ -3424,9 +3717,13 @@ export const RoutePage: React.FC = () => {
                           <span>เพิ่มหลายรายการ</span>
                         </button>
 
-                        <label className={`bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs px-2.5 py-1 rounded-md flex items-center gap-1 shadow-2xs transition-colors shrink-0 ${
-                          isParsingExcel || importingExcelStops ? "opacity-70 cursor-not-allowed pointer-events-none" : "cursor-pointer"
-                        }`}>
+                        <label
+                          className={`bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs px-2.5 py-1 rounded-md flex items-center gap-1 shadow-2xs transition-colors shrink-0 ${
+                            isParsingExcel || importingExcelStops
+                              ? "opacity-70 cursor-not-allowed pointer-events-none"
+                              : "cursor-pointer"
+                          }`}
+                        >
                           {isParsingExcel || importingExcelStops ? (
                             <>
                               <RefreshCw className="w-3.5 h-3.5 animate-spin text-white" />
@@ -3487,7 +3784,9 @@ export const RoutePage: React.FC = () => {
                           type="button"
                           onClick={() => {
                             if (unassignedStops.length === 0) {
-                              showError("ไม่มีรายการยังไม่จัดสายในวันที่เลือกเพื่อล้างข้อมูล");
+                              showError(
+                                "ไม่มีรายการยังไม่จัดสายในวันที่เลือกเพื่อล้างข้อมูล",
+                              );
                               return;
                             }
                             setIsConfirmClearUnassignedModalOpen(true);
@@ -3519,29 +3818,43 @@ export const RoutePage: React.FC = () => {
               {/* Table */}
               <div className="flex-1 overflow-auto custom-scrollbar">
                 {assignedTab === "unassigned" ? (
-                  <table className="w-full text-[11px] text-slate-700 border-collapse whitespace-nowrap min-w-[900px]">
+                  <table className="w-full text-[11px] min-w-[1300px] border-collapse whitespace-nowrap text-slate-700">
                     <thead className="sticky top-0 bg-slate-100/90 backdrop-blur-xs font-bold text-slate-700 border-b border-slate-200 shadow-2xs z-10">
-                      <tr>
-                        <th className="px-2.5 py-1 text-center w-12">#</th>
-                        <th className="px-2.5 py-1 w-28">รหัสร้านค้า</th>
-                        <th className="px-2.5 py-1 min-w-[180px]">ชื่อลูกค้า / ร้านค้า</th>
+                      <tr className="text-left text-[11px] text-slate-700 font-semibold uppercase tracking-wider">
+                        <th className="px-2.5 py-1 w-28">สถานะ</th>
+                        <th className="px-2.5 py-1 w-28">รหัสออเดอร์</th>
+                        <th className="px-2.5 py-1 min-w-[200px]">
+                          ที่ตั้ง / ร้านค้า
+                        </th>
+                        <th className="px-2.5 py-1 w-32">สายรถ / ทะเบียน</th>
+                        <th className="px-2.5 py-1 w-20">ลำดับความสำคัญ</th>
                         <th className="px-2.5 py-1 text-center w-24">จุดวาง</th>
-                        <th className="px-2.5 py-1 min-w-[200px]">ที่อยู่จัดส่ง</th>
-                        <th className="px-2.5 py-1 text-right w-24">
-                          จำนวน (ลัง)
+                        <th className="px-2.5 py-1 w-24">กำหนดเวลาไว้ที่</th>
+                        <th className="px-2.5 py-1 w-36">เริ่มบริการ</th>
+                        <th className="px-2.5 py-1 w-36">สิ้นสุดบริการ</th>
+                        <th className="px-2.5 py-1 w-24">ระยะเวลาจริง</th>
+                        <th className="px-2.5 py-1 w-24 text-center">
+                          หลักฐานการส่ง
                         </th>
-                        <th className="px-2.5 py-1 w-32">รหัสออเดอร์</th>
-                        <th className="px-2.5 py-1 w-32">พิกัด GPS</th>
-                        <th className="px-2.5 py-1 text-right w-20">
-                          จัดการ
+                        {loadingTypesList.map((lt) => (
+                          <th
+                            key={lt.loading_type_id}
+                            className="px-2.5 py-1 text-center w-20"
+                          >
+                            {lt.type_name}
+                          </th>
+                        ))}
+                        <th className="px-2.5 py-1 text-center w-24">
+                          จำนวนทั้งหมด
                         </th>
+                        <th className="px-2.5 py-1 text-right w-16">จัดการ</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
                       {unassignedStops.length === 0 ? (
                         <tr>
                           <td
-                            colSpan={9}
+                            colSpan={13 + loadingTypesList.length}
                             className="text-center py-6 text-slate-400"
                           >
                             <Package className="w-7 h-7 mx-auto mb-1 text-slate-300" />
@@ -3571,37 +3884,115 @@ export const RoutePage: React.FC = () => {
                               key={stop.list_id}
                               className="hover:bg-amber-50/50 transition-colors whitespace-nowrap"
                             >
-                              <td className="px-2.5 py-1 text-center font-bold text-slate-500">
-                                {idx + 1}
+                              {/* 1. สถานะ */}
+                              <td className="px-2.5 py-1">
+                                <div className="flex items-center gap-1.5 shrink-0">
+                                  <div className="w-3.5 h-3.5 rounded-full text-white text-[8px] font-bold flex items-center justify-center shrink-0 shadow-2xs bg-slate-400">
+                                    {idx + 1}
+                                  </div>
+                                  <span className="text-[10px] font-bold px-2 py-0.2 rounded-full inline-block bg-slate-100 text-slate-600 border border-slate-200">
+                                    รอจัดสาย
+                                  </span>
+                                </div>
                               </td>
-                              <td className="px-2.5 py-1 font-mono font-bold text-slate-900">
-                                {stop.store_id}
+
+                              {/* 2. รหัสออเดอร์ */}
+                              <td className="px-2.5 py-1 font-mono font-bold text-slate-800">
+                                {stop.orderNo || stop.locationNo || "-"}
                               </td>
-                              <td className="px-2.5 py-1 font-semibold text-slate-800">
-                                {stop.storeName}
-                              </td>
-                              <td className="px-2.5 py-1 text-center">
-                                {renderPositionBadge(stop, positionProductsList) || (
-                                  <span className="text-slate-400 font-normal">-</span>
+
+                              {/* 3. ที่ตั้ง / ร้านค้า */}
+                              <td className="px-2.5 py-1">
+                                <span className="font-semibold text-slate-900">
+                                  {stop.storeName}
+                                </span>
+                                {stop.address && (
+                                  <span className="text-[10px] text-slate-500 font-normal ml-1">
+                                    ({stop.address})
+                                  </span>
                                 )}
                               </td>
-                              <td className="px-2.5 py-1 text-slate-600 truncate max-w-[300px]">
-                                {stop.address}
+
+                              {/* 4. สายรถ / ทะเบียน */}
+                              <td className="px-2.5 py-1 text-slate-400 font-mono">
+                                -
                               </td>
-                              <td className="px-2.5 py-1 text-right font-bold text-amber-700 font-mono">
+
+                              {/* 5. ลำดับความสำคัญ */}
+                              <td className="px-2.5 py-1">
+                                {getPriorityBadge(stop.priority)}
+                              </td>
+
+                              {/* 6. จุดวาง */}
+                              <td className="px-2.5 py-1 text-center font-mono font-bold">
+                                {renderPositionBadge(
+                                  stop,
+                                  positionProductsList,
+                                ) || (
+                                  <span className="text-slate-400 font-normal">
+                                    -
+                                  </span>
+                                )}
+                              </td>
+
+                              {/* 7. กำหนดเวลาไว้ที่ */}
+                              <td className="px-2.5 py-1 text-slate-400 font-mono">
+                                -
+                              </td>
+
+                              {/* 8. เริ่มบริการ */}
+                              <td className="px-2.5 py-1 text-slate-400 font-mono">
+                                -
+                              </td>
+
+                              {/* 9. สิ้นสุดบริการ */}
+                              <td className="px-2.5 py-1 text-slate-400 font-mono">
+                                -
+                              </td>
+
+                              {/* 10. ระยะเวลาจริง */}
+                              <td className="px-2.5 py-1 text-slate-400 font-mono">
+                                -
+                              </td>
+
+                              {/* 11. หลักฐานการส่ง */}
+                              <td className="px-2.5 py-1 text-center text-slate-400 font-mono">
+                                -
+                              </td>
+
+                              {/* 12. Dynamic Cargo Loading Type Cells */}
+                              {loadingTypesList.map((lt) => {
+                                const loadObj = Array.isArray(stop.loads)
+                                  ? stop.loads.find(
+                                      (l: any) =>
+                                        Number(l.loading_type_id) ===
+                                        Number(lt.loading_type_id),
+                                    )
+                                  : null;
+                                const qty = loadObj ? loadObj.quantity : 0;
+                                return (
+                                  <td
+                                    key={lt.loading_type_id}
+                                    className="px-2.5 py-1 text-center font-bold text-amber-700 font-mono"
+                                  >
+                                    {qty > 0 ? qty : "-"}
+                                  </td>
+                                );
+                              })}
+
+                              {/* 13. จำนวนทั้งหมด */}
+                              <td className="px-2.5 py-1 text-center font-mono font-bold text-amber-700">
                                 {stop.sum_quantity ?? stop.quantity ?? 0}
                               </td>
-                              <td className="px-2.5 py-1 font-mono text-slate-600">
-                                {stop.orderNo}
-                              </td>
-                              <td className="px-2.5 py-1 font-mono text-[10px] text-slate-500">
-                                {stop.lat_long || "-"}
-                              </td>
+
+                              {/* 14. จัดการ */}
                               <td className="px-2.5 py-1 text-right">
                                 <div className="flex items-center justify-end gap-1">
                                   <button
                                     type="button"
-                                    onClick={() => handleOpenEditUnassignedStopDrawer(stop)}
+                                    onClick={() =>
+                                      handleOpenEditUnassignedStopDrawer(stop)
+                                    }
                                     className="p-0.5 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded transition-colors"
                                     title="แก้ไขรายการ"
                                   >
@@ -3628,16 +4019,30 @@ export const RoutePage: React.FC = () => {
                       <tr className="text-left text-[11px] text-slate-700 font-semibold uppercase tracking-wider">
                         <th className="px-2.5 py-1 w-28">สถานะ</th>
                         <th className="px-2.5 py-1 w-28">รหัสออเดอร์</th>
-                        <th className="px-2.5 py-1 text-right w-24">จำนวน (ลัง)</th>
+                        <th className="px-2.5 py-1 min-w-[200px]">
+                          ที่ตั้ง / ร้านค้า
+                        </th>
+                        <th className="px-2.5 py-1 w-32">สายรถ / ทะเบียน</th>
+                        <th className="px-2.5 py-1 w-20">ลำดับความสำคัญ</th>
                         <th className="px-2.5 py-1 text-center w-24">จุดวาง</th>
-                        <th className="px-2.5 py-1 w-24 text-center">หลักฐานการส่ง</th>
                         <th className="px-2.5 py-1 w-24">กำหนดเวลาไว้ที่</th>
                         <th className="px-2.5 py-1 w-36">เริ่มบริการ</th>
                         <th className="px-2.5 py-1 w-36">สิ้นสุดบริการ</th>
                         <th className="px-2.5 py-1 w-24">ระยะเวลาจริง</th>
-                        <th className="px-2.5 py-1 w-20">ลำดับความสำคัญ</th>
-                        <th className="px-2.5 py-1 min-w-[200px]">ที่ตั้ง / ร้านค้า</th>
-                        <th className="px-2.5 py-1 w-32">สายรถ / ทะเบียน</th>
+                        <th className="px-2.5 py-1 w-24 text-center">
+                          หลักฐานการส่ง
+                        </th>
+                        {loadingTypesList.map((lt) => (
+                          <th
+                            key={lt.loading_type_id}
+                            className="px-2.5 py-1 text-center w-20"
+                          >
+                            {lt.type_name}
+                          </th>
+                        ))}
+                        <th className="px-2.5 py-1 text-center w-24">
+                          จำนวนทั้งหมด
+                        </th>
                         <th className="px-2.5 py-1 text-right w-16">จัดการ</th>
                       </tr>
                     </thead>
@@ -3645,9 +4050,18 @@ export const RoutePage: React.FC = () => {
                       {tableStops.map((stop, idx) => {
                         const sc = getStatusColor(stop.status);
                         const isDepot = stop.type === "depot";
-                        const ed = getEarlyDelayBadge(stop.scheduled_time, stop.start_service_time);
-                        const edEnd = getEarlyDelayBadge(stop.scheduled_time, stop.end_service_time);
-                        const actualDur = getActualDurationText(stop.start_service_time, stop.end_service_time);
+                        const ed = getEarlyDelayBadge(
+                          stop.scheduled_time,
+                          stop.start_service_time,
+                        );
+                        const edEnd = getEarlyDelayBadge(
+                          stop.scheduled_time,
+                          stop.end_service_time,
+                        );
+                        const actualDur = getActualDurationText(
+                          stop.start_service_time,
+                          stop.end_service_time,
+                        );
 
                         return (
                           <tr
@@ -3662,7 +4076,11 @@ export const RoutePage: React.FC = () => {
                                   className="w-3.5 h-3.5 rounded-full text-white text-[8px] font-bold flex items-center justify-center shrink-0 shadow-2xs"
                                   style={{ background: stop.routeColor }}
                                 >
-                                  {isDepot ? "★" : (stop.rowOrder ?? stop.row_order ?? idx + 1)}
+                                  {isDepot
+                                    ? "★"
+                                    : (stop.rowOrder ??
+                                      stop.row_order ??
+                                      idx + 1)}
                                 </div>
                                 <span
                                   className="text-[10px] font-bold px-2 py-0.2 rounded-full inline-block"
@@ -3678,51 +4096,66 @@ export const RoutePage: React.FC = () => {
                               {stop.orderNo || stop.locationNo || "-"}
                             </td>
 
-                            {/* 3. จำนวน (ลัง) */}
-                            <td className="px-2.5 py-1 text-right font-mono font-bold text-amber-800">
-                              {isDepot
-                                ? "-"
-                                : `${stop.quantity ?? stop.sum_quantity ?? 1} ลัง`}
+                            {/* 3. ที่ตั้ง / ร้านค้า */}
+                            <td className="px-2.5 py-1">
+                              {stop.store_id && (
+                                <span className="font-mono text-slate-500 text-[10px] mr-1">
+                                  [{stop.store_id}]
+                                </span>
+                              )}
+                              <span className="font-semibold text-slate-900">
+                                {stop.storeName}
+                              </span>
+                              {stop.address && (
+                                <span className="text-[10px] text-slate-500 font-normal ml-1">
+                                  ({stop.address})
+                                </span>
+                              )}
                             </td>
 
-                            {/* 3.1 จุดวาง */}
+                            {/* 4. สายรถ / ทะเบียน */}
+                            <td className="px-2.5 py-1">
+                              <span className="font-medium text-slate-800 text-[11px]">
+                                {stop.routeDriverName}
+                              </span>
+                              {stop.routeVehicle && (
+                                <span className="text-[10px] font-mono text-slate-500 ml-1">
+                                  [{stop.routeVehicle}]
+                                </span>
+                              )}
+                            </td>
+
+                            {/* 5. ลำดับความสำคัญ */}
+                            <td className="px-2.5 py-1">
+                              {getPriorityBadge(stop.priority)}
+                            </td>
+
+                            {/* 6. จุดวาง */}
                             <td className="px-2.5 py-1 text-center font-mono font-bold">
-                              {renderPositionBadge(stop, positionProductsList) || (
-                                <span className="text-slate-400 font-normal">-</span>
+                              {renderPositionBadge(
+                                stop,
+                                positionProductsList,
+                              ) || (
+                                <span className="text-slate-400 font-normal">
+                                  -
+                                </span>
                               )}
                             </td>
 
-                            {/* 3. หลักฐานการส่ง (POD) */}
-                            <td className="px-2.5 py-1 text-center">
-                              {stop.pod_image ? (
-                                <a
-                                  href={stop.pod_image}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  onClick={(e) => e.stopPropagation()}
-                                  className="inline-block"
-                                >
-                                  <img
-                                    src={stop.pod_image}
-                                    alt="POD"
-                                    className="w-5 h-5 object-cover rounded border border-slate-300 hover:scale-110 transition-transform"
-                                  />
-                                </a>
-                              ) : (
-                                <span className="text-slate-400 font-mono">-</span>
-                              )}
-                            </td>
-
-                            {/* 4. กำหนดเวลาไว้ที่ (Scheduled ETA) */}
+                            {/* 7. กำหนดเวลาไว้ที่ (Scheduled ETA) */}
                             <td className="px-2.5 py-1 font-mono font-bold text-slate-700">
-                              {ed?.scheduledText || stop.scheduled_time?.slice(0, 5) || "-"}
+                              {ed?.scheduledText ||
+                                stop.scheduled_time?.slice(0, 5) ||
+                                "-"}
                             </td>
 
-                            {/* 5. เริ่มบริการ (Start Service + Early/Delay) */}
+                            {/* 8. เริ่มบริการ (Start Service + Early/Delay) */}
                             <td className="px-2.5 py-1 font-mono">
                               {ed?.startText ? (
                                 <div className="flex items-center gap-1">
-                                  <span className="font-bold text-slate-800">{ed.startText}</span>
+                                  <span className="font-bold text-slate-800">
+                                    {ed.startText}
+                                  </span>
                                   {ed.earlyDelayText && (
                                     <span
                                       className={`text-[10px] font-bold px-1.5 py-0.2 rounded ${
@@ -3740,11 +4173,13 @@ export const RoutePage: React.FC = () => {
                               )}
                             </td>
 
-                            {/* 6. สิ้นสุดบริการ (End Service + Early/Delay) */}
+                            {/* 9. สิ้นสุดบริการ (End Service + Early/Delay) */}
                             <td className="px-2.5 py-1 font-mono">
                               {edEnd?.startText ? (
                                 <div className="flex items-center gap-1">
-                                  <span className="font-bold text-slate-800">{edEnd.startText}</span>
+                                  <span className="font-bold text-slate-800">
+                                    {edEnd.startText}
+                                  </span>
                                   {edEnd.earlyDelayText && (
                                     <span
                                       className={`text-[10px] font-bold px-1.5 py-0.2 rounded ${
@@ -3762,41 +4197,62 @@ export const RoutePage: React.FC = () => {
                               )}
                             </td>
 
-                            {/* 7. ระยะเวลาจริง */}
+                            {/* 10. ระยะเวลาจริง */}
                             <td className="px-2.5 py-1 font-mono text-slate-700 font-bold">
                               {actualDur}
                             </td>
 
-                            {/* 8. ลำดับความสำคัญ */}
-                            <td className="px-2.5 py-1">
-                              {getPriorityBadge(stop.priority)}
-                            </td>
-
-                            {/* 9. ที่ตั้ง / ร้านค้า */}
-                            <td className="px-2.5 py-1">
-                              <span className="font-semibold text-slate-900">
-                                {stop.storeName}
-                              </span>
-                              {stop.address && (
-                                <span className="text-[10px] text-slate-500 font-normal ml-1">
-                                  ({stop.address})
+                            {/* 11. หลักฐานการส่ง (POD) */}
+                            <td className="px-2.5 py-1 text-center">
+                              {stop.pod_image ? (
+                                <a
+                                  href={stop.pod_image}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  onClick={(e) => e.stopPropagation()}
+                                  className="inline-block"
+                                >
+                                  <img
+                                    src={stop.pod_image}
+                                    alt="POD"
+                                    className="w-5 h-5 object-cover rounded border border-slate-300 hover:scale-110 transition-transform"
+                                  />
+                                </a>
+                              ) : (
+                                <span className="text-slate-400 font-mono">
+                                  -
                                 </span>
                               )}
                             </td>
 
-                            {/* 10. สายรถ / ทะเบียน */}
-                            <td className="px-2.5 py-1">
-                              <span className="font-medium text-slate-800 text-[11px]">
-                                {stop.routeDriverName}
-                              </span>
-                              {stop.routeVehicle && (
-                                <span className="text-[10px] font-mono text-slate-500 ml-1">
-                                  [{stop.routeVehicle}]
-                                </span>
-                              )}
+                            {/* 12. Dynamic Cargo Loading Type Cells */}
+                            {loadingTypesList.map((lt) => {
+                              const loadObj = Array.isArray(stop.loads)
+                                ? stop.loads.find(
+                                    (l: any) =>
+                                      Number(l.loading_type_id) ===
+                                      Number(lt.loading_type_id),
+                                  )
+                                : null;
+                              const qty = isDepot ? 0 : loadObj ? loadObj.quantity : 0;
+                              return (
+                                <td
+                                  key={lt.loading_type_id}
+                                  className="px-2.5 py-1 text-center font-bold text-amber-800 font-mono"
+                                >
+                                  {qty > 0 ? qty : "-"}
+                                </td>
+                              );
+                            })}
+
+                            {/* 13. จำนวนทั้งหมด */}
+                            <td className="px-2.5 py-1 text-center font-mono font-bold text-amber-800">
+                              {isDepot
+                                ? "-"
+                                : (stop.quantity ?? stop.sum_quantity ?? 1)}
                             </td>
 
-                            {/* 11. จัดการ */}
+                            {/* 14. จัดการ */}
                             <td className="px-2.5 py-1 text-right">
                               <div className="flex items-center justify-end gap-1">
                                 <button
@@ -3829,7 +4285,7 @@ export const RoutePage: React.FC = () => {
                       {tableStops.length === 0 && (
                         <tr>
                           <td
-                            colSpan={11}
+                            colSpan={13 + loadingTypesList.length}
                             className="text-center py-6 text-slate-400"
                           >
                             <Package className="w-5 h-5 mx-auto mb-1 text-slate-300" />
@@ -3984,7 +4440,8 @@ export const RoutePage: React.FC = () => {
             </div>
             <div>
               <label className="block text-slate-700 font-semibold mb-1">
-                จำนวนสินค้า (กล่อง/ชิ้น) <span className="text-rose-500">*</span>
+                จำนวนสินค้า (กล่อง/ชิ้น){" "}
+                <span className="text-rose-500">*</span>
               </label>
               <input
                 type="number"
@@ -4012,7 +4469,10 @@ export const RoutePage: React.FC = () => {
               >
                 <option value="">-- เลือกตำแหน่งวาง --</option>
                 {positionProductsList.map((pos) => (
-                  <option key={pos.position_product_id} value={pos.position_product_id}>
+                  <option
+                    key={pos.position_product_id}
+                    value={pos.position_product_id}
+                  >
                     {pos.position_product_name}
                   </option>
                 ))}
@@ -4025,7 +4485,9 @@ export const RoutePage: React.FC = () => {
               </label>
               <select
                 value={formStopPositionOrder}
-                onChange={(e) => setFormStopPositionOrder(parseInt(e.target.value, 10) || 1)}
+                onChange={(e) =>
+                  setFormStopPositionOrder(parseInt(e.target.value, 10) || 1)
+                }
                 className="w-full border border-slate-200 rounded-lg p-2.5 text-slate-800 bg-slate-50 focus:bg-white focus:outline-none focus:border-slate-400 font-semibold font-mono"
               >
                 {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((num) => (
@@ -4056,7 +4518,8 @@ export const RoutePage: React.FC = () => {
               <span>เวลาจัดส่งที่กำหนด</span>
               {previousStopInGroup?.scheduled_time && (
                 <span className="text-[10px] text-blue-700 font-bold bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
-                  จุดก่อนหน้า: {String(previousStopInGroup.scheduled_time).slice(0, 5)} น.
+                  จุดก่อนหน้า:{" "}
+                  {String(previousStopInGroup.scheduled_time).slice(0, 5)} น.
                 </span>
               )}
             </label>
@@ -4069,7 +4532,9 @@ export const RoutePage: React.FC = () => {
             />
             {previousStopInGroup?.scheduled_time ? (
               <p className="text-[10px] text-amber-600 mt-1 font-medium">
-                ⚠️ *เงื่อนไข:* เวลาที่กรอกต้องมากกว่าเวลาจุดจัดส่งก่อนหน้าในกรุ๊ปนี้ ({String(previousStopInGroup.scheduled_time).slice(0, 5)} น.)
+                ⚠️ *เงื่อนไข:*
+                เวลาที่กรอกต้องมากกว่าเวลาจุดจัดส่งก่อนหน้าในกรุ๊ปนี้ (
+                {String(previousStopInGroup.scheduled_time).slice(0, 5)} น.)
               </p>
             ) : (
               <p className="text-[10px] text-slate-500 mt-1">
@@ -4084,8 +4549,16 @@ export const RoutePage: React.FC = () => {
             onChange={(val) => setFormStopPriority(String(val))}
             placeholder="-- เลือกลำดับความสำคัญ --"
             options={[
-              { value: "high", label: "สูง (High Priority)", badge: "ด่วนที่สุด" },
-              { value: "medium", label: "กลาง (Medium Priority)", badge: "ปกติ" },
+              {
+                value: "high",
+                label: "สูง (High Priority)",
+                badge: "ด่วนที่สุด",
+              },
+              {
+                value: "medium",
+                label: "กลาง (Medium Priority)",
+                badge: "ปกติ",
+              },
               { value: "low", label: "ต่ำ (Low Priority)", badge: "ไม่รีบ" },
             ]}
             required
@@ -4148,7 +4621,8 @@ export const RoutePage: React.FC = () => {
 
           <div>
             <label className="block text-slate-700 font-semibold mb-1">
-              พิกัด GPS (ละติจูด, ลองจิจูด) <span className="text-rose-500">*</span>
+              พิกัด GPS (ละติจูด, ลองจิจูด){" "}
+              <span className="text-rose-500">*</span>
             </label>
             <input
               type="text"
@@ -4238,7 +4712,10 @@ export const RoutePage: React.FC = () => {
               >
                 <option value="">-- เลือกตำแหน่งวาง --</option>
                 {positionProductsList.map((pos) => (
-                  <option key={pos.position_product_id} value={pos.position_product_id}>
+                  <option
+                    key={pos.position_product_id}
+                    value={pos.position_product_id}
+                  >
                     {pos.position_product_name}
                   </option>
                 ))}
@@ -4251,7 +4728,9 @@ export const RoutePage: React.FC = () => {
               </label>
               <select
                 value={editFormPositionOrder}
-                onChange={(e) => setEditFormPositionOrder(parseInt(e.target.value, 10) || 1)}
+                onChange={(e) =>
+                  setEditFormPositionOrder(parseInt(e.target.value, 10) || 1)
+                }
                 className="w-full border border-slate-200 rounded-lg p-2.5 text-slate-800 bg-slate-50 focus:bg-white focus:outline-none focus:border-slate-400 font-semibold font-mono"
               >
                 {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((num) => (
@@ -4333,7 +4812,8 @@ export const RoutePage: React.FC = () => {
 
           <div>
             <label className="block text-slate-700 font-semibold mb-1">
-              พิกัด GPS (ละติจูด, ลองจิจูด) <span className="text-rose-500">*</span>
+              พิกัด GPS (ละติจูด, ลองจิจูด){" "}
+              <span className="text-rose-500">*</span>
             </label>
             <input
               type="text"
@@ -4351,8 +4831,16 @@ export const RoutePage: React.FC = () => {
             onChange={(val) => setEditFormStatus(String(val))}
             placeholder="-- เลือกสถานะจุดจัดส่ง --"
             options={[
-              { value: "unassigned", label: "ยังไม่จัดสาย", colorDot: "#94a3b8" },
-              { value: "in_progress", label: "รอดำเนินการ", colorDot: "#eab308" },
+              {
+                value: "unassigned",
+                label: "ยังไม่จัดสาย",
+                colorDot: "#94a3b8",
+              },
+              {
+                value: "in_progress",
+                label: "รอดำเนินการ",
+                colorDot: "#eab308",
+              },
               {
                 value: "completed",
                 label: "สำเร็จ",
@@ -4474,21 +4962,43 @@ export const RoutePage: React.FC = () => {
           e.preventDefault();
           setCreatingUnassigned(true);
           try {
+            const loadsPayload = Object.entries(unassignedLoads)
+              .map(([id, qty]) => ({
+                loading_type_id: parseInt(id, 10),
+                quantity: parseInt(String(qty), 10),
+              }))
+              .filter((item) => item.quantity > 0);
+
+            const totalLoadsQty = loadsPayload.reduce(
+              (sum, item) => sum + item.quantity,
+              0,
+            );
+            const finalQuantity =
+              totalLoadsQty > 0 ? totalLoadsQty : unassignedQuantity;
+
             const res = await api.post("/optimoroute/unassigned", {
               date: selectedDate,
               store_id: unassignedStoreId,
               store_name: unassignedStoreName,
               address: unassignedAddress,
-              sum_quantity: unassignedQuantity,
+              sum_quantity: finalQuantity,
               lat_long: unassignedLatLong,
               data_store_no: unassignedOrderNo,
               priority: unassignedPriority,
               position_product_id: unassignedPositionProductId || undefined,
               position_production_order: unassignedPositionOrder || 1,
+              loads: loadsPayload,
             });
             if (res.data.success) {
               showSuccess(res.data.message || "สร้างรายการรอจัดสายสำเร็จ!");
               setIsCreateUnassignedModalOpen(false);
+              setUnassignedStoreId("");
+              setUnassignedStoreName("");
+              setUnassignedAddress("");
+              setUnassignedQuantity(1);
+              setUnassignedLatLong("");
+              setUnassignedOrderNo("");
+              setUnassignedLoads({});
               setUnassignedPositionProductId("");
               setUnassignedPositionOrder(1);
               fetchUnassignedStops(selectedDate);
@@ -4514,8 +5024,16 @@ export const RoutePage: React.FC = () => {
             onChange={(val) => setUnassignedPriority(String(val))}
             placeholder="-- เลือกลำดับความสำคัญ --"
             options={[
-              { value: "high", label: "สูง (High Priority)", badge: "ด่วนที่สุด" },
-              { value: "medium", label: "กลาง (Medium Priority)", badge: "ปกติ" },
+              {
+                value: "high",
+                label: "สูง (High Priority)",
+                badge: "ด่วนที่สุด",
+              },
+              {
+                value: "medium",
+                label: "กลาง (Medium Priority)",
+                badge: "ปกติ",
+              },
               { value: "low", label: "ต่ำ (Low Priority)", badge: "ไม่รีบ" },
             ]}
             required
@@ -4545,19 +5063,95 @@ export const RoutePage: React.FC = () => {
             }))}
           />
 
+          {/* Cargo Loading Types Breakdown Input Section - Table List with White Background */}
+          {loadingTypesList.length > 0 && (
+            <div className="space-y-1.5 bg-white border border-slate-200 rounded-xl p-3 shadow-2xs">
+              <div className="flex items-center justify-between text-slate-800 font-bold mb-1">
+                <span className="flex items-center gap-1.5 text-slate-800 text-xs">
+                  <Package className="w-4 h-4 text-blue-600" />
+                  จำนวนประเภทของการโหลด
+                </span>
+                <span className="text-[11px] text-blue-700 font-mono bg-blue-50 px-2.5 py-0.5 rounded-full font-bold border border-blue-200">
+                  รวม:{" "}
+                  {Object.values(unassignedLoads).reduce(
+                    (a, b) => (Number(a) || 0) + (Number(b) || 0),
+                    0,
+                  )}{" "}
+                  ชิ้น
+                </span>
+              </div>
+              <div className="border border-slate-200 rounded-lg overflow-hidden bg-white">
+                <table className="w-full text-xs text-left border-collapse">
+                  <thead className="bg-slate-50 border-b border-slate-200 text-slate-700 font-bold text-[11px]">
+                    <tr>
+                      <th className="px-3 py-1.5 w-10 text-center">#</th>
+                      <th className="px-3 py-1.5">ประเภทการโหลด</th>
+                      <th className="px-3 py-1.5 w-24 text-center">หน่วยนับ</th>
+                      <th className="px-3 py-1.5 w-28 text-right">จำนวน</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 bg-white">
+                    {loadingTypesList.map((lt, idx) => (
+                      <tr
+                        key={lt.loading_type_id}
+                        className="hover:bg-slate-50/80 transition-colors"
+                      >
+                        <td className="px-3 py-1.5 text-center font-mono text-slate-400 text-[11px]">
+                          {idx + 1}
+                        </td>
+                        <td className="px-3 py-1.5 font-bold text-slate-800">
+                          {lt.type_name}
+                        </td>
+                        <td className="px-3 py-1.5 text-center font-mono text-slate-500 text-[11px]">
+                          {lt.unit_name || "ชิ้น"}
+                        </td>
+                        <td className="px-3 py-1.5 text-right">
+                          <input
+                            type="number"
+                            min={0}
+                            value={unassignedLoads[lt.loading_type_id] || 0}
+                            onChange={(e) => {
+                              const val = parseInt(e.target.value, 10) || 0;
+                              setUnassignedLoads((prev) => ({
+                                ...prev,
+                                [lt.loading_type_id]: val,
+                              }));
+                            }}
+                            className="w-20 border border-slate-300 rounded px-2 py-1 text-right font-bold text-slate-900 bg-white focus:outline-none focus:border-blue-500 font-mono text-xs"
+                          />
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-slate-700 font-semibold mb-1">
-                จำนวนสินค้า (ลัง) <span className="text-rose-500">*</span>
+                จำนวนสินค้ารวม (ลัง/ชิ้น){" "}
+                <span className="text-rose-500">*</span>
               </label>
               <input
                 type="number"
                 min={1}
-                value={unassignedQuantity}
+                value={
+                  Object.values(unassignedLoads).reduce(
+                    (a, b) => (Number(a) || 0) + (Number(b) || 0),
+                    0,
+                  ) > 0
+                    ? Object.values(unassignedLoads).reduce(
+                        (a, b) => (Number(a) || 0) + (Number(b) || 0),
+                        0,
+                      )
+                    : unassignedQuantity
+                }
                 onChange={(e) =>
                   setUnassignedQuantity(parseInt(e.target.value, 10) || 1)
                 }
-                className="w-full border border-slate-200 rounded-lg p-2.5 text-slate-800 bg-slate-50 focus:bg-white focus:outline-none focus:border-slate-400 font-bold"
+                className="w-full border border-slate-200 rounded-lg p-2.5 text-slate-800 bg-slate-50 focus:bg-white focus:outline-none focus:border-slate-400 font-bold font-mono"
                 required
               />
             </div>
@@ -4590,7 +5184,10 @@ export const RoutePage: React.FC = () => {
               >
                 <option value="">-- เลือกตำแหน่งวาง --</option>
                 {positionProductsList.map((pos) => (
-                  <option key={pos.position_product_id} value={pos.position_product_id}>
+                  <option
+                    key={pos.position_product_id}
+                    value={pos.position_product_id}
+                  >
                     {pos.position_product_name}
                   </option>
                 ))}
@@ -4603,7 +5200,9 @@ export const RoutePage: React.FC = () => {
               </label>
               <select
                 value={unassignedPositionOrder}
-                onChange={(e) => setUnassignedPositionOrder(parseInt(e.target.value, 10) || 1)}
+                onChange={(e) =>
+                  setUnassignedPositionOrder(parseInt(e.target.value, 10) || 1)
+                }
                 className="w-full border border-slate-200 rounded-lg p-2.5 text-slate-800 bg-slate-50 focus:bg-white focus:outline-none focus:border-slate-400 font-semibold font-mono"
               >
                 {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((num) => (
@@ -4644,7 +5243,8 @@ export const RoutePage: React.FC = () => {
 
           <div>
             <label className="block text-slate-700 font-semibold mb-1">
-              พิกัด GPS (ละติจูด, ลองจิจูด) <span className="text-rose-500">*</span>
+              พิกัด GPS (ละติจูด, ลองจิจูด){" "}
+              <span className="text-rose-500">*</span>
             </label>
             <input
               type="text"
@@ -4665,9 +5265,7 @@ export const RoutePage: React.FC = () => {
         title="แก้ไขรายการจัดส่ง (รอจัดสาย)"
         formId="edit-unassigned-stop-form"
         onSubmit={handleSaveEditUnassignedStop}
-        submitLabel={
-          updatingUnassigned ? "กำลังบันทึก..." : "บันทึกการแก้ไข"
-        }
+        submitLabel={updatingUnassigned ? "กำลังบันทึก..." : "บันทึกการแก้ไข"}
       >
         <div className="space-y-4 text-xs">
           <SearchableSelect
@@ -4676,9 +5274,17 @@ export const RoutePage: React.FC = () => {
             onChange={(val) => setUnassignedEditPriority(String(val))}
             placeholder="-- เลือกลำดับความสำคัญ --"
             options={[
-              { value: "high", label: "🔴 สูง (High Priority)", badge: "ด่วนที่สุด" },
-              { value: "medium", label: "🔵 กลาง (Medium Priority)", badge: "ปกติ" },
-              { value: "low", label: "⚪ ต่ำ (Low Priority)", badge: "ไม่รีบ" },
+              {
+                value: "high",
+                label: "สูง (High Priority)",
+                badge: "ด่วนที่สุด",
+              },
+              {
+                value: "medium",
+                label: "กลาง (Medium Priority)",
+                badge: "ปกติ",
+              },
+              { value: "low", label: "ต่ำ (Low Priority)", badge: "ไม่รีบ" },
             ]}
             required
           />
@@ -4707,19 +5313,95 @@ export const RoutePage: React.FC = () => {
             }))}
           />
 
+          {/* Cargo Loading Types Breakdown Input Section - Table List with White Background */}
+          {loadingTypesList.length > 0 && (
+            <div className="space-y-1.5 bg-white border border-slate-200 rounded-xl p-3 shadow-2xs">
+              <div className="flex items-center justify-between text-slate-800 font-bold mb-1">
+                <span className="flex items-center gap-1.5 text-slate-800 text-xs">
+                  <Package className="w-4 h-4 text-blue-600" />
+                  จำนวนประเภทของการโหลด
+                </span>
+                <span className="text-[11px] text-blue-700 font-mono bg-blue-50 px-2.5 py-0.5 rounded-full font-bold border border-blue-200">
+                  รวม:{" "}
+                  {Object.values(unassignedEditLoads).reduce(
+                    (a, b) => (Number(a) || 0) + (Number(b) || 0),
+                    0,
+                  )}{" "}
+                  ชิ้น
+                </span>
+              </div>
+              <div className="border border-slate-200 rounded-lg overflow-hidden bg-white">
+                <table className="w-full text-xs text-left border-collapse">
+                  <thead className="bg-slate-50 border-b border-slate-200 text-slate-700 font-bold text-[11px]">
+                    <tr>
+                      <th className="px-3 py-1.5 w-10 text-center">#</th>
+                      <th className="px-3 py-1.5">ประเภทการโหลด</th>
+                      <th className="px-3 py-1.5 w-24 text-center">หน่วยนับ</th>
+                      <th className="px-3 py-1.5 w-28 text-right">จำนวน</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 bg-white">
+                    {loadingTypesList.map((lt, idx) => (
+                      <tr
+                        key={lt.loading_type_id}
+                        className="hover:bg-slate-50/80 transition-colors"
+                      >
+                        <td className="px-3 py-1.5 text-center font-mono text-slate-400 text-[11px]">
+                          {idx + 1}
+                        </td>
+                        <td className="px-3 py-1.5 font-bold text-slate-800">
+                          {lt.type_name}
+                        </td>
+                        <td className="px-3 py-1.5 text-center font-mono text-slate-500 text-[11px]">
+                          {lt.unit_name || "ชิ้น"}
+                        </td>
+                        <td className="px-3 py-1.5 text-right">
+                          <input
+                            type="number"
+                            min={0}
+                            value={unassignedEditLoads[lt.loading_type_id] || 0}
+                            onChange={(e) => {
+                              const val = parseInt(e.target.value, 10) || 0;
+                              setUnassignedEditLoads((prev) => ({
+                                ...prev,
+                                [lt.loading_type_id]: val,
+                              }));
+                            }}
+                            className="w-20 border border-slate-300 rounded px-2 py-1 text-right font-bold text-slate-900 bg-white focus:outline-none focus:border-blue-500 font-mono text-xs"
+                          />
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-slate-700 font-semibold mb-1">
-                จำนวนสินค้า (ลัง) <span className="text-rose-500">*</span>
+                จำนวนสินค้ารวม (ลัง/ชิ้น){" "}
+                <span className="text-rose-500">*</span>
               </label>
               <input
                 type="number"
                 min={1}
-                value={unassignedEditQuantity}
+                value={
+                  Object.values(unassignedEditLoads).reduce(
+                    (a, b) => (Number(a) || 0) + (Number(b) || 0),
+                    0,
+                  ) > 0
+                    ? Object.values(unassignedEditLoads).reduce(
+                        (a, b) => (Number(a) || 0) + (Number(b) || 0),
+                        0,
+                      )
+                    : unassignedEditQuantity
+                }
                 onChange={(e) =>
                   setUnassignedEditQuantity(parseInt(e.target.value, 10) || 1)
                 }
-                className="w-full border border-slate-200 rounded-lg p-2.5 text-slate-800 bg-slate-50 focus:bg-white focus:outline-none focus:border-slate-400 font-bold"
+                className="w-full border border-slate-200 rounded-lg p-2.5 text-slate-800 bg-slate-50 focus:bg-white focus:outline-none focus:border-slate-400 font-bold font-mono"
                 required
               />
             </div>
@@ -4747,12 +5429,17 @@ export const RoutePage: React.FC = () => {
               </label>
               <select
                 value={unassignedEditPositionProductId}
-                onChange={(e) => setUnassignedEditPositionProductId(e.target.value)}
+                onChange={(e) =>
+                  setUnassignedEditPositionProductId(e.target.value)
+                }
                 className="w-full border border-slate-200 rounded-lg p-2.5 text-slate-800 bg-slate-50 focus:bg-white focus:outline-none focus:border-slate-400 font-semibold"
               >
                 <option value="">-- เลือกตำแหน่งวาง --</option>
                 {positionProductsList.map((pos) => (
-                  <option key={pos.position_product_id} value={pos.position_product_id}>
+                  <option
+                    key={pos.position_product_id}
+                    value={pos.position_product_id}
+                  >
                     {pos.position_product_name}
                   </option>
                 ))}
@@ -4765,7 +5452,11 @@ export const RoutePage: React.FC = () => {
               </label>
               <select
                 value={unassignedEditPositionOrder}
-                onChange={(e) => setUnassignedEditPositionOrder(parseInt(e.target.value, 10) || 1)}
+                onChange={(e) =>
+                  setUnassignedEditPositionOrder(
+                    parseInt(e.target.value, 10) || 1,
+                  )
+                }
                 className="w-full border border-slate-200 rounded-lg p-2.5 text-slate-800 bg-slate-50 focus:bg-white focus:outline-none focus:border-slate-400 font-semibold font-mono"
               >
                 {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((num) => (
@@ -4806,7 +5497,8 @@ export const RoutePage: React.FC = () => {
 
           <div>
             <label className="block text-slate-700 font-semibold mb-1">
-              พิกัด GPS (ละติจูด, ลองจิจูด) <span className="text-rose-500">*</span>
+              พิกัด GPS (ละติจูด, ลองจิจูด){" "}
+              <span className="text-rose-500">*</span>
             </label>
             <input
               type="text"
@@ -4835,7 +5527,7 @@ export const RoutePage: React.FC = () => {
             ? "กำลังนำเข้าข้อมูล..."
             : `ยืนยันนำเข้าข้อมูล (${excelPreviewStops.length} รายการ)`
         }
-        maxWidthClass="max-w-4xl sm:max-w-6xl"
+        maxWidthClass="max-w-full sm:max-w-[96vw]"
         isDirty={true}
       >
         <div className="space-y-3 text-xs">
@@ -4844,8 +5536,13 @@ export const RoutePage: React.FC = () => {
               <div className="flex items-center gap-3">
                 <RefreshCw className="w-5 h-5 animate-spin text-white" />
                 <div>
-                  <div className="font-extrabold text-sm">กำลังบันทึกลำดับจัดส่งจากไฟล์ Excel เข้าสู่ฐานข้อมูล...</div>
-                  <div className="text-[11px] text-blue-100 font-medium">กรุณารอสักครู่ ระบบกำลังนำเข้า {excelPreviewStops.length} รายการลงในส่วนยังไม่จัดสายรถ</div>
+                  <div className="font-extrabold text-sm">
+                    กำลังบันทึกลำดับจัดส่งจากไฟล์ Excel เข้าสู่ฐานข้อมูล...
+                  </div>
+                  <div className="text-[11px] text-blue-100 font-medium">
+                    กรุณารอสักครู่ ระบบกำลังนำเข้า {excelPreviewStops.length}{" "}
+                    รายการลงในส่วนยังไม่จัดสายรถ
+                  </div>
                 </div>
               </div>
               <span className="text-xs font-mono font-bold bg-white/20 px-3 py-1 rounded-lg backdrop-blur-xs">
@@ -4855,18 +5552,29 @@ export const RoutePage: React.FC = () => {
           )}
 
           <div className="text-[11px] text-slate-700 bg-emerald-50 p-2.5 rounded-lg border border-emerald-200 leading-relaxed">
-            <strong>ไฟล์นำเข้าใช้ 3 ฟิลด์หลัก</strong> (<code>รหัสร้านค้า</code>, <code>จำนวนสินค้า</code>, <code>รหัสออเดอร์</code>) โดยระบบดึง <strong>ชื่อร้านค้า</strong>, <strong>ที่อยู่จัดส่ง</strong> และ <strong>พิกัด GPS</strong> จากฐานข้อมูลมาสเตอร์ร้านค้าให้อัตโนมัติ! (สามารถตรวจสอบและแก้ไขข้อมูลก่อนกดบันทึกได้ครับ)
+            <strong>นำเข้าไฟล์ Excel</strong> — ระบบรองรับคอลัมน์ประเภทการโหลด (<code>จำนวนลัง</code>, <code>จำนวนกะบะ</code>, <code>จำนวนพาเลท</code>, <code>จำนวนกล่อง</code>, <code>จำนวนกรงเหล็ก</code>) พร้อมคำนวณจำนวนรวมให้อัตโนมัติ!
           </div>
 
           <div className="max-h-[75vh] min-h-[480px] overflow-auto border border-slate-200 rounded-lg shadow-inner bg-white">
-            <table className="w-full text-[11px] text-slate-700 border-collapse">
+            <table className="w-full text-[11px] text-slate-700 border-collapse whitespace-nowrap">
               <thead className="sticky top-0 bg-slate-100 font-bold text-slate-700 border-b border-slate-200 z-10 shadow-2xs">
                 <tr>
                   <th className="p-2 text-center w-8">#</th>
                   <th className="p-2 w-20">รหัสร้านค้า</th>
                   <th className="p-2 w-36">ชื่อร้านค้า</th>
-                  <th className="p-2 min-w-[200px]">ที่อยู่</th>
-                  <th className="p-2 w-20 text-center">จำนวน (ลัง)</th>
+                  <th className="p-2 min-w-[180px]">ที่อยู่</th>
+                  {loadingTypesList.map((lt) => (
+                    <th
+                      key={lt.loading_type_id}
+                      className="p-2 w-24 text-center bg-blue-50/90 text-blue-900 border-x border-blue-200/80 font-bold shrink-0"
+                      title={`จำนวน ${lt.type_name}`}
+                    >
+                      {lt.type_name} ({lt.unit_name || "ชิ้น"})
+                    </th>
+                  ))}
+                  <th className="p-2 w-28 text-center bg-amber-100/80 text-amber-900 border-x border-amber-200 font-bold shrink-0">
+                    จำนวนรวม (ออโต้)
+                  </th>
                   <th className="p-2 w-40">ตำแหน่งวางสินค้า</th>
                   <th className="p-2 w-16 text-center">แถว</th>
                   <th className="p-2 w-32">รหัสออเดอร์</th>
@@ -4885,16 +5593,24 @@ export const RoutePage: React.FC = () => {
                         value={item.store_id}
                         onChange={(val) => {
                           const selectedVal = String(val);
-                          const found = storesMap.get(selectedVal.trim().toLowerCase());
+                          const found = storesMap.get(
+                            selectedVal.trim().toLowerCase(),
+                          );
                           setExcelPreviewStops((prev) =>
                             prev.map((row) =>
                               row.id === item.id
                                 ? {
                                     ...row,
                                     store_id: selectedVal,
-                                    store_name: found ? found.store_name : row.store_name,
-                                    address: found ? found.store_address || "" : row.address,
-                                    lat_long: found ? found.store_location || "" : row.lat_long,
+                                    store_name: found
+                                      ? found.store_name
+                                      : row.store_name,
+                                    address: found
+                                      ? found.store_address || ""
+                                      : row.address,
+                                    lat_long: found
+                                      ? found.store_location || ""
+                                      : row.lat_long,
                                     is_mapped_master: !!found,
                                   }
                                 : row,
@@ -4903,7 +5619,9 @@ export const RoutePage: React.FC = () => {
                         }}
                         placeholder="-- เลือกร้านค้า --"
                         searchPlaceholder="พิมพ์ค้นหาร้านค้า (รหัส / ชื่อ)..."
-                        hasError={!item.store_id || !String(item.store_id).trim()}
+                        hasError={
+                          !item.store_id || !String(item.store_id).trim()
+                        }
                         buttonClassName="px-1.5 py-1 text-xs font-mono font-bold bg-white rounded-md"
                         dropdownClassName="w-[360px] sm:w-[420px] max-w-xl shadow-2xl"
                         renderSelected={(opt) => (
@@ -4912,7 +5630,10 @@ export const RoutePage: React.FC = () => {
                           </span>
                         )}
                         options={
-                          !item.store_id || storesMap.has(String(item.store_id).trim().toLowerCase())
+                          !item.store_id ||
+                          storesMap.has(
+                            String(item.store_id).trim().toLowerCase(),
+                          )
                             ? masterStoreSearchableOptions
                             : [
                                 {
@@ -4947,11 +5668,61 @@ export const RoutePage: React.FC = () => {
                         title="ดึงข้อมูลอัตโนมัติจากมาสเตอร์ร้านค้า (แก้ไขไม่ได้)"
                       />
                     </td>
-                    <td className="p-1">
+                    {/* Dynamic Cargo Loading Types Columns */}
+                    {loadingTypesList.map((lt) => (
+                      <td
+                        key={lt.loading_type_id}
+                        className="p-1 bg-blue-50/20 border-x border-blue-100/70"
+                      >
+                        <input
+                          type="number"
+                          min={0}
+                          value={item.loads?.[lt.loading_type_id] || 0}
+                          onChange={(e) => {
+                            const val = parseInt(e.target.value, 10) || 0;
+                            setExcelPreviewStops((prev) =>
+                              prev.map((row) => {
+                                if (row.id !== item.id) return row;
+                                const nextLoads: Record<number, number> = {
+                                  ...(row.loads || {}),
+                                  [lt.loading_type_id]: val,
+                                };
+                                const sumLoads = Object.values(
+                                  nextLoads,
+                                ).reduce<number>(
+                                  (a, b) => a + (Number(b) || 0),
+                                  0,
+                                );
+                                return {
+                                  ...row,
+                                  loads: nextLoads,
+                                  sum_quantity:
+                                    sumLoads > 0 ? sumLoads : row.sum_quantity,
+                                };
+                              }),
+                            );
+                          }}
+                          className="w-full border border-blue-200 rounded px-1 py-1 text-xs text-center font-bold text-blue-900 bg-white font-mono focus:border-blue-500 focus:outline-none"
+                        />
+                      </td>
+                    ))}
+                    {/* Sum Quantity Column Positioned After Loading Types */}
+                    <td className="p-1 font-mono font-bold text-center bg-amber-50/40 border-x border-amber-200/60">
                       <input
                         type="number"
                         min={1}
-                        value={item.sum_quantity}
+                        value={
+                          item.loads &&
+                          Object.values(item.loads).reduce<number>(
+                            (a, b) => a + (Number(b) || 0),
+                            0,
+                          ) > 0
+                            ? Object.values(item.loads).reduce<number>(
+                                (a, b) => a + (Number(b) || 0),
+                                0,
+                              )
+                            : item.sum_quantity
+                        }
                         onChange={(e) => {
                           const val = parseInt(e.target.value, 10) || 1;
                           setExcelPreviewStops((prev) =>
@@ -4962,7 +5733,8 @@ export const RoutePage: React.FC = () => {
                             ),
                           );
                         }}
-                        className="w-full border border-slate-200 rounded px-1.5 py-1 text-xs text-center font-bold text-amber-700"
+                        className="w-full border border-amber-300 rounded px-1.5 py-1 text-xs text-center font-bold text-amber-900 bg-amber-50/90 font-mono"
+                        title="คำนวณผลรวมอัตโนมัติจากจำนวนประเภทการโหลดทั้งหมด"
                       />
                     </td>
                     <td className="p-1 min-w-[150px]">
@@ -4971,7 +5743,9 @@ export const RoutePage: React.FC = () => {
                         onChange={(e) => {
                           const positionId = e.target.value;
                           const foundPosition = positionProductsList.find(
-                            (position) => String(position.position_product_id) === positionId,
+                            (position) =>
+                              String(position.position_product_id) ===
+                              positionId,
                           );
                           setExcelPreviewStops((prev) =>
                             prev.map((row) =>
@@ -4979,7 +5753,9 @@ export const RoutePage: React.FC = () => {
                                 ? {
                                     ...row,
                                     position_product_id: positionId,
-                                    position_product_name: foundPosition?.position_product_name || "",
+                                    position_product_name:
+                                      foundPosition?.position_product_name ||
+                                      "",
                                   }
                                 : row,
                             ),
@@ -4989,7 +5765,10 @@ export const RoutePage: React.FC = () => {
                       >
                         <option value="">-- เลือกตำแหน่งวาง --</option>
                         {positionProductsList.map((position) => (
-                          <option key={position.position_product_id} value={position.position_product_id}>
+                          <option
+                            key={position.position_product_id}
+                            value={position.position_product_id}
+                          >
                             {position.position_product_name}
                           </option>
                         ))}
@@ -5001,11 +5780,15 @@ export const RoutePage: React.FC = () => {
                         min={1}
                         value={item.position_production_order || 1}
                         onChange={(e) => {
-                          const positionOrder = parseInt(e.target.value, 10) || 1;
+                          const positionOrder =
+                            parseInt(e.target.value, 10) || 1;
                           setExcelPreviewStops((prev) =>
                             prev.map((row) =>
                               row.id === item.id
-                                ? { ...row, position_production_order: positionOrder }
+                                ? {
+                                    ...row,
+                                    position_production_order: positionOrder,
+                                  }
                                 : row,
                             ),
                           );
@@ -5029,7 +5812,8 @@ export const RoutePage: React.FC = () => {
                         }}
                         placeholder="กรอกรหัสออเดอร์ *"
                         className={`w-full border rounded px-1.5 py-1 text-xs font-mono font-bold transition-all ${
-                          !item.data_store_no || !String(item.data_store_no).trim()
+                          !item.data_store_no ||
+                          !String(item.data_store_no).trim()
                             ? "border-2 border-rose-500 bg-rose-50/70 text-rose-900 focus:border-rose-600 shadow-2xs"
                             : "border-slate-200 text-slate-800 focus:border-blue-400"
                         }`}
@@ -5073,7 +5857,7 @@ export const RoutePage: React.FC = () => {
 
                 {/* Row for adding a new empty item at the end of the table */}
                 <tr className="bg-slate-50/80 hover:bg-blue-50/50 transition-colors border-t-2 border-dashed border-slate-200">
-                  <td colSpan={10} className="p-2 text-center">
+                  <td colSpan={10 + loadingTypesList.length} className="p-2 text-center">
                     <button
                       type="button"
                       onClick={handleAddEmptyExcelRow}
@@ -5105,7 +5889,7 @@ export const RoutePage: React.FC = () => {
             ? "กำลังบันทึกข้อมูล..."
             : `ยืนยันบันทึก (${multiAddStops.filter((s) => s.store_id && String(s.store_id).trim()).length} รายการ)`
         }
-        maxWidthClass="max-w-4xl sm:max-w-6xl"
+        maxWidthClass="max-w-full sm:max-w-[96vw]"
         isDirty={true}
       >
         <div className="space-y-3 text-xs">
@@ -5114,8 +5898,14 @@ export const RoutePage: React.FC = () => {
               <div className="flex items-center gap-3">
                 <RefreshCw className="w-5 h-5 animate-spin text-white" />
                 <div>
-                  <div className="font-extrabold text-sm">กำลังบันทึกรายการจัดส่งเข้าสู่ฐานข้อมูล...</div>
-                  <div className="text-[11px] text-violet-100 font-medium">กรุณารอสักครู่ ระบบกำลังนำเข้า {multiAddStops.filter((s) => s.store_id).length} รายการลงในส่วนยังไม่จัดสายรถ</div>
+                  <div className="font-extrabold text-sm">
+                    กำลังบันทึกรายการจัดส่งเข้าสู่ฐานข้อมูล...
+                  </div>
+                  <div className="text-[11px] text-violet-100 font-medium">
+                    กรุณารอสักครู่ ระบบกำลังนำเข้า{" "}
+                    {multiAddStops.filter((s) => s.store_id).length}{" "}
+                    รายการลงในส่วนยังไม่จัดสายรถ
+                  </div>
                 </div>
               </div>
               <span className="text-xs font-mono font-bold bg-white/20 px-3 py-1 rounded-lg backdrop-blur-xs">
@@ -5125,18 +5915,30 @@ export const RoutePage: React.FC = () => {
           )}
 
           <div className="text-[11px] text-slate-700 bg-violet-50 p-2.5 rounded-lg border border-violet-200 leading-relaxed">
-            <strong>เพิ่มรายการจัดส่งหลายรายการพร้อมกัน</strong> — เลือก <code>ร้านค้า</code> จากมาสเตอร์ กรอก <code>จำนวน</code> และ <code>รหัสออเดอร์</code> ได้เลย ข้อมูลชื่อร้าน / ที่อยู่ / พิกัด GPS จะถูกดึงมาให้อัตโนมัติ (แถวที่ไม่ได้เลือกร้านค้าจะถูกข้ามไป)
+            <strong>เพิ่มรายการจัดส่งหลายรายการพร้อมกัน</strong> — เลือก{" "}
+            <code>ร้านค้า</code> จากมาสเตอร์ ระบุจำนวนตามประเภทการโหลด (ลัง, กระบะ, พาเลท, กล่อง ฯลฯ) ข้อมูลจำนวนรวมทั้งหมดจะถูกคำนวณให้อัตโนมัติ!
           </div>
 
           <div className="max-h-[75vh] min-h-[480px] overflow-auto border border-slate-200 rounded-lg shadow-inner bg-white">
-            <table className="w-full text-[11px] text-slate-700 border-collapse">
+            <table className="w-full text-[11px] text-slate-700 border-collapse whitespace-nowrap">
               <thead className="sticky top-0 bg-slate-100 font-bold text-slate-700 border-b border-slate-200 z-10 shadow-2xs">
                 <tr>
                   <th className="p-2 text-center w-8">#</th>
                   <th className="p-2 w-20">รหัสร้านค้า</th>
                   <th className="p-2 w-36">ชื่อร้านค้า</th>
-                  <th className="p-2 min-w-[200px]">ที่อยู่</th>
-                  <th className="p-2 w-20 text-center">จำนวน (ลัง)</th>
+                  <th className="p-2 min-w-[180px]">ที่อยู่</th>
+                  {loadingTypesList.map((lt) => (
+                    <th
+                      key={lt.loading_type_id}
+                      className="p-2 w-24 text-center bg-blue-50/90 text-blue-900 border-x border-blue-200/80 font-bold shrink-0"
+                      title={`ระบุจำนวน ${lt.type_name}`}
+                    >
+                      {lt.type_name} ({lt.unit_name || "ชิ้น"})
+                    </th>
+                  ))}
+                  <th className="p-2 w-28 text-center bg-amber-100/80 text-amber-900 border-x border-amber-200 font-bold shrink-0">
+                    จำนวนรวม (ออโต้)
+                  </th>
                   <th className="p-2 w-30">ตำแหน่งวางสินค้า</th>
                   <th className="p-2 w-16 text-center">แถว</th>
                   <th className="p-2 w-32">รหัสออเดอร์</th>
@@ -5155,16 +5957,24 @@ export const RoutePage: React.FC = () => {
                         value={item.store_id}
                         onChange={(val) => {
                           const selectedVal = String(val);
-                          const found = storesMap.get(selectedVal.trim().toLowerCase());
+                          const found = storesMap.get(
+                            selectedVal.trim().toLowerCase(),
+                          );
                           setMultiAddStops((prev) =>
                             prev.map((row) =>
                               row.id === item.id
                                 ? {
                                     ...row,
                                     store_id: selectedVal,
-                                    store_name: found ? found.store_name : row.store_name,
-                                    address: found ? found.store_address || "" : row.address,
-                                    lat_long: found ? found.store_location || "" : row.lat_long,
+                                    store_name: found
+                                      ? found.store_name
+                                      : row.store_name,
+                                    address: found
+                                      ? found.store_address || ""
+                                      : row.address,
+                                    lat_long: found
+                                      ? found.store_location || ""
+                                      : row.lat_long,
                                     is_mapped_master: !!found,
                                   }
                                 : row,
@@ -5206,11 +6016,61 @@ export const RoutePage: React.FC = () => {
                         title="ดึงข้อมูลอัตโนมัติจากมาสเตอร์ร้านค้า (แก้ไขไม่ได้)"
                       />
                     </td>
-                    <td className="p-1">
+                    {/* Dynamic Cargo Loading Types Columns */}
+                    {loadingTypesList.map((lt) => (
+                      <td
+                        key={lt.loading_type_id}
+                        className="p-1 bg-blue-50/20 border-x border-blue-100/70"
+                      >
+                        <input
+                          type="number"
+                          min={0}
+                          value={item.loads?.[lt.loading_type_id] || 0}
+                          onChange={(e) => {
+                            const val = parseInt(e.target.value, 10) || 0;
+                            setMultiAddStops((prev) =>
+                              prev.map((row) => {
+                                if (row.id !== item.id) return row;
+                                const nextLoads: Record<number, number> = {
+                                  ...(row.loads || {}),
+                                  [lt.loading_type_id]: val,
+                                };
+                                const sumLoads = Object.values(
+                                  nextLoads,
+                                ).reduce<number>(
+                                  (a, b) => a + (Number(b) || 0),
+                                  0,
+                                );
+                                return {
+                                  ...row,
+                                  loads: nextLoads,
+                                  sum_quantity:
+                                    sumLoads > 0 ? sumLoads : row.sum_quantity,
+                                };
+                              }),
+                            );
+                          }}
+                          className="w-full border border-blue-200 rounded px-1 py-1 text-xs text-center font-bold text-blue-900 bg-white font-mono focus:border-blue-500 focus:outline-none"
+                        />
+                      </td>
+                    ))}
+                    {/* Sum Quantity Column Positioned After Loading Types */}
+                    <td className="p-1 font-mono font-bold text-center bg-amber-50/40 border-x border-amber-200/60">
                       <input
                         type="number"
                         min={1}
-                        value={item.sum_quantity}
+                        value={
+                          item.loads &&
+                          Object.values(item.loads).reduce<number>(
+                            (a, b) => a + (Number(b) || 0),
+                            0,
+                          ) > 0
+                            ? Object.values(item.loads).reduce<number>(
+                                (a, b) => a + (Number(b) || 0),
+                                0,
+                              )
+                            : item.sum_quantity
+                        }
                         onChange={(e) => {
                           const val = parseInt(e.target.value, 10) || 1;
                           setMultiAddStops((prev) =>
@@ -5221,16 +6081,19 @@ export const RoutePage: React.FC = () => {
                             ),
                           );
                         }}
-                        className="w-full border border-slate-200 rounded px-1.5 py-1 text-xs text-center font-bold text-amber-700"
+                        className="w-full border border-amber-300 rounded px-1.5 py-1 text-xs text-center font-bold text-amber-900 bg-amber-50/90 font-mono"
+                        title="คำนวณผลรวมอัตโนมัติจากจำนวนประเภทการโหลดทั้งหมด"
                       />
                     </td>
-                    <td className="p-1">
+                    <td className="p-1 min-w-[140px]">
                       <select
                         value={item.position_product_id || ""}
                         onChange={(e) => {
                           const positionId = e.target.value;
                           const foundPosition = positionProductsList.find(
-                            (position) => String(position.position_product_id) === positionId,
+                            (position) =>
+                              String(position.position_product_id) ===
+                              positionId,
                           );
                           setMultiAddStops((prev) =>
                             prev.map((row) =>
@@ -5238,7 +6101,9 @@ export const RoutePage: React.FC = () => {
                                 ? {
                                     ...row,
                                     position_product_id: positionId,
-                                    position_product_name: foundPosition?.position_product_name || "",
+                                    position_product_name:
+                                      foundPosition?.position_product_name ||
+                                      "",
                                   }
                                 : row,
                             ),
@@ -5248,7 +6113,10 @@ export const RoutePage: React.FC = () => {
                       >
                         <option value="">-- เลือกตำแหน่งวาง --</option>
                         {positionProductsList.map((position) => (
-                          <option key={position.position_product_id} value={position.position_product_id}>
+                          <option
+                            key={position.position_product_id}
+                            value={position.position_product_id}
+                          >
                             {position.position_product_name}
                           </option>
                         ))}
@@ -5260,11 +6128,15 @@ export const RoutePage: React.FC = () => {
                         min={1}
                         value={item.position_production_order || 1}
                         onChange={(e) => {
-                          const positionOrder = parseInt(e.target.value, 10) || 1;
+                          const positionOrder =
+                            parseInt(e.target.value, 10) || 1;
                           setMultiAddStops((prev) =>
                             prev.map((row) =>
                               row.id === item.id
-                                ? { ...row, position_production_order: positionOrder }
+                                ? {
+                                    ...row,
+                                    position_production_order: positionOrder,
+                                  }
                                 : row,
                             ),
                           );
@@ -5288,7 +6160,9 @@ export const RoutePage: React.FC = () => {
                         }}
                         placeholder="กรอกรหัสออเดอร์ *"
                         className={`w-full border rounded px-1.5 py-1 text-xs font-mono font-bold transition-all ${
-                          item.store_id && (!item.data_store_no || !String(item.data_store_no).trim())
+                          item.store_id &&
+                          (!item.data_store_no ||
+                            !String(item.data_store_no).trim())
                             ? "border-2 border-rose-500 bg-rose-50/70 text-rose-900 focus:border-rose-600 shadow-2xs"
                             : "border-slate-200 text-slate-800 focus:border-blue-400"
                         }`}
@@ -5322,7 +6196,10 @@ export const RoutePage: React.FC = () => {
 
                 {/* Row for adding a new empty item */}
                 <tr className="bg-slate-50/80 hover:bg-violet-50/50 transition-colors border-t-2 border-dashed border-slate-200">
-                  <td colSpan={10} className="p-2 text-center">
+                  <td
+                    colSpan={10 + loadingTypesList.length}
+                    className="p-2 text-center"
+                  >
                     <button
                       type="button"
                       onClick={handleAddEmptyMultiAddRow}
@@ -5380,25 +6257,29 @@ export const RoutePage: React.FC = () => {
                     id: "fastest_time",
                     label: "เวลาเร็วที่สุด",
                     icon: "⚡",
-                    desc: "จัดส่งถึงไวที่สุด",
+                    desc: "จัดส่งถึงไวที่สุด (OSRM Road)",
+                    detail: "คำนวณและคัดเลือกร้านค้าถัดไปโดยอ้างอิงจากระยะเวลาเดินทางบนถนนจริง (OSRM Travel Minutes) ช่วยให้จัดส่งถึงเป้าหมายได้รวดเร็วที่สุด",
                   },
                   {
                     id: "distance_first",
                     label: "ระยะทางสั้นสุด",
                     icon: "📐",
-                    desc: "เน้นระยะทางรวมสั้นสุด",
+                    desc: "ประหยัดค่าน้ำมัน",
+                    detail: "คัดเลือกจุดส่งถัดไปโดยคำนวณตามระยะทางกิโลเมตรสั้นที่สุดบนพื้นผิวโลก (Haversine KM) ช่วยประหยัดค่าน้ำมันและคุมระยะไมล์สะสมของรถ",
                   },
                   {
                     id: "max_load_first",
                     label: "บรรทุกแน่นสุด",
                     icon: "📦",
-                    desc: "เน้นความจุรถใหญ่ก่อน",
+                    desc: "อัดรถใหญ่ก่อน",
+                    detail: "เรียงลำดับรถโดยนำรถที่มีความจุมากที่สุดขึ้นมาก่อน แล้วใส่ออเดอร์ลงรถคันใหญ่ให้เต็มคันก่อน แล้วค่อยจัดสินค้าส่วนที่เหลือลงรถคันเล็กถัดไป",
                   },
                   {
                     id: "order_fifo",
                     label: "ตามลำดับออเดอร์",
                     icon: "📋",
-                    desc: "เข้าก่อน-ออกก่อน",
+                    desc: "เรียงคีย์ก่อน-หลัง",
+                    detail: "ไม่จัดกลุ่มพื้นที่หรือสลับจุดส่งข้ามไปข้ามมา แต่จะจัดสินค้าลงรถเรียงตามลำดับเวลาที่ออเดอร์เปิดเข้ามาในระบบก่อน-หลัง (FIFO)",
                   },
                 ].map((opt) => (
                   <button
@@ -5410,9 +6291,9 @@ export const RoutePage: React.FC = () => {
                         priorityStrategy: opt.id as any,
                       }));
                     }}
-                    className={`p-2 rounded-lg border text-left flex flex-col justify-between transition-all cursor-pointer ${
+                    className={`p-2.5 rounded-lg border text-left flex flex-col justify-between transition-all cursor-pointer ${
                       deliverySettings.priorityStrategy === opt.id
-                        ? "border-blue-600 bg-blue-50/90 text-blue-950 font-bold shadow-2xs"
+                        ? "border-blue-600 bg-blue-50/90 text-blue-950 font-bold shadow-2xs ring-1 ring-blue-500"
                         : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
                     }`}
                   >
@@ -5426,13 +6307,41 @@ export const RoutePage: React.FC = () => {
                   </button>
                 ))}
               </div>
+
+              {/* Dynamic Strategy Description Banner */}
+              <div className="mt-2.5 bg-blue-50/80 border border-blue-200/80 rounded-lg p-2.5 text-[11px] text-blue-950 flex items-start gap-2">
+                <span className="text-sm shrink-0">💡</span>
+                <div>
+                  <strong className="font-bold">
+                    คำอธิบายหมวดหมู่การคำนวณ (
+                    {deliverySettings.priorityStrategy === "fastest_time"
+                      ? "⚡ เวลาเร็วที่สุด"
+                      : deliverySettings.priorityStrategy === "distance_first"
+                        ? "📐 ระยะทางสั้นที่สุด"
+                        : deliverySettings.priorityStrategy === "max_load_first"
+                          ? "📦 บรรจุสินค้าเต็มคันก่อน"
+                          : "📋 ตามลำดับออเดอร์ FIFO"}
+                    ):
+                  </strong>{" "}
+                  <span className="text-slate-700">
+                    {deliverySettings.priorityStrategy === "fastest_time" &&
+                      "คำนวณและคัดเลือกร้านค้าถัดไปโดยอ้างอิงจากระยะเวลาเดินทางบนถนนจริง (OSRM Travel Minutes) ช่วยให้จัดส่งถึงเป้าหมายได้รวดเร็วที่สุด"}
+                    {deliverySettings.priorityStrategy === "distance_first" &&
+                      "คัดเลือกจุดส่งถัดไปโดยคำนวณตามระยะทางกิโลเมตรสั้นที่สุดบนพื้นผิวโลก (Haversine KM) ช่วยประหยัดค่าน้ำมันและคุมระยะไมล์สะสมของรถ"}
+                    {deliverySettings.priorityStrategy === "max_load_first" &&
+                      "เรียงลำดับรถโดยนำรถที่มีความจุมากที่สุดขึ้นมาก่อน แล้วใส่ออเดอร์ลงรถคันใหญ่ให้เต็มคันก่อน แล้วค่อยจัดสินค้าส่วนที่เหลือลงรถคันเล็กถัดไป"}
+                    {deliverySettings.priorityStrategy === "order_fifo" &&
+                      "ไม่จัดกลุ่มพื้นที่หรือสลับจุดส่งข้ามไปข้ามมา แต่จะจัดสินค้าลงรถเรียงตามลำดับเวลาที่ออเดอร์เปิดเข้ามาในระบบก่อน-หลัง (FIFO)"}
+                  </span>
+                </div>
+              </div>
             </div>
 
             {/* 2. Service Time & Unlimited Stops Info */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1 border-t border-slate-200/60">
               <div>
                 <label className="block text-slate-700 font-semibold mb-1">
-                   ระยะเวลาลงสินค้าต่อสถานที่ (นาที/จุด)
+                  ระยะเวลาลงสินค้าต่อสถานที่ (นาที/จุด)
                 </label>
                 <div className="relative">
                   <input
@@ -5487,8 +6396,8 @@ export const RoutePage: React.FC = () => {
                   totalSelectedCapacity === 0
                     ? "bg-slate-300 w-0"
                     : totalSelectedCapacity >= totalUnassignedBoxes
-                    ? "bg-emerald-500"
-                    : "bg-amber-500"
+                      ? "bg-emerald-500"
+                      : "bg-amber-500"
                 }`}
                 style={{
                   width: `${
@@ -5524,11 +6433,20 @@ export const RoutePage: React.FC = () => {
               <div className="pt-1">
                 {totalSelectedCapacity >= totalUnassignedBoxes ? (
                   <div className="text-[11px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 p-2 rounded-lg flex items-center gap-1.5">
-                    <span><Check className="w-4 h-4" /></span> ความจุของรถที่เลือกเพียงพอสำหรับสินค้าทั้งหมด ({totalUnassignedBoxes} / {totalSelectedCapacity} ลัง)
+                    <span>
+                      <Check className="w-4 h-4" />
+                    </span>{" "}
+                    ความจุของรถที่เลือกเพียงพอสำหรับสินค้าทั้งหมด (
+                    {totalUnassignedBoxes} / {totalSelectedCapacity} ลัง)
                   </div>
                 ) : (
                   <div className="text-[11px] font-bold text-amber-800 bg-amber-50 border border-amber-200 p-2 rounded-lg flex items-center gap-1.5">
-                    <span><AlertTriangle className="w-4 h-4" /></span> ความจุรถไม่เพียงพอ! ต้องการอีก {totalUnassignedBoxes - totalSelectedCapacity} ลัง (กรุณาเลือกรถเพิ่ม)
+                    <span>
+                      <AlertTriangle className="w-4 h-4" />
+                    </span>{" "}
+                    ความจุรถไม่เพียงพอ! ต้องการอีก{" "}
+                    {totalUnassignedBoxes - totalSelectedCapacity} ลัง
+                    (กรุณาเลือกรถเพิ่ม)
                   </div>
                 )}
               </div>
@@ -5664,7 +6582,9 @@ export const RoutePage: React.FC = () => {
               JSON.stringify(deliverySettings),
             );
             await api.post("/optimoroute/delivery-settings", deliverySettings);
-            showSuccess("บันทึกการตั้งค่าจัดส่งลงฐานข้อมูลเรียบร้อยแล้ว (ทุกเครื่องจะเห็นข้อมูลตรงกัน)");
+            showSuccess(
+              "บันทึกการตั้งค่าจัดส่งลงฐานข้อมูลเรียบร้อยแล้ว (ทุกเครื่องจะเห็นข้อมูลตรงกัน)",
+            );
           } catch (err: any) {
             showError("เกิดข้อผิดพลาดในการบันทึกการตั้งค่าลงฐานข้อมูล");
           }
@@ -5680,7 +6600,9 @@ export const RoutePage: React.FC = () => {
               <strong className="text-blue-950 font-bold block mb-0.5">
                 การตั้งค่าระยะเวลา & ลำดับความสำคัญ
               </strong>
-              กำหนดระยะเวลาที่ใช้ส่งสินค้าต่อรอบ/จุด และหลักการคำนวณ เพื่อให้ระบบประเมินเวลาเดินทาง (ETA) และจัดสายรถได้อย่างแม่นยำยิ่งขึ้น
+              กำหนดระยะเวลาที่ใช้ส่งสินค้าต่อรอบ/จุด และหลักการคำนวณ
+              เพื่อให้ระบบประเมินเวลาเดินทาง (ETA)
+              และจัดสายรถได้อย่างแม่นยำยิ่งขึ้น
             </div>
           </div>
 
@@ -5743,24 +6665,24 @@ export const RoutePage: React.FC = () => {
               {[
                 {
                   id: "fastest_time",
-                  title: "⚡ ประหยัดเวลา & ค่าน้ำมัน (Fastest & Fuel Efficient)",
-                  desc: "เน้นคำนวณเส้นทางที่ใช้เวลาน้อยที่สุด และหลีกเลี่ยงการจราจรติดขัด",
+                  title: "⚡ เวลาเร็วที่สุด (Fastest Time)",
+                  desc: "อ้างอิงระยะเวลาเดินทางบนถนนจริง (OSRM Travel Minutes) ช่วยให้จัดส่งถึงเป้าหมายได้รวดเร็วที่สุด และลดเวลาเดินทางรวม",
                   tag: "แนะนำ",
                 },
                 {
                   id: "distance_first",
                   title: "📐 ระยะทางสั้นที่สุด (Shortest Distance)",
-                  desc: "เน้นวิ่งระยะทางรวมสั้นที่สุด โดยรวมกลุ่มร้านค้าที่ตั้งอยู่ใกล้กันที่สุดก่อน",
+                  desc: "คำนวณตามระยะทางกิโลเมตรสั้นที่สุดบนพื้นผิวโลก (Haversine KM) ช่วยประหยัดค่าน้ำมันและควบคุมระยะไมล์สะสมของรถ",
                 },
                 {
                   id: "max_load_first",
-                  title: "📦 บรรจุสินค้าเต็มคันก่อน (Max Capacity Utilization)",
-                  desc: "เน้นเลือกรถความจุสูงและจัดสินค้าใส่ให้เต็มคันก่อน แล้วค่อยจัดคันถัดไป",
+                  title: "📦 บรรจุสินค้าเต็มคันก่อน (Max Capacity First)",
+                  desc: "นำรถที่มีความจุมากที่สุดขึ้นมาก่อน แล้วใส่ออเดอร์ลงรถคันใหญ่ให้เต็มก่อน แล้วค่อยนำสินค้าส่วนที่เหลือใส่รถคันเล็กถัดไป",
                 },
                 {
                   id: "order_fifo",
                   title: "📋 ตามลำดับคิวออเดอร์ (First-In First-Out: FIFO)",
-                  desc: "จัดสายส่งเรียงตามลำดับเวลาที่ออเดอร์เปิดเข้ามาในระบบก่อน-หลัง",
+                  desc: "ไม่สลับจุดส่งข้ามไปข้ามมา แต่จะจัดสินค้าลงรถเรียงตามลำดับเวลาที่ออเดอร์เปิดเข้ามาในระบบก่อน-หลัง (FIFO)",
                 },
               ].map((strat) => (
                 <label
@@ -5851,7 +6773,9 @@ export const RoutePage: React.FC = () => {
         isOpen={isConfirmClearUnassignedModalOpen}
         title="ยืนยันการล้างข้อมูลยังไม่จัดสาย"
         message={`คุณแน่ใจหรือไม่ว่าต้องการล้างรายการสินค้าที่ยังไม่ได้จัดสายของวันที่ ${selectedDate} ทั้งหมด (${unassignedStops.length} รายการ)? ข้อมูลนี้จะถูกลบออกจากระบบ`}
-        confirmText={clearingUnassigned ? "กำลังล้างข้อมูล..." : "ล้างข้อมูลทั้งหมด"}
+        confirmText={
+          clearingUnassigned ? "กำลังล้างข้อมูล..." : "ล้างข้อมูลทั้งหมด"
+        }
         cancelText="ยกเลิก"
         onConfirm={handleClearUnassignedStops}
         onCancel={() => setIsConfirmClearUnassignedModalOpen(false)}

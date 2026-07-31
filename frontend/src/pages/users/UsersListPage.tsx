@@ -79,6 +79,9 @@ export const UsersListPage: React.FC = () => {
 
   const getAvatarUrl = (img?: string) => {
     if (!img || typeof img !== "string" || img.trim() === "") return null;
+    if (img.startsWith("blob:") || img.startsWith("data:") || img.startsWith("http://") || img.startsWith("https://")) {
+      return img;
+    }
     return getImageUrl(img);
   };
 
@@ -525,11 +528,12 @@ export const UsersListPage: React.FC = () => {
             <div className="w-14 h-14 rounded-full overflow-hidden bg-white border border-slate-300 flex items-center justify-center shrink-0 shadow-2xs relative">
               {formImagePreview ? (
                 <img
+                  key={formImagePreview}
                   src={getAvatarUrl(formImagePreview) || formImagePreview}
                   alt="Profile Preview"
                   className="w-full h-full object-cover"
                   onError={(e) => {
-                    (e.target as HTMLElement).style.display = "none";
+                    (e.currentTarget as HTMLImageElement).src = "https://cdn-icons-png.flaticon.com/512/9055/9055398.png";
                   }}
                 />
               ) : (
@@ -544,7 +548,8 @@ export const UsersListPage: React.FC = () => {
                   const file = e.target.files?.[0];
                   if (file) {
                     setFormImageFile(file);
-                    setFormImagePreview(URL.createObjectURL(file));
+                    const blobUrl = URL.createObjectURL(file);
+                    setFormImagePreview(blobUrl);
                   }
                 }}
                 className="block w-full text-slate-500 text-xs file:mr-3 file:py-1 file:px-2.5 file:rounded-lg file:border file:border-slate-200 file:text-xs file:font-semibold file:bg-white file:text-slate-700 hover:file:bg-slate-100 cursor-pointer"

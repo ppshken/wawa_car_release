@@ -205,47 +205,47 @@ export const PositionProductPage: React.FC = () => {
       {/* Table Data */}
       <div className="tms-card overflow-hidden w-full">
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs border-collapse">
-            <thead className="bg-slate-50 border-b border-slate-200 text-slate-600 font-semibold uppercase tracking-wider">
+          <table className="w-full text-left text-[11px] border-collapse">
+            <thead className="bg-slate-100/90 border-b border-slate-200 text-slate-700 font-bold uppercase tracking-wider text-[10px]">
               <tr>
-                <th className="py-2.5 px-4 w-16 text-center">ID</th>
-                <th className="py-2.5 px-4">ชื่อตำแหน่งวางสินค้า</th>
-                <th className="py-2.5 px-4">วันที่สร้าง</th>
-                <th className="py-2.5 px-4 w-28 text-center">จัดการ</th>
+                <th className="py-1.5 px-3 w-16 text-center">ID</th>
+                <th className="py-1.5 px-3">ชื่อตำแหน่งวางสินค้า</th>
+                <th className="py-1.5 px-3">วันที่สร้าง</th>
+                <th className="py-1.5 px-3 w-28 text-center">จัดการ</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100">
+            <tbody className="divide-y divide-slate-100 whitespace-nowrap">
               {loading ? (
                 <tr>
-                  <td colSpan={4} className="py-8 text-center text-slate-400">
+                  <td colSpan={4} className="py-6 text-center text-slate-400">
                     กำลังโหลดข้อมูล...
                   </td>
                 </tr>
               ) : paginatedPositions.length === 0 ? (
                 <tr>
-                  <td colSpan={4} className="py-8 text-center text-slate-400">
+                  <td colSpan={4} className="py-6 text-center text-slate-400">
                     ไม่พบข้อมูลตำแหน่งวางสินค้า
                   </td>
                 </tr>
               ) : (
                 paginatedPositions.map((item) => (
                   <tr key={item.position_product_id} className="hover:bg-slate-50/80 transition-colors">
-                    <td className="py-2 px-4 text-center font-mono font-medium text-slate-500">
+                    <td className="py-1 px-3 text-center font-mono font-bold text-slate-500 text-[11px]">
                       {item.position_product_id}
                     </td>
-                    <td className="py-2 px-4 font-bold text-slate-900">
-                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-slate-100 border border-slate-200 text-slate-800 font-mono text-xs">
+                    <td className="py-1 px-3 font-bold text-slate-900 text-[11px]">
+                      <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded bg-slate-100 border border-slate-200 text-slate-800 font-mono text-[11px]">
                         {item.position_product_name}
                       </span>
                     </td>
-                    <td className="py-2 px-4 text-slate-500">
+                    <td className="py-1 px-3 text-slate-500 text-[11px]">
                       {item.created_at ? new Date(item.created_at).toLocaleString("th-TH") : "-"}
                     </td>
-                    <td className="py-2 px-4 text-center">
+                    <td className="py-1 px-3 text-center">
                       <div className="flex items-center justify-center gap-1">
                         <button
                           onClick={() => handleOpenEditDrawer(item)}
-                          className="p-1 text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                          className="p-0.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
                           title="แก้ไข"
                         >
                           <Edit2 className="w-3.5 h-3.5" />

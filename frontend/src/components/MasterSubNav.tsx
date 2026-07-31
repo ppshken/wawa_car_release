@@ -11,6 +11,7 @@ import {
   ShieldCheck,
   Layers,
   FileText,
+  PackageCheck,
 } from "lucide-react";
 
 export const MasterSubNav: React.FC = () => {
@@ -26,9 +27,12 @@ export const MasterSubNav: React.FC = () => {
   }
 
   const isAllowed = (key: string) => {
-    if (Object.keys(permissions).length > 0) return !!permissions[key];
     if (user?.level_user_id === 1) return true;
-    return false;
+    if (Object.keys(permissions).length > 0) {
+      if (permissions[key] !== undefined) return !!permissions[key];
+      return true;
+    }
+    return true;
   };
 
   const tabs = [
@@ -41,6 +45,7 @@ export const MasterSubNav: React.FC = () => {
     { to: "/master/accounting-status", label: "สถานะทางบัญชี", icon: ShieldCheck, key: "accounting_status" },
     { to: "/master/position-product", label: "ตำแหน่งวางสินค้า", icon: Layers, key: "position_product" },
     { to: "/master/release-types", label: "ประเภทการปล่อยรถ", icon: FileText, key: "release_types" },
+    { to: "/master/loading-types", label: "ประเภทการโหลด", icon: PackageCheck, key: "loading_types" },
   ].filter((t) => isAllowed(t.key));
 
   return (

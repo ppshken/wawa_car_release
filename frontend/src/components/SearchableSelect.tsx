@@ -96,7 +96,7 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
   };
 
   return (
-    <div className={`relative ${isOpen ? "z-30" : ""} ${label ? "space-y-1" : ""} ${className}`} ref={containerRef}>
+    <div className={`relative ${isOpen ? "z-[9999]" : ""} ${label ? "space-y-1" : ""} ${className}`} ref={containerRef}>
       {label && (
         <label className="block text-slate-700 font-semibold mb-1 flex items-center justify-between">
           <span>
@@ -172,7 +172,7 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
       {/* Custom Floating Dropdown Menu */}
       {isOpen && !disabled && (
         <div
-          className={`absolute left-0 top-full mt-1 bg-white border border-slate-200 rounded-xl shadow-2xl z-50 overflow-hidden flex flex-col max-h-72 animate-in fade-in duration-100 ${
+          className={`absolute left-0 top-full mt-1 bg-white border border-slate-200 rounded-xl shadow-2xl z-[9999] overflow-hidden flex flex-col max-h-72 animate-in fade-in duration-100 ${
             dropdownClassName ? dropdownClassName : "min-w-full min-w-[300px] max-w-md"
           }`}
         >

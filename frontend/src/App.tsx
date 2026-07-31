@@ -18,6 +18,7 @@ import { ParkingPage } from './pages/master/ParkingPage';
 import { AccountingStatusPage } from './pages/master/AccountingStatusPage';
 import { PositionProductPage } from './pages/master/PositionProductPage';
 import { ReleaseTypesPage } from './pages/master/ReleaseTypesPage';
+import { LoadingTypesPage } from './pages/master/LoadingTypesPage';
 
 import { UsersListPage } from './pages/users/UsersListPage';
 import { UserLevelsPage } from './pages/users/UserLevelsPage';
@@ -27,6 +28,7 @@ import { RoutePage } from './pages/RoutePage';
 import { ImportOptimoPage } from './pages/ImportOptimoPage';
 import { Reports } from './pages/Reports';
 import { ProfilePage } from './pages/ProfilePage';
+import { ApiKeyManagement } from './pages/ApiKeyManagement';
 
 const ProtectedLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { isAuthenticated, loading } = useAuth();
@@ -62,6 +64,10 @@ const ProtectedLayout: React.FC<{ children: React.ReactNode }> = ({ children }) 
 const PermissionGuard: React.FC<{ permKey: string; children: React.ReactNode }> = ({ permKey, children }) => {
   const { user } = useAuth();
 
+  if (user?.level_user_id === 1) {
+    return <>{children}</>;
+  }
+
   let permissions: Record<string, boolean> = {};
   if (user?.menu_permissions) {
     if (typeof user.menu_permissions === 'string') {
@@ -71,14 +77,9 @@ const PermissionGuard: React.FC<{ permKey: string; children: React.ReactNode }> 
     }
   }
 
-  // If permissions loaded, check the key
+  // If permissions loaded, check if explicitly set to false
   if (Object.keys(permissions).length > 0) {
-    if (!permissions[permKey]) {
-      return <Navigate to="/" replace />;
-    }
-  } else {
-    // No permissions loaded yet — only admin level 1 can pass
-    if (user?.level_user_id !== 1) {
+    if (permissions[permKey] === false) {
       return <Navigate to="/" replace />;
     }
   }
@@ -123,6 +124,7 @@ export const App: React.FC = () => {
           <Route path="/master/accounting-status" element={<ProtectedLayout><PermissionGuard permKey="accounting_status"><AccountingStatusPage /></PermissionGuard></ProtectedLayout>} />
           <Route path="/master/position-product" element={<ProtectedLayout><PermissionGuard permKey="position_product"><PositionProductPage /></PermissionGuard></ProtectedLayout>} />
           <Route path="/master/release-types" element={<ProtectedLayout><PermissionGuard permKey="release_types"><ReleaseTypesPage /></PermissionGuard></ProtectedLayout>} />
+          <Route path="/master/loading-types" element={<ProtectedLayout><PermissionGuard permKey="loading_types"><LoadingTypesPage /></PermissionGuard></ProtectedLayout>} />
 
           {/* User Management & Permissions Standalone Pages */}
           <Route path="/users" element={<ProtectedLayout><PermissionGuard permKey="users"><UsersListPage /></PermissionGuard></ProtectedLayout>} />
@@ -140,6 +142,15 @@ export const App: React.FC = () => {
             element={
               <ProtectedLayout>
                 <PermissionGuard permKey="reports"><Reports /></PermissionGuard>
+              </ProtectedLayout>
+            }
+          />
+
+          <Route
+            path="/api-keys"
+            element={
+              <ProtectedLayout>
+                <ApiKeyManagement />
               </ProtectedLayout>
             }
           />

@@ -36,7 +36,7 @@ api.interceptors.response.use(
 
 export const getImageUrl = (path?: string) => {
   if (!path) return "";
-  if (path.startsWith("data:image")) return path;
+  if (path.startsWith("data:") || path.startsWith("blob:")) return path;
   if (path.startsWith("http://") || path.startsWith("https://")) {
     return path.replace("http://localhost:5000", "http://localhost:5001");
   }

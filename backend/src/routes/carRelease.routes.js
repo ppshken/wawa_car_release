@@ -55,32 +55,65 @@ router.post('/car-release', authenticateToken, async (req, res) => {
     const imgAround5Url = saveBase64Image(image_around_5, imgPath);
     const imgPdaUrl = saveBase64Image(image_pda, imgPath);
 
-    const result = await query(
-      `INSERT INTO car_release 
-       (car_release_no, car_id, car_release_type_id, user_id, group_store_id, mileage, 
-        image_mileage, image_front, image_around_1, image_around_2, image_around_3, image_around_4, image_around_5, 
-        image_pda, pda_device, description, accounting_status) 
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
-        releaseNo,
-        car_id,
-        car_release_type_id || null,
-        user_id,
-        group_store_id || null,
-        mileage || 0,
-        imgMileageUrl,
-        imgFrontUrl,
-        imgAround1Url,
-        imgAround2Url,
-        imgAround3Url,
-        imgAround4Url,
-        imgAround5Url,
-        imgPdaUrl,
-        pda_device || '',
-        description || '',
-        accounting_status
-      ]
-    );
+    const createdByVal = req.user ? (req.user.user_id || req.user.id || req.user.name || req.user.username || 1) : 1;
+
+    let result;
+    try {
+      result = await query(
+        `INSERT INTO car_release 
+         (car_release_no, car_id, car_release_type_id, user_id, group_store_id, mileage, 
+          image_mileage, image_front, image_around_1, image_around_2, image_around_3, image_around_4, image_around_5, 
+          image_pda, pda_device, description, accounting_status, created_by) 
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          releaseNo,
+          car_id,
+          car_release_type_id || null,
+          user_id,
+          group_store_id || null,
+          mileage || 0,
+          imgMileageUrl,
+          imgFrontUrl,
+          imgAround1Url,
+          imgAround2Url,
+          imgAround3Url,
+          imgAround4Url,
+          imgAround5Url,
+          imgPdaUrl,
+          pda_device ? parseInt(pda_device, 10) : null,
+          description || '',
+          accounting_status,
+          createdByVal
+        ]
+      );
+    } catch (eReleaseIns) {
+      result = await query(
+        `INSERT INTO car_release 
+         (car_release_no, car_id, car_release_type_id, user_id, group_store_id, mileage, 
+          image_mileage, image_front, image_around_1, image_around_2, image_around_3, image_around_4, image_around_5, 
+          image_pda, pda_device, description, accounting_status) 
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          releaseNo,
+          car_id,
+          car_release_type_id || null,
+          user_id,
+          group_store_id || null,
+          mileage || 0,
+          imgMileageUrl,
+          imgFrontUrl,
+          imgAround1Url,
+          imgAround2Url,
+          imgAround3Url,
+          imgAround4Url,
+          imgAround5Url,
+          imgPdaUrl,
+          pda_device ? parseInt(pda_device, 10) : null,
+          description || '',
+          accounting_status
+        ]
+      );
+    }
 
     const car_release_id = result.insertId;
 
@@ -118,6 +151,23 @@ router.post('/car-release', authenticateToken, async (req, res) => {
   }
 });
 
+// GET /api/car-release/active-dates (ดึงวันที่ทั้งหมดที่มีการปล่อยรถ)
+router.get('/car-release/active-dates', authenticateToken, async (req, res) => {
+  try {
+    const rows = await query(`
+      SELECT DISTINCT DATE_FORMAT(created_at, '%Y-%m-%d') AS d 
+      FROM car_release 
+      WHERE created_at IS NOT NULL AND created_at != '0000-00-00 00:00:00'
+      ORDER BY d ASC
+    `);
+    const activeDates = rows.map(r => r.d).filter(Boolean);
+    return res.json({ success: true, activeDates });
+  } catch (err) {
+    console.error("Fetch active car release dates error:", err);
+    return res.json({ success: true, activeDates: [] });
+  }
+});
+
 // GET /api/car-release (ดึงรายการใบปล่อยรถทั้งหมด รองรับ Pagination & Filter ตามวันที่ & ค้นหา)
 router.get('/car-release', authenticateToken, async (req, res) => {
   try {
@@ -146,6 +196,7 @@ router.get('/car-release', authenticateToken, async (req, res) => {
       LEFT JOIN car_release_type crt ON cr.car_release_type_id = crt.car_release_type_id
       LEFT JOIN group_store gs ON cr.group_store_id = gs.group_store_id
       LEFT JOIN accounting_status acc ON (cr.accounting_status = acc.status_id OR cr.accounting_status = acc.status_name OR cr.accounting_status = acc.status_code)
+      LEFT JOIN pda_device pd ON cr.pda_device = pd.pda_id
       ${whereClause}
     `;
 
@@ -161,6 +212,7 @@ router.get('/car-release', authenticateToken, async (req, res) => {
              crt.type as car_release_type_name,
              gs.group_store_name, gs.group_color,
              acc.status_name as accounting_status_name, acc.status_id as accounting_status_id,
+             pd.device_name as pda_device_name,
              (SELECT COUNT(*) FROM list_store ls WHERE ls.group_store_id = cr.group_store_id) as total_stores,
              (SELECT COUNT(*) FROM list_store ls WHERE ls.group_store_id = cr.group_store_id AND (ls.status = 'completed' OR ls.status = 'problem')) as completed_stores,
              (SELECT COUNT(*) FROM car_return crt WHERE crt.car_release_id = cr.car_release_id) > 0 as is_returned
@@ -492,12 +544,6 @@ router.delete('/car-release/:id', authenticateToken, async (req, res) => {
     // Delete related records in car_release_follower, car_return
     await query(`DELETE FROM car_release_follower WHERE car_release_id = ?`, [car_release_id]);
     await query(`DELETE FROM car_return WHERE car_release_id = ?`, [car_release_id]);
-
-    // Unlink or clean list_store
-    const hasCarReleaseId = await hasColumn('list_store', 'car_release_id');
-    if (hasCarReleaseId) {
-      await query(`UPDATE list_store SET car_release_id = NULL WHERE car_release_id = ?`, [car_release_id]);
-    }
 
     // Delete main car_release record
     await query(`DELETE FROM car_release WHERE car_release_id = ?`, [car_release_id]);

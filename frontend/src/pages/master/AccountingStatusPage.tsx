@@ -209,40 +209,38 @@ export const AccountingStatusPage: React.FC = () => {
           <table className="w-full text-left text-xs border-collapse">
             <thead>
               <tr className="bg-slate-100/90 border-b border-slate-200 text-slate-700 font-bold uppercase text-[10px] tracking-wider whitespace-nowrap">
-                <th className="py-2.5 px-4 text-center w-16">ID</th>
-                <th className="py-2.5 px-4">รหัสสถานะ</th>
-                <th className="py-2.5 px-4">ชื่อสถานะทางบัญชี</th>
-                <th className="py-2.5 px-4">คำอธิบาย</th>
-                <th className="py-2.5 px-4 text-center">สถานะ</th>
-                <th className="py-2.5 px-4 text-right">จัดการ</th>
+                <th className="py-1.5 px-3 text-center w-16">ID</th>
+                <th className="py-1.5 px-3">รหัสสถานะ</th>
+                <th className="py-1.5 px-3">ชื่อสถานะทางบัญชี</th>
+                <th className="py-1.5 px-3">คำอธิบาย</th>
+                <th className="py-1.5 px-3 text-center">วันที่สร้าง</th>
+                <th className="py-1.5 px-3 text-right">จัดการ</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200/60 text-slate-800 whitespace-nowrap">
               {paginatedAccStatuses.map((acc) => (
                 <tr key={acc.status_id} className="hover:bg-slate-50/80 transition-colors">
-                  <td className="py-2 px-4 text-center text-slate-400 font-mono font-bold">{acc.status_id}</td>
-                  <td className="py-2 px-4">
-                    <code className="bg-slate-100 border border-slate-200 text-slate-700 px-2 py-0.5 rounded text-[10px] font-mono font-bold">{acc.status_code}</code>
+                  <td className="py-1 px-3 text-center text-slate-400 font-mono font-bold text-[11px]">{acc.status_id}</td>
+                  <td className="py-1 px-3">
+                    <code className="bg-slate-100 border border-slate-200 text-slate-700 px-1.5 py-0.2 rounded text-[10px] font-mono font-bold">{acc.status_code}</code>
                   </td>
-                  <td className="py-2 px-4 font-bold text-slate-900">{acc.status_name}</td>
-                  <td className="py-2 px-4 text-slate-600 max-w-[280px] truncate">{acc.description || "-"}</td>
-                  <td className="py-2 px-4 text-center">
-                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                      <CheckCircle2 className="w-3 h-3" /> ใช้งานอยู่
-                    </span>
+                  <td className="py-1 px-3 font-bold text-slate-900 text-[11px]">{acc.status_name}</td>
+                  <td className="py-1 px-3 text-slate-600 max-w-[280px] truncate text-[11px]">{acc.description || "-"}</td>
+                  <td className="py-1 px-3 text-center text-slate-500 font-mono text-[11px]">
+                    {(acc as any).created_at ? new Date((acc as any).created_at).toLocaleDateString("th-TH") : "-"}
                   </td>
-                  <td className="py-2 px-4 text-right space-x-1">
-                    <button onClick={() => handleOpenEditAccStatus(acc)} className="p-1 rounded-md text-slate-600 hover:text-slate-900 hover:bg-slate-100" title="แก้ไข">
+                  <td className="py-1 px-3 text-right space-x-1">
+                    <button onClick={() => handleOpenEditAccStatus(acc)} className="p-0.5 rounded-md text-slate-600 hover:text-slate-900 hover:bg-slate-100" title="แก้ไข">
                       <Edit2 className="w-3.5 h-3.5" />
                     </button>
-                    <button onClick={() => setAccStatusToDelete(acc)} className="p-1 rounded-md text-slate-400 hover:text-rose-600 hover:bg-rose-50" title="ลบ">
+                    <button onClick={() => setAccStatusToDelete(acc)} className="p-0.5 rounded-md text-slate-400 hover:text-rose-600 hover:bg-rose-50" title="ลบ">
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
                   </td>
                 </tr>
               ))}
               {filteredAccStatuses.length === 0 && (
-                <tr><td colSpan={6} className="py-8 text-center text-slate-400">ยังไม่มีข้อมูลสถานะทางบัญชี</td></tr>
+                <tr><td colSpan={5} className="py-6 text-center text-slate-400">ยังไม่มีข้อมูลสถานะทางบัญชี</td></tr>
               )}
             </tbody>
           </table>

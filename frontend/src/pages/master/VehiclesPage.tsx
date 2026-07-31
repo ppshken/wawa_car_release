@@ -330,34 +330,35 @@ export const VehiclesPage: React.FC = () => {
           <table className="w-full text-left text-xs border-collapse">
             <thead>
               <tr className="bg-slate-100/90 border-b border-slate-200 text-slate-700 font-bold uppercase text-[10px] tracking-wider whitespace-nowrap">
-                <th className="py-2.5 px-4 text-center w-16">รูปรถ</th>
-                <th className="py-2.5 px-4 text-center w-36">ID (car_id / Code)</th>
-                <th className="py-2.5 px-4">ทะเบียนรถ</th>
-                <th className="py-2.5 px-4">ยี่ห้อ (Brand)</th>
-                <th className="py-2.5 px-4">รุ่น (Model)</th>
-                <th className="py-2.5 px-4">รุ่นย่อย / ปีรถ</th>
-                <th className="py-2.5 px-4 text-right">ความจุสินค้า (ลัง)</th>
-                <th className="py-2.5 px-4 text-center">สถานะการใช้รถ</th>
-                <th className="py-2.5 px-4 text-right">จัดการ</th>
+                <th className="py-1.5 px-3 text-center w-16">รูปรถ</th>
+                <th className="py-1.5 px-3 text-center w-36">ID (car_id / Code)</th>
+                <th className="py-1.5 px-3">ทะเบียนรถ</th>
+                <th className="py-1.5 px-3">ยี่ห้อ (Brand)</th>
+                <th className="py-1.5 px-3">รุ่น (Model)</th>
+                <th className="py-1.5 px-3">รุ่นย่อย / ปีรถ</th>
+                <th className="py-1.5 px-3 text-right">ความจุสินค้า (ลัง)</th>
+                <th className="py-1.5 px-3 text-center">สถานะการใช้รถ</th>
+                <th className="py-1.5 px-3 text-center">วันที่สร้าง</th>
+                <th className="py-1.5 px-3 text-right">จัดการ</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200/60 text-slate-800 whitespace-nowrap">
               {paginatedVehicles.map((v) => (
                 <tr key={v.car_id} className="hover:bg-slate-50/80 transition-colors">
-                  <td className="py-2 px-3 text-center">
+                  <td className="py-1 px-3 text-center">
                     {v.car_image ? (
-                      <div className="w-12 h-10 rounded border border-slate-200 overflow-hidden bg-slate-50 flex items-center justify-center mx-auto shadow-2xs">
+                      <div className="w-10 h-8 rounded border border-slate-200 overflow-hidden bg-slate-50 flex items-center justify-center mx-auto shadow-2xs">
                         <img src={getImageUrl(v.car_image)} alt={v.license_plate} className="w-full h-full object-cover" />
                       </div>
                     ) : (
-                      <div className="w-12 h-10 rounded border border-dashed border-rose-300 bg-rose-50 text-rose-500 flex flex-col items-center justify-center text-[9px] font-bold mx-auto">
-                        <Camera className="w-3.5 h-3.5" />
+                      <div className="w-10 h-8 rounded border border-dashed border-rose-300 bg-rose-50 text-rose-500 flex flex-col items-center justify-center text-[8px] font-bold mx-auto">
+                        <Camera className="w-3 h-3" />
                         <span>ไม่มีรูป *</span>
                       </div>
                     )}
                   </td>
-                  <td className="py-2 px-4 text-center font-mono">
-                    <div className="text-[10px] font-bold text-blue-700 truncate max-w-[140px]" title={String(v.car_id)}>
+                  <td className="py-1 px-3 text-center font-mono text-[11px]">
+                    <div className="font-bold text-blue-700 truncate max-w-[140px]" title={String(v.car_id)}>
                       {v.car_id}
                     </div>
                     {v.car_code && (
@@ -366,46 +367,49 @@ export const VehiclesPage: React.FC = () => {
                       </div>
                     )}
                   </td>
-                  <td className="py-2 px-4">
-                    <span className="font-bold text-slate-900 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded">{v.license_plate}</span>
+                  <td className="py-1 px-3 text-[11px]">
+                    <span className="font-bold text-slate-900 bg-slate-100 border border-slate-200 px-1.5 py-0.2 rounded">{v.license_plate}</span>
                   </td>
-                  <td className="py-2 px-4 font-semibold text-slate-800">{v.brand || "-"}</td>
-                  <td className="py-2 px-4 text-slate-600">{v.model || "-"}</td>
-                  <td className="py-2 px-4 text-slate-600">
+                  <td className="py-1 px-3 font-semibold text-slate-800 text-[11px]">{v.brand || "-"}</td>
+                  <td className="py-1 px-3 text-slate-600 text-[11px]">{v.model || "-"}</td>
+                  <td className="py-1 px-3 text-slate-600 text-[11px]">
                     {v.sub_model ? `${v.sub_model} ${v.year ? `(${v.year})` : ""}` : (v.year ? `ปี ${v.year}` : "-")}
                   </td>
-                  <td className="py-2 px-4 text-right font-bold text-amber-800 font-mono">
+                  <td className="py-1 px-3 text-right font-bold text-amber-800 font-mono text-[11px]">
                     {v.quantity ?? 100} ลัง
                   </td>
-                  <td className="py-2 px-4 text-center">
+                  <td className="py-1 px-3 text-center">
                     {v.is_assigned_today ? (
                       <span
-                        className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200"
+                        className="inline-flex items-center gap-1 px-2 py-0.2 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200"
                         title={`ถูกจัดสายรถแล้ว ณ วันที่ ${selectedDate}`}
                       >
                         <AlertCircle className="w-3 h-3 text-amber-600" /> ไม่ว่าง (จัดสายแล้ว)
                       </span>
                     ) : (
                       <span
-                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200"
+                        className="inline-flex items-center gap-1 px-2 py-0.2 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200"
                         title={`ว่าง พร้อมใช้งาน ณ วันที่ ${selectedDate}`}
                       >
                         <CheckCircle2 className="w-3 h-3 text-emerald-600" /> ว่าง (พร้อมใช้งาน)
                       </span>
                     )}
                   </td>
-                  <td className="py-2 px-4 text-right space-x-1">
-                    <button onClick={() => handleOpenEditVehicle(v)} className="p-1 rounded-md text-slate-600 hover:text-slate-900 hover:bg-slate-100" title="แก้ไข">
+                  <td className="py-1 px-3 text-center text-slate-500 font-mono text-[11px]">
+                    {(v as any).created_at ? new Date((v as any).created_at).toLocaleDateString("th-TH") : "-"}
+                  </td>
+                  <td className="py-1 px-3 text-right space-x-1">
+                    <button onClick={() => handleOpenEditVehicle(v)} className="p-0.5 rounded-md text-slate-600 hover:text-slate-900 hover:bg-slate-100" title="แก้ไข">
                       <Edit2 className="w-3.5 h-3.5" />
                     </button>
-                    <button onClick={() => setVehicleToDelete(v)} className="p-1 rounded-md text-slate-400 hover:text-rose-600 hover:bg-rose-50" title="ลบ">
+                    <button onClick={() => setVehicleToDelete(v)} className="p-0.5 rounded-md text-slate-400 hover:text-rose-600 hover:bg-rose-50" title="ลบ">
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
                   </td>
                 </tr>
               ))}
               {filteredVehicles.length === 0 && (
-                <tr><td colSpan={9} className="py-8 text-center text-slate-400">ยังไม่มีข้อมูลรถ</td></tr>
+                <tr><td colSpan={10} className="py-6 text-center text-slate-400">ยังไม่มีข้อมูลรถ</td></tr>
               )}
             </tbody>
           </table>

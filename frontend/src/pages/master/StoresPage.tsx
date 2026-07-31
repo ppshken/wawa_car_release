@@ -363,39 +363,40 @@ export const StoresPage: React.FC = () => {
           <table className="w-full text-left text-xs border-collapse">
             <thead>
               <tr className="bg-slate-100/90 border-b border-slate-200 text-slate-700 font-bold uppercase text-[10px] tracking-wider whitespace-nowrap">
-                <th className="py-2.5 px-4 text-center w-28">รหัสร้านค้า</th>
-                <th className="py-2.5 px-4">ชื่อร้านค้า</th>
-                <th className="py-2.5 px-4">เวลาเปิด-ปิดทำการ</th>
-                <th className="py-2.5 px-4">ที่อยู่ร้านค้า</th>
-                <th className="py-2.5 px-4">เบอร์โทรศัพท์ / แฟกซ์</th>
-                <th className="py-2.5 px-4">อีเมล</th>
-                <th className="py-2.5 px-4">พิกัด GPS</th>
-                <th className="py-2.5 px-4 text-right">จัดการ</th>
+                <th className="py-1.5 px-3 text-center w-28">รหัสร้านค้า</th>
+                <th className="py-1.5 px-3">ชื่อร้านค้า</th>
+                <th className="py-1.5 px-3">เวลาเปิด-ปิดทำการ</th>
+                <th className="py-1.5 px-3">ที่อยู่ร้านค้า</th>
+                <th className="py-1.5 px-3">เบอร์โทรศัพท์ / แฟกซ์</th>
+                <th className="py-1.5 px-3">อีเมล</th>
+                <th className="py-1.5 px-3">พิกัด GPS</th>
+                <th className="py-1.5 px-3 text-center">วันที่สร้าง</th>
+                <th className="py-1.5 px-3 text-right">จัดการ</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200/60 text-slate-800 whitespace-nowrap">
               {stores.map((s) => (
                 <tr key={s.store_id} className="hover:bg-slate-50/80 transition-colors">
-                  <td className="py-2 px-4 text-center">
-                    <span className="font-mono font-bold bg-slate-100 border border-slate-200 text-slate-700 px-2 py-0.5 rounded text-[11px]">
+                  <td className="py-1 px-3 text-center">
+                    <span className="font-mono font-bold bg-slate-100 border border-slate-200 text-slate-700 px-1.5 py-0.2 rounded text-[11px]">
                       {s.store_id}
                     </span>
                   </td>
-                  <td className="py-2 px-4 font-bold text-slate-900">{s.store_name}</td>
-                  <td className="py-2 px-4 text-slate-700">
-                    <span className="inline-flex items-center gap-1 bg-blue-50 text-blue-800 border border-blue-200 px-2 py-0.5 rounded text-[10px] font-bold font-mono">
+                  <td className="py-1 px-3 font-bold text-slate-900 text-[11px]">{s.store_name}</td>
+                  <td className="py-1 px-3 text-slate-700">
+                    <span className="inline-flex items-center gap-1 bg-blue-50 text-blue-800 border border-blue-200 px-1.5 py-0.2 rounded text-[10px] font-bold font-mono">
                       <Clock className="w-3 h-3 text-blue-600 shrink-0" />
                       {s.open_time || "08:00"} - {s.close_time || "17:00"}
                     </span>
                   </td>
-                  <td className="py-2 px-4 text-slate-600 max-w-[200px] truncate">{s.store_address || "-"}</td>
-                  <td className="py-2 px-4 text-slate-600">
+                  <td className="py-1 px-3 text-slate-600 max-w-[200px] truncate text-[11px]">{s.store_address || "-"}</td>
+                  <td className="py-1 px-3 text-slate-600 text-[11px]">
                     <div>{s.telephone_number || "-"}</div>
                   </td>
-                  <td className="py-2 px-4 text-slate-600">
+                  <td className="py-1 px-3 text-slate-600 text-[11px]">
                     <div>{s.email || "-"}</div>
                   </td>
-                  <td className="py-2 px-4 text-slate-600">
+                  <td className="py-1 px-3 text-slate-600 text-[11px]">
                     {s.store_location ? (
                       <a
                         href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(s.store_location)}`}
@@ -404,25 +405,28 @@ export const StoresPage: React.FC = () => {
                         className="inline-flex items-center gap-1 text-slate-700 hover:text-amber-600 hover:underline font-medium transition-colors group"
                         title={`เปิดแผนที่ Google Maps (${s.store_location})`}
                       >
-                        <MapPin className="w-3.5 h-3.5 text-amber-500 group-hover:text-amber-600 shrink-0" />
+                        <MapPin className="w-3 h-3 text-amber-500 group-hover:text-amber-600 shrink-0" />
                         <span>{s.store_location}</span>
                       </a>
                     ) : (
                       "-"
                     )}
                   </td>
-                  <td className="py-2 px-4 text-right space-x-1">
-                    <button onClick={() => handleOpenEditStore(s)} className="p-1 rounded-md text-slate-600 hover:text-slate-900 hover:bg-slate-100" title="แก้ไข">
+                  <td className="py-1 px-3 text-center text-slate-500 font-mono text-[11px]">
+                    {(s as any).created_at ? new Date((s as any).created_at).toLocaleDateString("th-TH") : "-"}
+                  </td>
+                  <td className="py-1 px-3 text-right space-x-1">
+                    <button onClick={() => handleOpenEditStore(s)} className="p-0.5 rounded-md text-slate-600 hover:text-slate-900 hover:bg-slate-100" title="แก้ไข">
                       <Edit2 className="w-3.5 h-3.5" />
                     </button>
-                    <button onClick={() => setStoreToDelete(s)} className="p-1 rounded-md text-slate-400 hover:text-rose-600 hover:bg-rose-50" title="ลบ">
+                    <button onClick={() => setStoreToDelete(s)} className="p-0.5 rounded-md text-slate-400 hover:text-rose-600 hover:bg-rose-50" title="ลบ">
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
                   </td>
                 </tr>
               ))}
               {stores.length === 0 && (
-                <tr><td colSpan={8} className="py-8 text-center text-slate-400">ยังไม่มีข้อมูลร้านค้า</td></tr>
+                <tr><td colSpan={9} className="py-6 text-center text-slate-400">ยังไม่มีข้อมูลร้านค้า</td></tr>
               )}
             </tbody>
           </table>

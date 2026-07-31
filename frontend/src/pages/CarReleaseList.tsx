@@ -31,8 +31,20 @@ import {
   Calendar,
   AlertTriangle,
   Clock,
+  Plane,
+  GraduationCap,
+  Building2,
+  Users,
+  Briefcase,
+  PackagePlus,
+  Handshake,
+  UserPlus,
 } from "lucide-react";
-import { ColumnToggleDropdown, ColumnItem } from "../components/ColumnToggleDropdown";
+import {
+  ColumnToggleDropdown,
+  ColumnItem,
+} from "../components/ColumnToggleDropdown";
+import { CustomDatePicker } from "../components/CustomDatePicker";
 
 const CAR_RELEASE_TABLE_COLUMNS: ColumnItem[] = [
   { id: "car_release_no", label: "เลขที่ปล่อยรถ" },
@@ -74,7 +86,8 @@ interface CarReleaseData {
   accounting_status_id: number;
   mileage: number;
   user_image: string;
-  pda_device: string;
+  pda_device: number;
+  pda_device_name: string;
   description: string;
   image_mileage: string;
   image_front: string;
@@ -133,9 +146,9 @@ export const CarReleaseList: React.FC = () => {
   const { showSuccess, showError } = useToast();
   const [releases, setReleases] = useState<any[]>([]);
   const [selectedRelease, setSelectedRelease] = useState<any | null>(null);
-  const [activeDetailTab, setActiveDetailTab] = useState<"info" | "gps" | "chat">(
-    "info",
-  );
+  const [activeDetailTab, setActiveDetailTab] = useState<
+    "info" | "gps" | "chat"
+  >("info");
   const [selectedStoreItem, setSelectedStoreItem] = useState<any | null>(null);
   const [isDrawerOpen, setIsDrawerOpen] = useState<boolean>(false);
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -144,35 +157,54 @@ export const CarReleaseList: React.FC = () => {
 
   // Date Filter & Pagination State
   const [selectedDate, setSelectedDate] = useState<string>("");
+  const [activeReleaseDates, setActiveReleaseDates] = useState<string[]>([]);
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [itemsPerPage, setItemsPerPage] = useState<number>(10);
   const [totalItems, setTotalItems] = useState<number>(0);
 
-  // Column Visibility State
-  const [visibleColumns, setVisibleColumns] = useState<Record<string, boolean>>(() => {
-    const saved = localStorage.getItem("wawa_car_release_visible_cols");
-    if (saved) {
-      try { return JSON.parse(saved); } catch (e) {}
+  const fetchActiveReleaseDates = useCallback(async () => {
+    try {
+      const res = await api.get("/car-release/active-dates");
+      if (res.data.success && Array.isArray(res.data.activeDates)) {
+        setActiveReleaseDates(res.data.activeDates);
+      }
+    } catch (err) {
+      console.error("Fetch active car release dates error:", err);
     }
-    return {
-      car_release_no: true,
-      license_plate: true,
-      progress: true,
-      group_store: true,
-      release_status: true,
-      return_status: true,
-      allowance: true,
-      accounting_status: true,
-      mileage: true,
-      driver_name: true,
-      follower_name: true,
-      actions: true,
-    };
-  });
+  }, []);
+
+  // Column Visibility State
+  const [visibleColumns, setVisibleColumns] = useState<Record<string, boolean>>(
+    () => {
+      const saved = localStorage.getItem("wawa_car_release_visible_cols");
+      if (saved) {
+        try {
+          return JSON.parse(saved);
+        } catch (e) {}
+      }
+      return {
+        car_release_no: true,
+        license_plate: true,
+        progress: true,
+        group_store: true,
+        release_status: true,
+        return_status: true,
+        allowance: true,
+        accounting_status: true,
+        mileage: true,
+        driver_name: true,
+        follower_name: true,
+        actions: true,
+      };
+    },
+  );
 
   const handleColumnChange = (updated: Record<string, boolean>) => {
     setVisibleColumns(updated);
-    localStorage.setItem("wawa_car_release_visible_cols", JSON.stringify(updated));
+    localStorage.setItem(
+      "wawa_car_release_visible_cols",
+      JSON.stringify(updated),
+    );
   };
 
   // Delete Modal
@@ -204,7 +236,7 @@ export const CarReleaseList: React.FC = () => {
   const [followerSearch, setFollowerSearch] = useState<string>("");
   const [formMileage, setFormMileage] = useState<number>(0);
   const [formAllowance, setFormAllowance] = useState<string>("");
-  const [formPda, setFormPda] = useState<string>("");
+  const [formPda, setFormPda] = useState<number>(0);
   const [formAccountingStatus, setFormAccountingStatus] = useState<
     string | number
   >("");
@@ -339,12 +371,16 @@ export const CarReleaseList: React.FC = () => {
   }, []);
 
   // Option lists for SearchableSelect
-  const todayDateStr = useMemo(() => new Date().toLocaleDateString("th-TH"), []);
+  const todayDateStr = useMemo(
+    () => new Date().toLocaleDateString("th-TH"),
+    [],
+  );
 
   // Today's releases (excluding currently edited release)
   const todayReleases = useMemo(() => {
     return releases.filter((r) => {
-      if (editingId && String(r.car_release_id) === String(editingId)) return false;
+      if (editingId && String(r.car_release_id) === String(editingId))
+        return false;
       return r.dateGroup === todayDateStr || !selectedDate;
     });
   }, [releases, editingId, todayDateStr, selectedDate]);
@@ -410,7 +446,10 @@ export const CarReleaseList: React.FC = () => {
     // Filter groupStores to include ONLY those created / scheduled for TODAY
     const todayGroups = groupStores.filter((g) => {
       // If editing, always allow the currently selected group store
-      if (formGroupStoreId && String(g.group_store_id) === String(formGroupStoreId)) {
+      if (
+        formGroupStoreId &&
+        String(g.group_store_id) === String(formGroupStoreId)
+      ) {
         return true;
       }
       const gDateRaw = g.date || g.group_date || g.created_at;
@@ -422,7 +461,8 @@ export const CarReleaseList: React.FC = () => {
       const veh = vehicles.find((v) => String(v.car_id) === String(g.car_id));
       const plate = veh ? veh.license_plate : g.license_plate || "";
       const isUsed = usedGroupIds.has(String(g.group_store_id));
-      const isSelectedInForm = String(g.group_store_id) === String(formGroupStoreId);
+      const isSelectedInForm =
+        String(g.group_store_id) === String(formGroupStoreId);
 
       return {
         value: g.group_store_id,
@@ -450,7 +490,7 @@ export const CarReleaseList: React.FC = () => {
       const isUsedAsDriver = usedDriverIds.has(String(d.user_id));
       const isUsedAsFollower = usedFollowerNames.has(driverNameLower);
       const isSelectedAsFollower = formFollowers.some(
-        (f) => f.trim().toLowerCase() === driverNameLower
+        (f) => f.trim().toLowerCase() === driverNameLower,
       );
       const isSelectedInForm = String(d.user_id) === String(formUserId);
 
@@ -470,7 +510,8 @@ export const CarReleaseList: React.FC = () => {
       return {
         value: d.user_id,
         label: d.name,
-        subLabel: d.phone_number_1 || d.phone_number || d.tel_number || undefined,
+        subLabel:
+          d.phone_number_1 || d.phone_number || d.tel_number || undefined,
         disabled: isForbidden,
         badge: badge,
       };
@@ -485,16 +526,18 @@ export const CarReleaseList: React.FC = () => {
       }));
     }
     return [
-      { value: "1", label: "ปล่อยรถปกติ (ประจำวัน)", badge: "ปกติ" },
-      { value: "2", label: "ปล่อยรถพิเศษ (งานด่วน)", badge: "พิเศษ" },
-      { value: "3", label: "รับ-ส่งสินค้า / ตะเวนรับ", badge: "รับ-ส่ง" },
+      { value: "1", label: "รับสินค้า" },
+      { value: "2", label: "ฝากส่ง" },
+      { value: "3", label: "เยี่ยมลูกค้า" },
+      { value: "4", label: "ส่งของ" },
+      { value: "5", label: "เปิดลูกค้าใหม่" },
     ];
   }, [releaseTypes]);
 
   const pdaOptions = useMemo(() => {
     return pdaDevices.map((p) => ({
-      value: p.device_name || p.device_code,
-      label: p.device_name || p.device_code,
+      value: p.pda_id,
+      label: p.device_name,
       subLabel: p.serial_number ? `SN: ${p.serial_number}` : undefined,
     }));
   }, [pdaDevices]);
@@ -537,9 +580,11 @@ export const CarReleaseList: React.FC = () => {
           allowance: r.allowance || "-",
           allowance_paid: r.allowance_paid || "-",
           accounting_status_name: r.accounting_status_name || "-",
-          accounting_status_id: r.accounting_status_id || undefined,
+          accounting_status_id: r.accounting_status_id || "-",
           mileage: r.mileage || 0,
-          driver_avatar: r.user_image || "https://cdn-icons-png.flaticon.com/512/9055/9055398.png",
+          driver_avatar:
+            r.user_image ||
+            "https://cdn-icons-png.flaticon.com/512/9055/9055398.png",
           driver_name: r.driver_name || "ไม่ระบุ",
           driver_phone: r.driver_phone || "-",
           follower_name: r.follower_name || "-",
@@ -549,8 +594,8 @@ export const CarReleaseList: React.FC = () => {
             "th-TH",
           ),
           dateCount: 5,
-          issuer: "ระบบ",
           pda_device: r.pda_device || "-",
+          pda_device_name: r.pda_device_name || "-",
           description: r.description || "-",
           image_mileage: r.image_mileage || "",
           image_front: r.image_front || "",
@@ -574,7 +619,8 @@ export const CarReleaseList: React.FC = () => {
   useEffect(() => {
     fetchReleases();
     fetchMasterData();
-  }, [fetchReleases, fetchMasterData]);
+    fetchActiveReleaseDates();
+  }, [fetchReleases, fetchMasterData, fetchActiveReleaseDates]);
 
   const handleOpenAdd = () => {
     setEditingId(null);
@@ -851,18 +897,14 @@ export const CarReleaseList: React.FC = () => {
         <div className="flex flex-col sm:flex-row items-center gap-3 w-full max-w-2xl">
           {/* Date Picker Filter */}
           <div className="flex items-center gap-2 shrink-0 w-full sm:w-auto">
-            <span className="font-semibold text-slate-700 text-xs shrink-0 flex items-center gap-1">
-              <Calendar className="w-3.5 h-3.5 text-blue-600" />
-              วันที่ปล่อยรถ:
-            </span>
-            <input
-              type="date"
+            <CustomDatePicker
               value={selectedDate}
-              onChange={(e) => {
-                setSelectedDate(e.target.value);
+              onChange={(d) => {
+                setSelectedDate(d);
                 setCurrentPage(1);
               }}
-              className="bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1 text-xs text-slate-800 focus:bg-white focus:outline-none focus:border-slate-400 font-mono"
+              activeDates={activeReleaseDates}
+              label="วันที่ปล่อยรถ:"
             />
             {selectedDate && (
               <button
@@ -919,24 +961,50 @@ export const CarReleaseList: React.FC = () => {
           <table className="w-full text-left text-xs border-collapse">
             <thead>
               <tr className="bg-slate-100/90 border-b border-slate-200 text-slate-700 font-bold uppercase text-[10px] tracking-wider whitespace-nowrap">
-                {visibleColumns.car_release_no !== false && <th className="py-2.5 px-3">เลขที่ปล่อยรถ</th>}
-                {visibleColumns.license_plate !== false && <th className="py-2.5 px-3">ทะเบียนรถ</th>}
-                {visibleColumns.progress !== false && <th className="py-2.5 px-3">ความคืบหน้า</th>}
-                {visibleColumns.group_store !== false && <th className="py-2.5 px-3">กรุ๊ปรถ</th>}
-                {visibleColumns.release_status !== false && <th className="py-2.5 px-3 text-center">สถานะปล่อยรถ</th>}
-                {visibleColumns.return_status !== false && <th className="py-2.5 px-3 text-center">คืนรถ</th>}
-                {visibleColumns.allowance !== false && <th className="py-2.5 px-3 text-center">เบี้ยเลี้ยง</th>}
-                {visibleColumns.accounting_status !== false && <th className="py-2.5 px-3">สถานะทางบัญชี</th>}
-                {visibleColumns.mileage !== false && <th className="py-2.5 px-3 text-right">เลขไมล์</th>}
-                {visibleColumns.driver_name !== false && <th className="py-2.5 px-3">คนขับ</th>}
-                {visibleColumns.follower_name !== false && <th className="py-2.5 px-3">ผู้ติดตาม</th>}
-                {visibleColumns.actions !== false && <th className="py-2.5 px-3 text-right">จัดการ</th>}
+                {visibleColumns.car_release_no !== false && (
+                  <th className="py-2.5 px-3">เลขที่ปล่อยรถ</th>
+                )}
+                {visibleColumns.license_plate !== false && (
+                  <th className="py-2.5 px-3">ทะเบียนรถ</th>
+                )}
+                {visibleColumns.progress !== false && (
+                  <th className="py-2.5 px-3">ความคืบหน้า</th>
+                )}
+                {visibleColumns.group_store !== false && (
+                  <th className="py-2.5 px-3">กรุ๊ปรถ</th>
+                )}
+                {visibleColumns.release_status !== false && (
+                  <th className="py-2.5 px-3 text-center">สถานะปล่อยรถ</th>
+                )}
+                {visibleColumns.return_status !== false && (
+                  <th className="py-2.5 px-3 text-center">คืนรถ</th>
+                )}
+                {visibleColumns.allowance !== false && (
+                  <th className="py-2.5 px-3 text-center">เบี้ยเลี้ยง</th>
+                )}
+                {visibleColumns.accounting_status !== false && (
+                  <th className="py-2.5 px-3">สถานะทางบัญชี</th>
+                )}
+                {visibleColumns.mileage !== false && (
+                  <th className="py-2.5 px-3 text-right">เลขไมล์</th>
+                )}
+                {visibleColumns.driver_name !== false && (
+                  <th className="py-2.5 px-3">คนขับ</th>
+                )}
+                {visibleColumns.follower_name !== false && (
+                  <th className="py-2.5 px-3">ผู้ติดตาม</th>
+                )}
+                {visibleColumns.actions !== false && (
+                  <th className="py-2.5 px-3 text-right">จัดการ</th>
+                )}
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200/60 text-slate-800 whitespace-nowrap">
               {Object.entries(groupedReleases).map(([dateStr, itemsList]) => {
                 const items = itemsList as any[];
-                const activeColCount = Object.values(visibleColumns).filter(v => v !== false).length || 1;
+                const activeColCount =
+                  Object.values(visibleColumns).filter((v) => v !== false)
+                    .length || 1;
                 return (
                   <React.Fragment key={dateStr}>
                     {/* Date Header Row */}
@@ -1014,7 +1082,7 @@ export const CarReleaseList: React.FC = () => {
                                   {rel.group_store_name !== "-"
                                     ? rel.group_store_name
                                     : rel.brand_model || "-"}
-                                </span>                                
+                                </span>
                               </div>
                             </td>
                           )}
@@ -1130,7 +1198,13 @@ export const CarReleaseList: React.FC = () => {
               })}
               {releases.length === 0 && (
                 <tr>
-                  <td colSpan={Object.values(visibleColumns).filter(v => v !== false).length || 1} className="py-8 text-center text-slate-400">
+                  <td
+                    colSpan={
+                      Object.values(visibleColumns).filter((v) => v !== false)
+                        .length || 1
+                    }
+                    className="py-8 text-center text-slate-400"
+                  >
                     ไม่พบข้อมูลรายการปล่อยรถ
                   </td>
                 </tr>
@@ -1287,7 +1361,7 @@ export const CarReleaseList: React.FC = () => {
                               ชื่อร้านค้า / จุดจัดส่ง
                             </th>
                             <th className="py-1 px-1.5 text-center w-12">
-                              ลัง
+                              จำนวนทั้งหมด
                             </th>
                           </tr>
                         </thead>
@@ -1330,20 +1404,111 @@ export const CarReleaseList: React.FC = () => {
               )}
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                <SearchableSelect
-                  label="ประเภทการปล่อยรถ"
-                  options={releaseTypeOptions}
-                  value={String(formReleaseTypeId)}
-                  onChange={(val) => setFormReleaseTypeId(val)}
-                  placeholder="-- เลือกประเภทการปล่อยรถ --"
-                  required
-                />
+                {/* Job Type Card Selector (เลือกประเภทงาน) */}
+                <div className="sm:col-span-2 space-y-2">
+                  <div className="border-b border-slate-200/80 pb-1.5">
+                    <label className="text-xs font-bold text-slate-700">
+                      เลือกประเภทงาน <span className="text-rose-500">*</span>
+                    </label>
+                  </div>
+
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 pt-0.5">
+                    {releaseTypeOptions.map((opt) => {
+                      const isSelected =
+                        String(formReleaseTypeId) === String(opt.value);
+                      const labelLower = (opt.label || "").toLowerCase();
+
+                      let IconComponent = Truck;
+                      if (
+                        labelLower.includes("รับสินค้า") ||
+                        labelLower.includes("รับของ") ||
+                        labelLower.includes("รับ")
+                      ) {
+                        IconComponent = PackageCheck;
+                      } else if (
+                        labelLower.includes("ฝากส่ง") ||
+                        labelLower.includes("ฝาก")
+                      ) {
+                        IconComponent = PackagePlus;
+                      } else if (
+                        labelLower.includes("เยี่ยมลูกค้า") ||
+                        labelLower.includes("เยี่ยม")
+                      ) {
+                        IconComponent = Handshake;
+                      } else if (
+                        labelLower.includes("เปิดลูกค้าใหม่") ||
+                        labelLower.includes("ลูกค้าใหม่")
+                      ) {
+                        IconComponent = UserPlus;
+                      } else if (
+                        labelLower.includes("ส่งของ") ||
+                        labelLower.includes("ส่ง") ||
+                        labelLower.includes("จัดส่ง")
+                      ) {
+                        IconComponent = Truck;
+                      } else if (
+                        labelLower.includes("ทัวร์") ||
+                        labelLower.includes("เที่ยว") ||
+                        labelLower.includes("tour")
+                      ) {
+                        IconComponent = Plane;
+                      } else if (
+                        labelLower.includes("เรียน") ||
+                        labelLower.includes("นักเรียน") ||
+                        labelLower.includes("school")
+                      ) {
+                        IconComponent = GraduationCap;
+                      } else if (
+                        labelLower.includes("โรงงาน") ||
+                        labelLower.includes("factory")
+                      ) {
+                        IconComponent = Building2;
+                      } else if (
+                        labelLower.includes("พนักงาน") ||
+                        labelLower.includes("คน") ||
+                        labelLower.includes("staff")
+                      ) {
+                        IconComponent = Users;
+                      } else if (labelLower.includes("งาน")) {
+                        IconComponent = Briefcase;
+                      }
+
+                      return (
+                        <button
+                          key={opt.value}
+                          type="button"
+                          onClick={() => setFormReleaseTypeId(opt.value)}
+                          className={`flex flex-col items-center justify-center py-3 px-3 rounded-xl border text-center transition-all cursor-pointer select-none ${
+                            isSelected
+                              ? "bg-blue-50/90 border-2 border-blue-500 text-blue-600 shadow-2xs font-bold ring-2 ring-blue-500/10"
+                              : "bg-white border-slate-200 text-slate-600 hover:border-slate-300 hover:bg-slate-50/80 font-medium"
+                          }`}
+                        >
+                          <IconComponent
+                            className={`w-6 h-6 mb-1.5 ${
+                              isSelected
+                                ? "text-blue-500 scale-105"
+                                : "text-slate-400"
+                            } transition-transform`}
+                          />
+                          <span
+                            className={`text-xs tracking-tight ${isSelected ? "text-blue-600 font-bold" : "text-slate-700 font-medium"}`}
+                          >
+                            {opt.label}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
 
                 <div className="sm:col-span-2">
                   <label className="text-slate-700 font-semibold block mb-1 flex items-center justify-between">
-                    <span>ผู้ติดตาม (เลือกพนักงานเป็นผู้ติดตามได้หลายคน) *</span>
+                    <span>
+                      ผู้ติดตาม (เลือกพนักงานเป็นผู้ติดตามได้หลายคน) *
+                    </span>
                     <span className="text-[10px] text-blue-600 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded font-semibold">
-                      เลือกแล้ว {formFollowers.length} คน 
+                      เลือกแล้ว {formFollowers.length} คน
                     </span>
                   </label>
 
@@ -1375,16 +1540,24 @@ export const CarReleaseList: React.FC = () => {
                       })
                       .map((u) => {
                         const uNameLower = (u.name || "").trim().toLowerCase();
-                        const isUsedAsDriver = usedDriverIds.has(String(u.user_id));
-                        const isUsedAsFollower = usedFollowerNames.has(uNameLower);
+                        const isUsedAsDriver = usedDriverIds.has(
+                          String(u.user_id),
+                        );
+                        const isUsedAsFollower =
+                          usedFollowerNames.has(uNameLower);
                         const isSelectedAsMainDriver =
                           String(u.user_id) === String(formUserId) ||
-                          Boolean(formDriverName && formDriverName.trim().toLowerCase() === uNameLower);
+                          Boolean(
+                            formDriverName &&
+                            formDriverName.trim().toLowerCase() === uNameLower,
+                          );
                         const isChecked = formFollowers.includes(u.name);
 
                         const isForbidden = Boolean(
-                          (isUsedAsDriver || isUsedAsFollower || isSelectedAsMainDriver) &&
-                          !isChecked
+                          (isUsedAsDriver ||
+                            isUsedAsFollower ||
+                            isSelectedAsMainDriver) &&
+                          !isChecked,
                         );
 
                         let badgeText: string | undefined;
@@ -1403,8 +1576,8 @@ export const CarReleaseList: React.FC = () => {
                               isForbidden
                                 ? "opacity-50 cursor-not-allowed bg-slate-100/80"
                                 : isChecked
-                                ? "bg-blue-50/90 text-blue-900 border border-blue-200 font-semibold cursor-pointer"
-                                : "hover:bg-slate-100 text-slate-700 cursor-pointer"
+                                  ? "bg-blue-50/90 text-blue-900 border border-blue-200 font-semibold cursor-pointer"
+                                  : "hover:bg-slate-100 text-slate-700 cursor-pointer"
                             }`}
                           >
                             <div className="flex items-center gap-2 min-w-0">
@@ -1488,7 +1661,7 @@ export const CarReleaseList: React.FC = () => {
                   label="อุปกรณ์ PDA"
                   options={pdaOptions}
                   value={formPda}
-                  onChange={(val) => setFormPda(String(val))}
+                  onChange={(val) => setFormPda(Number(val))}
                   placeholder="-- ค้นหาและเลือกอุปกรณ์ PDA --"
                   searchPlaceholder="พิมพ์ค้นหา PDA..."
                 />
@@ -1871,7 +2044,7 @@ export const CarReleaseList: React.FC = () => {
                         อุปกรณ์ PDA
                       </span>
                       <span className="font-medium text-slate-800">
-                        {selectedRelease.pda_device || "-"}
+                        {selectedRelease.pda_device_name || "-"}
                       </span>
                     </div>
 

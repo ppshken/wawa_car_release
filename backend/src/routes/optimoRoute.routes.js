@@ -1,11 +1,35 @@
 const express = require('express');
 const router = express.Router();
 const { authenticateToken } = require('../middleware/auth');
+const { getApiKey } = require('../utils/apiKeyHelper');
 
 // =========================================================
 // OptimoRoute API Proxy
 // =========================================================
 
+
+// GET /api/optimoroute/active-dates (ดึงวันที่ทั้งหมดที่มีออเดอร์/เส้นทาง)
+router.get('/active-dates', authenticateToken, async (req, res) => {
+  try {
+    const { query } = require('../config/db');
+    const rows = await query(`
+      SELECT DISTINCT d FROM (
+        SELECT DATE_FORMAT(date, '%Y-%m-%d') AS d FROM group_store WHERE date IS NOT NULL AND date != ''
+        UNION
+        SELECT DATE_FORMAT(created_at, '%Y-%m-%d') AS d FROM group_store WHERE created_at IS NOT NULL
+        UNION
+        SELECT DATE_FORMAT(created_at, '%Y-%m-%d') AS d FROM list_store WHERE created_at IS NOT NULL
+      ) AS dates_union
+      WHERE d IS NOT NULL AND d != '0000-00-00'
+      ORDER BY d ASC
+    `);
+    const activeDates = rows.map(r => r.d).filter(Boolean);
+    return res.json({ success: true, activeDates });
+  } catch (err) {
+    console.error("Fetch active route dates error:", err);
+    return res.json({ success: true, activeDates: [] });
+  }
+});
 
 // GET /api/optimoroute/routes?date=YYYY-MM-DD
 // ดึงข้อมูลเส้นทางและจุดหยุดแวะโดยตรงจากฐานข้อมูลระบบ (group_store, list_store, store)
@@ -123,6 +147,25 @@ router.get('/routes', authenticateToken, async (req, res) => {
     const groupMap = new Map();
     const colors = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4'];
 
+    const listIds = (rows || []).map((r) => r.list_id).filter(Boolean);
+    let loadsMap = {};
+    if (listIds.length > 0) {
+      try {
+        const loadRows = await query(
+          `SELECT lsl.list_id, lsl.loading_type_id, lsl.quantity, lt.type_name, lt.unit_name, lt.type_code
+           FROM list_store_load lsl
+           JOIN loading_type lt ON lsl.loading_type_id = lt.loading_type_id
+           WHERE lsl.list_id IN (${listIds.join(',')})`
+        );
+        (loadRows || []).forEach((l) => {
+          if (!loadsMap[l.list_id]) loadsMap[l.list_id] = [];
+          loadsMap[l.list_id].push(l);
+        });
+      } catch (eLoads) {
+        console.warn('Fetch list_store_load for routes warning:', eLoads.message);
+      }
+    }
+
     rows.forEach((row) => {
       const gId = row.group_store_id;
       if (!groupMap.has(gId)) {
@@ -175,6 +218,7 @@ router.get('/routes', authenticateToken, async (req, res) => {
           position_product_id: row.position_product_id,
           position_production_order: row.position_production_order,
           position_product_name: row.position_product_name,
+          loads: loadsMap[row.list_id] || [],
           arrivalTime: '',
           departureTime: '',
           status: row.status || 'pending',
@@ -206,13 +250,13 @@ router.get('/routes', authenticateToken, async (req, res) => {
 // ดึงข้อมูลจาก OptimoRoute API เพื่อพรีวิวก่อนบันทึกลงฐานข้อมูล
 router.post('/preview', authenticateToken, async (req, res) => {
   try {
-    const apiKey = process.env.OPTIMOROUTE_API_KEY;
+    const apiKey = await getApiKey('OPTIMOROUTE_API_KEY');
     const targetDate = req.body.date || new Date().toISOString().slice(0, 10);
 
     if (!apiKey || apiKey.trim() === '') {
       return res.status(400).json({
         success: false,
-        message: 'ยังไม่ได้ตั้งค่า OPTIMOROUTE_API_KEY ในไฟล์ .env ของ Backend'
+        message: 'ยังไม่ได้ตั้งค่า OPTIMOROUTE_API_KEY ในระบบ หรือตั้งค่าเป็นปิดใช้งาน (Disabled)'
       });
     }
 
@@ -327,7 +371,7 @@ router.post('/preview', authenticateToken, async (req, res) => {
 router.post('/import', authenticateToken, async (req, res) => {
   try {
     const { query } = require('../config/db');
-    const apiKey = process.env.OPTIMOROUTE_API_KEY;
+    const apiKey = await getApiKey('OPTIMOROUTE_API_KEY');
     const targetDate = req.body.date || new Date().toISOString().slice(0, 10);
 
     let routeData = req.body.routes || [];
@@ -337,7 +381,7 @@ router.post('/import', authenticateToken, async (req, res) => {
       if (!apiKey || apiKey.trim() === '') {
         return res.status(400).json({
           success: false,
-          message: 'ยังไม่ได้ตั้งค่า OPTIMOROUTE_API_KEY ในไฟล์ .env ของ Backend'
+          message: 'ยังไม่ได้ตั้งค่า OPTIMOROUTE_API_KEY ในระบบ หรือตั้งค่าเป็นปิดใช้งาน (Disabled)'
         });
       }
 
@@ -605,26 +649,28 @@ router.post('/stops', authenticateToken, async (req, res) => {
       }
     }
 
+    const createdByVal = req.user ? (req.user.user_id || req.user.id || req.user.name || req.user.username || 1) : 1;
+
     // บันทึกลง list_store
     let insertRes;
     try {
       insertRes = await query(
-        `INSERT INTO list_store (store_id, group_store_id, row_order, sum_quantity, lat_long, store_name_result, data_store_no, scheduled_time, priority, status, position_product_id, position_production_order, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [targetStoreId, group_store_id, rowOrderNum, quantityNum, lat_long || null, storeNameResult, targetOrderNo, targetScheduledTime, targetPriority, targetStatus, targetPosProdId, targetPosProdOrder, `${targetDate} 08:00:00`]
+        `INSERT INTO list_store (store_id, group_store_id, row_order, sum_quantity, lat_long, store_name_result, data_store_no, scheduled_time, priority, status, position_product_id, position_production_order, created_by, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [targetStoreId, group_store_id, rowOrderNum, quantityNum, lat_long || null, storeNameResult, targetOrderNo, targetScheduledTime, targetPriority, targetStatus, targetPosProdId, targetPosProdOrder, createdByVal, `${targetDate} 08:00:00`]
       );
     } catch (eIns) {
       try {
         insertRes = await query(
-          `INSERT INTO list_store (store_id, group_store_id, row_order, sum_quantity, lat_long, store_name_result, data_store_no, created_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-          [targetStoreId, group_store_id, rowOrderNum, quantityNum, lat_long || null, storeNameResult, targetOrderNo, `${targetDate} 08:00:00`]
+          `INSERT INTO list_store (store_id, group_store_id, row_order, sum_quantity, lat_long, store_name_result, data_store_no, created_by, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [targetStoreId, group_store_id, rowOrderNum, quantityNum, lat_long || null, storeNameResult, targetOrderNo, createdByVal, `${targetDate} 08:00:00`]
         );
       } catch (e2) {
         insertRes = await query(
-          `INSERT INTO list_store (store_id, group_store_id, row_order, sum_quantity, lat_long, store_name_result, created_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?)`,
-          [targetStoreId, group_store_id, rowOrderNum, quantityNum, lat_long || null, storeNameResult, `${targetDate} 08:00:00`]
+          `INSERT INTO list_store (store_id, group_store_id, row_order, sum_quantity, lat_long, store_name_result, created_by, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+          [targetStoreId, group_store_id, rowOrderNum, quantityNum, lat_long || null, storeNameResult, createdByVal, `${targetDate} 08:00:00`]
         );
       }
     }
@@ -723,6 +769,23 @@ router.put('/stops/:listId', authenticateToken, async (req, res) => {
       );
     }
 
+    const { loads } = req.body;
+    if (Array.isArray(loads)) {
+      try {
+        await query(`DELETE FROM list_store_load WHERE list_id = ?`, [listId]);
+        for (const l of loads) {
+          if (l.loading_type_id && parseInt(l.quantity, 10) > 0) {
+            await query(
+              `INSERT INTO list_store_load (list_id, loading_type_id, quantity) VALUES (?, ?, ?)`,
+              [listId, parseInt(l.loading_type_id, 10), parseInt(l.quantity, 10)]
+            );
+          }
+        }
+      } catch (eLoadUp) {
+        console.warn('Update list_store_load error:', eLoadUp.message);
+      }
+    }
+
     res.json({
       success: true,
       message: 'อัปเดตข้อมูลจุดจัดส่งเรียบร้อยแล้ว'
@@ -757,7 +820,7 @@ router.delete('/stops/:listId', authenticateToken, async (req, res) => {
 router.get('/gps/devices', authenticateToken, async (req, res) => {
   const https = require('https');
   try {
-    const token = process.env.GPS_API_TOKEN || '13dade62-5bd6-4082-b0ce-36757dec0d47';
+    const token = await getApiKey('GPS_API_TOKEN');
     const options = {
       hostname: 'api.gpsiam.app',
       path: '/devices?address=1',
@@ -846,6 +909,25 @@ router.get('/unassigned', authenticateToken, async (req, res) => {
       [targetDate, targetDate]
     );
 
+    const listIds = (rows || []).map((r) => r.list_id).filter(Boolean);
+    let loadsMap = {};
+    if (listIds.length > 0) {
+      try {
+        const loadRows = await query(
+          `SELECT lsl.list_id, lsl.loading_type_id, lsl.quantity, lt.type_name, lt.unit_name, lt.type_code
+           FROM list_store_load lsl
+           JOIN loading_type lt ON lsl.loading_type_id = lt.loading_type_id
+           WHERE lsl.list_id IN (${listIds.join(',')})`
+        );
+        (loadRows || []).forEach((l) => {
+          if (!loadsMap[l.list_id]) loadsMap[l.list_id] = [];
+          loadsMap[l.list_id].push(l);
+        });
+      } catch (eLoads) {
+        console.warn('Fetch list_store_load warning:', eLoads.message);
+      }
+    }
+
     const stops = (rows || []).map((row) => {
       let lat = 0;
       let lng = 0;
@@ -876,6 +958,7 @@ router.get('/unassigned', authenticateToken, async (req, res) => {
         position_product_id: row.position_product_id,
         position_production_order: row.position_production_order,
         position_product_name: row.position_product_name,
+        loads: loadsMap[row.list_id] || [],
         type: 'delivery',
         created_at: row.created_at
       };
@@ -932,33 +1015,52 @@ router.post('/unassigned', authenticateToken, async (req, res) => {
       }
     }
 
+    const createdByVal = req.user ? (req.user.user_id || req.user.id || req.user.name || req.user.username || 1) : 1;
+
     let insertRes;
     try {
       insertRes = await query(
-        `INSERT INTO list_store (store_id, group_store_id, row_order, sum_quantity, lat_long, store_name_result, data_store_no, priority, status, position_product_id, position_production_order, created_at)
-         VALUES (?, NULL, NULL, ?, ?, ?, ?, ?, 'unassigned', ?, ?, ?)`,
-        [targetStoreId, quantityNum, lat_long || null, storeNameResult, targetOrderNo, targetPriority, targetPosProdId, targetPosProdOrder, `${targetDate} 08:00:00`]
+        `INSERT INTO list_store (store_id, group_store_id, row_order, sum_quantity, lat_long, store_name_result, data_store_no, priority, status, position_product_id, position_production_order, created_by, created_at)
+         VALUES (?, NULL, NULL, ?, ?, ?, ?, ?, 'unassigned', ?, ?, ?, ?)`,
+        [targetStoreId, quantityNum, lat_long || null, storeNameResult, targetOrderNo, targetPriority, targetPosProdId, targetPosProdOrder, createdByVal, `${targetDate} 08:00:00`]
       );
     } catch (eIns) {
       try {
         insertRes = await query(
-          `INSERT INTO list_store (store_id, group_store_id, row_order, sum_quantity, lat_long, store_name_result, data_store_no, status, created_at)
-           VALUES (?, NULL, NULL, ?, ?, ?, ?, 'unassigned', ?)`,
-          [targetStoreId, quantityNum, lat_long || null, storeNameResult, targetOrderNo, `${targetDate} 08:00:00`]
+          `INSERT INTO list_store (store_id, group_store_id, row_order, sum_quantity, lat_long, store_name_result, data_store_no, status, created_by, created_at)
+           VALUES (?, NULL, NULL, ?, ?, ?, ?, 'unassigned', ?, ?)`,
+          [targetStoreId, quantityNum, lat_long || null, storeNameResult, targetOrderNo, createdByVal, `${targetDate} 08:00:00`]
         );
       } catch (e2) {
         insertRes = await query(
-          `INSERT INTO list_store (store_id, group_store_id, row_order, sum_quantity, lat_long, store_name_result, status, created_at)
-           VALUES (?, NULL, NULL, ?, ?, ?, 'unassigned', ?)`,
-          [targetStoreId, quantityNum, lat_long || null, storeNameResult, `${targetDate} 08:00:00`]
+          `INSERT INTO list_store (store_id, group_store_id, row_order, sum_quantity, lat_long, store_name_result, status, created_by, created_at)
+           VALUES (?, NULL, NULL, ?, ?, ?, 'unassigned', ?, ?)`,
+          [targetStoreId, quantityNum, lat_long || null, storeNameResult, createdByVal, `${targetDate} 08:00:00`]
         );
+      }
+    }
+
+    const newListId = insertRes ? insertRes.insertId : null;
+    const { loads } = req.body;
+    if (newListId && Array.isArray(loads) && loads.length > 0) {
+      for (const l of loads) {
+        if (l.loading_type_id && parseInt(l.quantity, 10) > 0) {
+          try {
+            await query(
+              `INSERT INTO list_store_load (list_id, loading_type_id, quantity) VALUES (?, ?, ?)`,
+              [newListId, parseInt(l.loading_type_id, 10), parseInt(l.quantity, 10)]
+            );
+          } catch (eLoadIns) {
+            console.warn('Insert list_store_load error:', eLoadIns.message);
+          }
+        }
       }
     }
 
     res.json({
       success: true,
       message: 'สร้างรายการจัดส่ง (ยังไม่จัดสาย) สำเร็จ',
-      list_id: insertRes.insertId
+      list_id: newListId
     });
   } catch (err) {
     console.error('POST /unassigned error:', err);
@@ -999,18 +1101,51 @@ router.post('/unassigned/import', authenticateToken, async (req, res) => {
         );
       } catch (eStore) {}
 
+      const createdByVal = req.user ? (req.user.user_id || req.user.id || req.user.name || req.user.username || 1) : 1;
+
+      let insertRes;
       try {
-        await query(
-          `INSERT INTO list_store (store_id, group_store_id, row_order, sum_quantity, lat_long, store_name_result, data_store_no, status, position_product_id, position_production_order, created_at)
-           VALUES (?, NULL, NULL, ?, ?, ?, ?, 'unassigned', ?, ?, ?)`,
-          [storeId, quantity, latLong || null, storeName, orderNo, posProdId, posProdOrder, `${targetDate} 08:00:00`]
+        insertRes = await query(
+          `INSERT INTO list_store (store_id, group_store_id, row_order, sum_quantity, lat_long, store_name_result, data_store_no, status, position_product_id, position_production_order, created_by, created_at)
+           VALUES (?, NULL, NULL, ?, ?, ?, ?, 'unassigned', ?, ?, ?, ?)`,
+          [storeId, quantity, latLong || null, storeName, orderNo, posProdId, posProdOrder, createdByVal, `${targetDate} 08:00:00`]
         );
       } catch (eIns) {
-        await query(
-          `INSERT INTO list_store (store_id, group_store_id, row_order, sum_quantity, lat_long, store_name_result, status, position_product_id, position_production_order, created_at)
-           VALUES (?, NULL, NULL, ?, ?, ?, 'unassigned', ?, ?, ?)`,
-          [storeId, quantity, latLong || null, storeName, posProdId, posProdOrder, `${targetDate} 08:00:00`]
+        insertRes = await query(
+          `INSERT INTO list_store (store_id, group_store_id, row_order, sum_quantity, lat_long, store_name_result, status, position_product_id, position_production_order, created_by, created_at)
+           VALUES (?, NULL, NULL, ?, ?, ?, 'unassigned', ?, ?, ?, ?)`,
+          [storeId, quantity, latLong || null, storeName, posProdId, posProdOrder, createdByVal, `${targetDate} 08:00:00`]
         );
+      }
+
+      const newListId = insertRes ? insertRes.insertId : null;
+
+      // Insert cargo loading types into list_store_load
+      let itemLoadsArray = [];
+      if (Array.isArray(item.loads)) {
+        itemLoadsArray = item.loads;
+      } else if (item.loads && typeof item.loads === 'object') {
+        itemLoadsArray = Object.entries(item.loads).map(([typeId, qty]) => ({
+          loading_type_id: parseInt(typeId, 10),
+          quantity: parseInt(String(qty), 10)
+        }));
+      }
+
+      if (newListId && itemLoadsArray.length > 0) {
+        for (const l of itemLoadsArray) {
+          const lId = parseInt(l.loading_type_id, 10);
+          const lQty = parseInt(l.quantity, 10);
+          if (lId && lQty > 0) {
+            try {
+              await query(
+                `INSERT INTO list_store_load (list_id, loading_type_id, quantity) VALUES (?, ?, ?)`,
+                [newListId, lId, lQty]
+              );
+            } catch (eLoadIns) {
+              console.warn('Insert list_store_load error in import:', eLoadIns.message);
+            }
+          }
+        }
       }
       count++;
     }
@@ -1140,6 +1275,9 @@ router.delete('/unassigned/clear', authenticateToken, async (req, res) => {
  * ใช้แทน Math.hypot ที่คำนวณผิด — สูตรนี้คำนวณระยะบนพื้นผิวทรงกลมจริง
  */
 function haversineKm(lat1, lng1, lat2, lng2) {
+  if (lat1 === lat2 && lng1 === lng2) return 0;
+  if (Math.abs(lat1 - lat2) < 0.00002 && Math.abs(lng1 - lng2) < 0.00002) return 0;
+
   const R = 6371; // Earth radius in km
   const dLat = (lat2 - lat1) * Math.PI / 180;
   const dLng = (lng2 - lng1) * Math.PI / 180;
@@ -1152,10 +1290,11 @@ function haversineKm(lat1, lng1, lat2, lng2) {
 
 /**
  * Estimate travel time in minutes based on distance
- * ความเร็วแยกตามระยะทาง: ใกล้ = ในเมือง (25 km/h), กลาง = ชานเมือง (40 km/h), ไกล = ทางหลวง (60 km/h)
+ * ความเร็วแยกตามระยะทาง: พิกัดเดียวกัน (0 นาที), ใกล้ (25 km/h), กลาง (40 km/h), ไกล (60 km/h)
  */
 function estimateTravelMinutes(distKm) {
-  if (distKm <= 0.5) return 3; // minimum 3 min
+  if (distKm <= 0.001) return 0; // สถานที่/พิกัดเดียวกัน: 0 นาที
+  if (distKm <= 0.5) return Math.max(1, Math.round((distKm / 25) * 60)); // ในเมืองระยะใกล้
   if (distKm <= 5) return Math.round((distKm / 25) * 60);    // ในเมือง: 25 km/h
   if (distKm <= 30) return Math.round((distKm / 40) * 60);   // ชานเมือง: 40 km/h
   return Math.round((distKm / 60) * 60);                     // ทางหลวง: 60 km/h
@@ -1469,15 +1608,24 @@ router.post('/auto-route', authenticateToken, async (req, res) => {
     /**
      * Get travel time between two points (minutes)
      * ใช้ OSRM matrix ถ้ามี มิฉะนั้น fallback เป็น Haversine + speed estimate
+     * (พิกัดเดียวกัน / สถานที่เดียวกัน = 0 นาที)
      */
     function getTravelMinutes(fromId, fromLat, fromLng, toId, toLat, toLng) {
+      if (
+        (fromId && fromId === toId) ||
+        (fromLat === toLat && fromLng === toLng) ||
+        (Math.abs(fromLat - toLat) < 0.00002 && Math.abs(fromLng - toLng) < 0.00002)
+      ) {
+        return 0;
+      }
+
       if (osrmMatrix && osrmPointsMap) {
         const fromIdx = osrmPointsMap.get(fromId);
         const toIdx = osrmPointsMap.get(toId);
         if (fromIdx !== undefined && toIdx !== undefined) {
           const seconds = osrmMatrix[fromIdx][toIdx];
-          if (seconds !== null && seconds !== undefined && seconds > 0) {
-            return Math.max(2, Math.round(seconds / 60));
+          if (seconds !== null && seconds !== undefined && seconds >= 0) {
+            return Math.round(seconds / 60);
           }
         }
       }
@@ -1488,30 +1636,27 @@ router.post('/auto-route', authenticateToken, async (req, res) => {
 
     // ─── Phase 1+2: Build Routes with Nearest Neighbor + 2-opt + Clustering ───
     const colors = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#64748b'];
-    const createdRoutes = [];
+    
+    // Track vehicle route states
+    const vehicleRouteStates = selectedVehicles.map((vehicle) => ({
+      vehicle,
+      vehicleCap: vehicle.capacity,
+      routeStops: [],
+      currentLoad: 0,
+      currentPos: { lat: DEPOT.lat, lng: DEPOT.lng }
+    }));
 
-    for (let vIdx = 0; vIdx < selectedVehicles.length; vIdx++) {
-      const vehicle = selectedVehicles[vIdx];
-      const vehicleCap = vehicle.capacity;
+    const assignedItemIds = new Set();
 
-      // ดึง items จาก cluster ที่จับคู่กับรถคันนี้
-      let clusterItems;
+    // Pass 1: Primary Cluster-based Allocation
+    for (let vIdx = 0; vIdx < vehicleRouteStates.length; vIdx++) {
+      const state = vehicleRouteStates[vIdx];
+      let clusterItems = [];
       if (vIdx < clusterKeys.length) {
-        clusterItems = [...clusterGroups[clusterKeys[vIdx]]];
-      } else {
-        // ถ้ารถคันนี้ไม่มี cluster → ไม่มี stops
-        continue;
+        clusterItems = clusterGroups[clusterKeys[vIdx]] || [];
       }
 
-      if (clusterItems.length === 0) continue;
-
-      // ─── Nearest Neighbor Construction (ใช้ Haversine) ───
-      const routeStops = [];
-      let currentLoad = 0;
-      let currentPos = { lat: DEPOT.lat, lng: DEPOT.lng };
-
-      // สร้าง remainingClusterItems แยกต่างหากเพื่อไม่กระทบ cluster อื่น
-      let remainingClusterItems = [...clusterItems];
+      let remainingClusterItems = clusterItems.filter((i) => !assignedItemIds.has(i.list_id));
 
       while (remainingClusterItems.length > 0) {
         let nearestIdx = -1;
@@ -1519,7 +1664,7 @@ router.post('/auto-route', authenticateToken, async (req, res) => {
 
         if (effectivePriority === 'order_fifo') {
           for (let i = 0; i < remainingClusterItems.length; i++) {
-            if (currentLoad + remainingClusterItems[i].quantity <= vehicleCap) {
+            if (state.currentLoad + remainingClusterItems[i].quantity <= state.vehicleCap) {
               nearestIdx = i;
               break;
             }
@@ -1527,18 +1672,16 @@ router.post('/auto-route', authenticateToken, async (req, res) => {
         } else {
           for (let i = 0; i < remainingClusterItems.length; i++) {
             const item = remainingClusterItems[i];
-            if (currentLoad + item.quantity <= vehicleCap) {
+            if (state.currentLoad + item.quantity <= state.vehicleCap) {
               let metric;
               if (effectivePriority === 'fastest_time') {
-                // Optimize for travel time (use OSRM if available)
                 metric = getTravelMinutes(
-                  routeStops.length === 0 ? 'DEPOT' : String(routeStops[routeStops.length - 1].list_id),
-                  currentPos.lat, currentPos.lng,
+                  state.routeStops.length === 0 ? 'DEPOT' : String(state.routeStops[state.routeStops.length - 1].list_id),
+                  state.currentPos.lat, state.currentPos.lng,
                   String(item.list_id), item.lat, item.lng
                 );
               } else {
-                // distance_first / default — optimize for Haversine distance
-                metric = haversineKm(currentPos.lat, currentPos.lng, item.lat, item.lng);
+                metric = haversineKm(state.currentPos.lat, state.currentPos.lng, item.lat, item.lng);
               }
               if (metric < minMetric) {
                 minMetric = metric;
@@ -1551,19 +1694,74 @@ router.post('/auto-route', authenticateToken, async (req, res) => {
         if (nearestIdx === -1) break;
 
         const pickedItem = remainingClusterItems[nearestIdx];
-        routeStops.push(pickedItem);
-        currentLoad += pickedItem.quantity;
-        currentPos = { lat: pickedItem.lat, lng: pickedItem.lng };
+        state.routeStops.push(pickedItem);
+        state.currentLoad += pickedItem.quantity;
+        state.currentPos = { lat: pickedItem.lat, lng: pickedItem.lng };
+        assignedItemIds.add(pickedItem.list_id);
         remainingClusterItems.splice(nearestIdx, 1);
       }
+    }
 
-      // ถ้ามี items เหลือที่ใส่ไม่ได้ → ใส่กลับ remaining ของ cluster ถัดไป
-      if (remainingClusterItems.length > 0 && vIdx + 1 < clusterKeys.length) {
-        const nextClusterKey = clusterKeys[vIdx + 1];
-        if (clusterGroups[nextClusterKey]) {
-          clusterGroups[nextClusterKey].push(...remainingClusterItems);
+    // Pass 2: Reallocate ALL leftover unassigned items to ANY vehicle with remaining capacity
+    let leftoverItems = items.filter((i) => !assignedItemIds.has(i.list_id));
+
+    if (leftoverItems.length > 0) {
+      let progressMade = true;
+      while (progressMade && leftoverItems.length > 0) {
+        progressMade = false;
+
+        for (const state of vehicleRouteStates) {
+          if (state.currentLoad >= state.vehicleCap) continue;
+
+          let bestIdx = -1;
+          let minMetric = Infinity;
+
+          for (let i = 0; i < leftoverItems.length; i++) {
+            const item = leftoverItems[i];
+            if (state.currentLoad + item.quantity <= state.vehicleCap) {
+              const metric = haversineKm(state.currentPos.lat, state.currentPos.lng, item.lat, item.lng);
+              if (metric < minMetric) {
+                minMetric = metric;
+                bestIdx = i;
+              }
+            }
+          }
+
+          if (bestIdx !== -1) {
+            const pickedItem = leftoverItems[bestIdx];
+            state.routeStops.push(pickedItem);
+            state.currentLoad += pickedItem.quantity;
+            state.currentPos = { lat: pickedItem.lat, lng: pickedItem.lng };
+            assignedItemIds.add(pickedItem.list_id);
+            leftoverItems.splice(bestIdx, 1);
+            progressMade = true;
+          }
         }
       }
+    }
+
+    // Pass 3: Safety Fallback for any remaining item if total capacity is sufficient
+    if (leftoverItems.length > 0) {
+      for (const item of leftoverItems) {
+        const bestVehicleState = vehicleRouteStates.reduce((prev, curr) =>
+          curr.vehicleCap - curr.currentLoad > prev.vehicleCap - prev.currentLoad ? curr : prev
+        , vehicleRouteStates[0]);
+
+        if (bestVehicleState) {
+          bestVehicleState.routeStops.push(item);
+          bestVehicleState.currentLoad += item.quantity;
+          assignedItemIds.add(item.list_id);
+        }
+      }
+    }
+
+    const createdRoutes = [];
+
+    for (let vIdx = 0; vIdx < vehicleRouteStates.length; vIdx++) {
+      const state = vehicleRouteStates[vIdx];
+      const vehicle = state.vehicle;
+      const routeStops = state.routeStops;
+      const currentLoad = state.currentLoad;
 
       if (routeStops.length === 0) continue;
 

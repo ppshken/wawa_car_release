@@ -311,7 +311,7 @@ router.get('/stores/export', authenticateToken, async (req, res) => {
 // GET /api/master/keys
 router.get('/keys', authenticateToken, async (req, res) => {
   try {
-    const keys = await query('SELECT key_holder_id, key_holder_name FROM key_holder ORDER BY key_holder_id DESC');
+    const keys = await query('SELECT key_holder_id, key_holder_name, created_at FROM key_holder ORDER BY key_holder_id DESC');
     res.json({ success: true, keys });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
@@ -430,7 +430,7 @@ router.delete('/pda/:id', authenticateToken, async (req, res) => {
 // GET /api/master/payments
 router.get('/payments', authenticateToken, async (req, res) => {
   try {
-    const payments = await query('SELECT payment_id, payment_name FROM payment ORDER BY payment_id DESC');
+    const payments = await query('SELECT payment_id, payment_name, created_at FROM payment ORDER BY payment_id DESC');
     res.json({ success: true, payments });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
@@ -786,7 +786,7 @@ router.get(['/groups/:id/stores', '/group-stores/:id/stores'], authenticateToken
 // GET /api/master/parking
 router.get('/parking', authenticateToken, async (req, res) => {
   try {
-    const parking = await query('SELECT parking_id, parking_name FROM parking ORDER BY parking_id DESC');
+    const parking = await query('SELECT parking_id, parking_name, created_at FROM parking ORDER BY parking_id DESC');
     res.json({ success: true, parking });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
@@ -1096,6 +1096,162 @@ router.delete('/car-release-types/:id', authenticateToken, async (req, res) => {
     await query('DELETE FROM car_release_type WHERE car_release_type_id = ?', [id]);
     res.json({ success: true, message: 'ลบประเภทการปล่อยรถเรียบร้อยแล้ว' });
   } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+
+// =========================================================
+// 10. LOADING TYPES (ตาราง: loading_type)
+// =========================================================
+
+async function initLoadingTypeTables() {
+  try {
+    await query(`
+      CREATE TABLE IF NOT EXISTS loading_type (
+        loading_type_id INT AUTO_INCREMENT PRIMARY KEY,
+        type_code VARCHAR(50) NOT NULL UNIQUE,
+        type_name VARCHAR(100) NOT NULL,
+        unit_name VARCHAR(50) DEFAULT 'ชิ้น',
+        description VARCHAR(255) DEFAULT NULL,
+        is_active TINYINT(1) NOT NULL DEFAULT 1,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    `);
+
+    await query(`
+      CREATE TABLE IF NOT EXISTS list_store_load (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        list_id INT NOT NULL,
+        loading_type_id INT NOT NULL,
+        quantity INT NOT NULL DEFAULT 0,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    `);
+
+    // Seed default loading types if empty
+    const countRows = await query('SELECT COUNT(*) AS total FROM loading_type');
+    if (countRows && countRows[0].total === 0) {
+      const defaults = [
+        ['CRATE', 'ลัง', 'ลัง', 'ลังสินค้ามาตรฐานสำหรับจัดส่ง', 1],
+        ['BASKET', 'กระบะ', 'ใบ', 'กระบะพลาสติกสำหรับสินค้าสด/แช่เย็น', 1],
+        ['PALLET', 'พาเลท', 'พาเลท', 'แท่นวางสินค้าขนาดใหญ่/สินค้าหนัก', 1],
+        ['BOX', 'กล่อง', 'กล่อง', 'กล่องพัสดุกระดาษลูกฟูกทั่วไป', 1]
+      ];
+      for (const item of defaults) {
+        await query(
+          'INSERT IGNORE INTO loading_type (type_code, type_name, unit_name, description, is_active) VALUES (?, ?, ?, ?, ?)',
+          item
+        );
+      }
+      console.log('✅ Default loading_types seeded into database table loading_type.');
+    }
+  } catch (err) {
+    console.error('Error initializing loading_type tables:', err.message);
+  }
+}
+initLoadingTypeTables();
+
+// GET /api/master/loading-types
+router.get('/loading-types', authenticateToken, async (req, res) => {
+  try {
+    const { activeOnly } = req.query;
+    let sql = 'SELECT * FROM loading_type';
+    const params = [];
+    if (activeOnly === 'true' || activeOnly === '1') {
+      sql += ' WHERE is_active = 1';
+    }
+    sql += ' ORDER BY loading_type_id ASC';
+
+    const loadingTypes = await query(sql, params);
+    res.json({ success: true, loadingTypes: loadingTypes || [] });
+  } catch (err) {
+    console.error('GET /loading-types error:', err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// POST /api/master/loading-types
+router.post('/loading-types', authenticateToken, async (req, res) => {
+  try {
+    const { type_code, type_name, unit_name, description, is_active } = req.body;
+    if (!type_name || !type_name.trim()) {
+      return res.status(400).json({ success: false, message: 'กรุณากรอกชื่อประเภทการโหลด' });
+    }
+
+    const code = (type_code && type_code.trim())
+      ? type_code.trim().toUpperCase()
+      : `LOAD-${Date.now().toString().slice(-4)}`;
+
+    const result = await query(
+      `INSERT INTO loading_type (type_code, type_name, unit_name, description, is_active)
+       VALUES (?, ?, ?, ?, ?)`,
+      [
+        code,
+        type_name.trim(),
+        (unit_name && unit_name.trim()) || 'ชิ้น',
+        (description && description.trim()) || null,
+        is_active !== undefined ? (is_active ? 1 : 0) : 1
+      ]
+    );
+
+    res.json({
+      success: true,
+      message: 'เพิ่มประเภทการโหลดสินค้าสำเร็จ!',
+      loading_type_id: result.insertId
+    });
+  } catch (err) {
+    console.error('POST /loading-types error:', err);
+    if (err.code === 'ER_DUP_ENTRY') {
+      return res.status(400).json({ success: false, message: 'รหัสประเภทการโหลดนี้มีอยู่ในระบบแล้ว' });
+    }
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// PUT /api/master/loading-types/:id
+router.put('/loading-types/:id', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { type_code, type_name, unit_name, description, is_active } = req.body;
+
+    if (!type_name || !type_name.trim()) {
+      return res.status(400).json({ success: false, message: 'กรุณากรอกชื่อประเภทการโหลด' });
+    }
+
+    await query(
+      `UPDATE loading_type 
+       SET type_code = ?, type_name = ?, unit_name = ?, description = ?, is_active = ?, updated_at = NOW()
+       WHERE loading_type_id = ?`,
+      [
+        type_code ? type_code.trim().toUpperCase() : null,
+        type_name.trim(),
+        unit_name ? unit_name.trim() : 'ชิ้น',
+        description ? description.trim() : null,
+        is_active !== undefined ? (is_active ? 1 : 0) : 1,
+        id
+      ]
+    );
+
+    res.json({ success: true, message: 'อัปเดตข้อมูลประเภทการโหลดเรียบร้อยแล้ว' });
+  } catch (err) {
+    console.error('PUT /loading-types/:id error:', err);
+    if (err.code === 'ER_DUP_ENTRY') {
+      return res.status(400).json({ success: false, message: 'รหัสประเภทการโหลดนี้ซ้ำกับรายการอื่น' });
+    }
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// DELETE /api/master/loading-types/:id
+router.delete('/loading-types/:id', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    await query('DELETE FROM loading_type WHERE loading_type_id = ?', [id]);
+    res.json({ success: true, message: 'ลบประเภทการโหลดสินค้าเรียบร้อยแล้ว' });
+  } catch (err) {
+    console.error('DELETE /loading-types/:id error:', err);
     res.status(500).json({ success: false, message: err.message });
   }
 });
