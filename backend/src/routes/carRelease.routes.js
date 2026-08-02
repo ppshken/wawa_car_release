@@ -237,12 +237,22 @@ router.get('/car-release', authenticateToken, async (req, res) => {
 
     // Fetch followers for each release
     for (const rel of releases) {
-      const followers = await query(
-        `SELECT follower_name FROM car_release_follower WHERE car_release_id = ?`,
-        [rel.car_release_id]
-      );
-      rel.followers = followers;
-      rel.follower_name = followers.length > 0 ? followers.map(f => f.follower_name).join(', ') : '-';
+      try {
+        const followers = await query(
+          `SELECT crf.*, u.phone_number_1 as follower_phone
+           FROM car_release_follower crf
+           LEFT JOIN user u ON LOWER(TRIM(crf.follower_name)) = LOWER(TRIM(u.name))
+           WHERE crf.car_release_id = ?`,
+          [rel.car_release_id]
+        );
+        rel.followers = followers || [];
+        rel.follower_name = followers && followers.length > 0 ? followers.map(f => f.follower_name).join(', ') : '-';
+        rel.follower_phone = followers && followers.length > 0 ? (followers.map(f => f.follower_phone).filter(Boolean).join(', ') || '-') : '-';
+      } catch (eFoll) {
+        rel.followers = [];
+        rel.follower_name = '-';
+        rel.follower_phone = '-';
+      }
     }
 
     res.json({
@@ -286,10 +296,23 @@ router.get('/car-release/:id', authenticateToken, async (req, res) => {
     const release = releases[0];
 
     // Fetch Followers
-    const followers = await query(
-      `SELECT * FROM car_release_follower WHERE car_release_id = ? ORDER BY follower_id ASC`,
-      [car_release_id]
-    );
+    try {
+      const followers = await query(
+        `SELECT crf.*, u.phone_number_1 as follower_phone
+         FROM car_release_follower crf
+         LEFT JOIN user u ON LOWER(TRIM(crf.follower_name)) = LOWER(TRIM(u.name))
+         WHERE crf.car_release_id = ? 
+         ORDER BY crf.follower_id ASC`,
+        [car_release_id]
+      );
+      release.followers = followers || [];
+      release.follower_name = followers && followers.length > 0 ? followers.map(f => f.follower_name).join(', ') : '-';
+      release.follower_phone = followers && followers.length > 0 ? (followers.map(f => f.follower_phone).filter(Boolean).join(', ') || '-') : '-';
+    } catch (eFoll) {
+      release.followers = [];
+      release.follower_name = '-';
+      release.follower_phone = '-';
+    }
 
     // Fetch List Stores + CheckIn + CheckOut + Problem
     const hasCarReleaseId = await hasColumn('list_store', 'car_release_id');
@@ -307,6 +330,7 @@ router.get('/car-release/:id', authenticateToken, async (req, res) => {
               co.transfer_according, co.off_site as check_out_off_site, co.paid, co.amount, co.visit_customer, 
               co.visit_type_id, vt.visit_type_name, co.visit_note,
               p.payment_name,
+              gs.group_store_name,
               prob.problem_id, prob.problem_name, prob.normal_bill, prob.edit_bill, prob.product_swap, prob.out_of_stock, prob.overstock
        FROM list_store ls
        LEFT JOIN store s ON ls.store_id = s.store_id
@@ -316,10 +340,56 @@ router.get('/car-release/:id', authenticateToken, async (req, res) => {
        LEFT JOIN visit_type vt ON co.visit_type_id = vt.visit_type_id
        LEFT JOIN payment p ON co.payment_id = p.payment_id
        LEFT JOIN problem prob ON ls.list_id = prob.list_id
+       LEFT JOIN group_store gs ON ls.group_store_id = gs.group_store_id
        ${storeWhere}
        ORDER BY ls.row_order ASC`,
       storeParams
     );
+
+    // Fetch additional checkout images & problem images for each store
+    for (const st of stores) {
+      if (st.check_out_id) {
+        const coImgs = await query(
+          `SELECT image_check_out FROM check_out_image WHERE check_out_id = ?`,
+          [st.check_out_id]
+        );
+        st.checkout_images = coImgs.map(r => r.image_check_out).filter(Boolean);
+      }
+      if (st.problem_id) {
+        const pImgs = await query(
+          `SELECT problem_image FROM problem_image WHERE problem_id = ?`,
+          [st.problem_id]
+        );
+        st.problem_images = pImgs.map(r => r.problem_image).filter(Boolean);
+      }
+
+      // Sync service time with check_in / check_out timestamps if null
+      if (!st.start_service_time && st.date_time_check_in) {
+        st.start_service_time = st.date_time_check_in;
+      }
+      if (!st.end_service_time && st.date_time_check_out) {
+        st.end_service_time = st.date_time_check_out;
+      }
+
+      // Fetch list_store_load joined with loading_type
+      try {
+        const loads = await query(
+          `SELECT lsl.loading_type_id, lsl.quantity, lt.type_code, lt.type_name, lt.type_name AS loading_type_name, lt.unit_name
+           FROM list_store_load lsl
+           LEFT JOIN loading_type lt ON lsl.loading_type_id = lt.loading_type_id
+           WHERE lsl.list_id = ?`,
+          [st.list_id]
+        );
+        st.loads = loads || [];
+        for (const l of st.loads) {
+          if (l.loading_type_id) {
+            st[`loading_type_${l.loading_type_id}`] = l.quantity || l.qty || 0;
+          }
+        }
+      } catch (eLoad) {
+        st.loads = [];
+      }
+    }
 
     // Fetch Car Return details if exists
     const returns = await query(
@@ -331,7 +401,6 @@ router.get('/car-release/:id', authenticateToken, async (req, res) => {
       [car_release_id]
     );
 
-    release.followers = followers;
     release.stores = stores;
     release.car_return = returns.length > 0 ? returns[0] : null;
 
@@ -371,40 +440,82 @@ router.post('/car-release/:id/return', authenticateToken, async (req, res) => {
     const imgReturnUrl = saveBase64Image(image_return);
     const imgPdaUrl = saveBase64Image(image_pda);
 
-    const result = await query(
-      `INSERT INTO car_return 
-       (car_release_id, key_holder_id, parking_id, mileage, image_mileage, image_front, 
-        image_around_1, image_around_2, image_around_3, image_around_4, image_return, image_pda, gas_bill, note)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
-        car_release_id,
-        key_holder_id || null,
-        parking_id || null,
-        mileage || 0,
-        imgMileageUrl,
-        imgFrontUrl,
-        imgAround1Url,
-        imgAround2Url,
-        imgAround3Url,
-        imgAround4Url,
-        imgReturnUrl,
-        imgPdaUrl,
-        gas_bill || 0,
-        note || ''
-      ]
+    // Check if return record already exists
+    const existing = await query(
+      `SELECT car_return_id FROM car_return WHERE car_release_id = ?`,
+      [car_release_id]
     );
+
+    let returnId;
+    if (existing.length > 0) {
+      returnId = existing[0].car_return_id;
+      await query(
+        `UPDATE car_return 
+         SET key_holder_id = ?, parking_id = ?, mileage = ?, 
+             image_mileage = COALESCE(?, image_mileage), 
+             image_front = COALESCE(?, image_front), 
+             image_around_1 = COALESCE(?, image_around_1), 
+             image_around_2 = COALESCE(?, image_around_2), 
+             image_around_3 = COALESCE(?, image_around_3), 
+             image_around_4 = COALESCE(?, image_around_4), 
+             image_return = COALESCE(?, image_return), 
+             image_pda = COALESCE(?, image_pda), 
+             gas_bill = ?, note = ?
+         WHERE car_return_id = ?`,
+        [
+          key_holder_id || null,
+          parking_id || null,
+          mileage || 0,
+          imgMileageUrl,
+          imgFrontUrl,
+          imgAround1Url,
+          imgAround2Url,
+          imgAround3Url,
+          imgAround4Url,
+          imgReturnUrl,
+          imgPdaUrl,
+          gas_bill || 0,
+          note || '',
+          returnId
+        ]
+      );
+    } else {
+      const result = await query(
+        `INSERT INTO car_return 
+         (car_release_id, key_holder_id, parking_id, mileage, image_mileage, image_front, 
+          image_around_1, image_around_2, image_around_3, image_around_4, image_return, image_pda, gas_bill, note)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          car_release_id,
+          key_holder_id || null,
+          parking_id || null,
+          mileage || 0,
+          imgMileageUrl,
+          imgFrontUrl,
+          imgAround1Url,
+          imgAround2Url,
+          imgAround3Url,
+          imgAround4Url,
+          imgReturnUrl,
+          imgPdaUrl,
+          gas_bill || 0,
+          note || ''
+        ]
+      );
+      returnId = result.insertId;
+    }
 
     await logAudit(req, {
       action: 'RETURN_CAR',
       targetType: 'car_return',
-      targetId: result.insertId,
+      targetId: returnId,
       details: { car_release_id, mileage, key_holder_id, parking_id, gas_bill }
     });
 
     res.json({
       success: true,
       message: 'บันทึกใบคืนรถสำเร็จ',
-      car_return_id: result.insertId
+      car_return_id: returnId
     });
   } catch (err) {
     console.error('Car return error:', err);

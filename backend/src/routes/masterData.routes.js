@@ -1256,5 +1256,431 @@ router.delete('/loading-types/:id', authenticateToken, async (req, res) => {
   }
 });
 
+// =========================================================
+// 11. GPS DISTANCE (ตาราง: gps_distance)
+// =========================================================
+
+async function initGpsDistanceTables() {
+  try {
+    await query(`
+      CREATE TABLE IF NOT EXISTS gps_distance (
+        gps_distance_id INT AUTO_INCREMENT PRIMARY KEY,
+        distance_code VARCHAR(50) NOT NULL UNIQUE,
+        distance_name VARCHAR(100) NOT NULL,
+        distance_meters INT NOT NULL DEFAULT 300,
+        unit_name VARCHAR(20) DEFAULT 'เมตร',
+        description VARCHAR(255) DEFAULT NULL,
+        is_active TINYINT(1) NOT NULL DEFAULT 1,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    `);
+
+    // Seed default GPS distances if empty
+    const countRows = await query('SELECT COUNT(*) AS total FROM gps_distance');
+    if (countRows && countRows[0].total === 0) {
+      const defaults = [
+        ['CHECKOUT_MAX', 'ระยะห่างเช็คเอาท์นอกสถานที่ (Off-site Checkout)', 300, 'เมตร', 'ระยะทางสูงสุดระหว่างตำแหน่งเช็คเอาท์กับพิกัดร้านค้า หากเกินถือว่านอกสถานที่', 1],
+        ['CHECKIN_RADIUS', 'รัศมีเช็คอินร้านค้า (Store Check-in Radius)', 100, 'เมตร', 'ระยะห่างที่ยอมรับได้สำหรับแจ้งเตือนเข้าถึงบริเวณร้านค้า', 1],
+        ['ALERT_RADIUS', 'รัศมีแจ้งเตือนใกล้ถึงจุดหมาย (Destination Alert)', 500, 'เมตร', 'รัศมีตรวจจับตำแหน่ง GPS ก่อนเข้าถึงจุดส่งสินค้า', 1]
+      ];
+      for (const item of defaults) {
+        await query(
+          'INSERT IGNORE INTO gps_distance (distance_code, distance_name, distance_meters, unit_name, description, is_active) VALUES (?, ?, ?, ?, ?, ?)',
+          item
+        );
+      }
+      console.log('✅ Default gps_distance seeded into database table gps_distance.');
+    }
+  } catch (err) {
+    console.error('Error initializing gps_distance table:', err.message);
+  }
+}
+initGpsDistanceTables();
+
+// GET /api/master/gps-distance or /api/master/gps-distances
+router.get(['/gps-distance', '/gps-distances'], authenticateToken, async (req, res) => {
+  try {
+    const { activeOnly, search } = req.query;
+    let sql = 'SELECT * FROM gps_distance';
+    const params = [];
+    const conditions = [];
+
+    if (activeOnly === 'true' || activeOnly === '1') {
+      conditions.push('is_active = 1');
+    }
+    if (search && search.trim() !== '') {
+      const pattern = `%${search.trim()}%`;
+      conditions.push('(distance_code LIKE ? OR distance_name LIKE ? OR description LIKE ?)');
+      params.push(pattern, pattern, pattern);
+    }
+
+    if (conditions.length > 0) {
+      sql += ' WHERE ' + conditions.join(' AND ');
+    }
+    sql += ' ORDER BY gps_distance_id ASC';
+
+    const distances = await query(sql, params);
+    res.json({ success: true, distances: distances || [] });
+  } catch (err) {
+    console.error('GET /gps-distance error:', err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// POST /api/master/gps-distance
+router.post(['/gps-distance', '/gps-distances'], authenticateToken, async (req, res) => {
+  try {
+    const { distance_code, distance_name, distance_meters, unit_name, description, is_active } = req.body;
+    if (!distance_name || !distance_name.trim()) {
+      return res.status(400).json({ success: false, message: 'กรุณากรอกชื่อเกณฑ์ระยะห่าง GPS' });
+    }
+
+    const code = (distance_code && distance_code.trim())
+      ? distance_code.trim().toUpperCase()
+      : `GPS-DIST-${Date.now().toString().slice(-4)}`;
+
+    const meters = Number(distance_meters) >= 0 ? Number(distance_meters) : 300;
+
+    const result = await query(
+      `INSERT INTO gps_distance (distance_code, distance_name, distance_meters, unit_name, description, is_active)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      [
+        code,
+        distance_name.trim(),
+        meters,
+        (unit_name && unit_name.trim()) || 'เมตร',
+        (description && description.trim()) || null,
+        is_active !== undefined ? (is_active ? 1 : 0) : 1
+      ]
+    );
+
+    res.json({
+      success: true,
+      message: 'เพิ่มข้อมูลระยะห่าง GPS สำเร็จ!',
+      gps_distance_id: result.insertId
+    });
+  } catch (err) {
+    console.error('POST /gps-distance error:', err);
+    if (err.code === 'ER_DUP_ENTRY') {
+      return res.status(400).json({ success: false, message: 'รหัสเกณฑ์ระยะห่างนี้มีอยู่ในระบบแล้ว' });
+    }
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// PUT /api/master/gps-distance/:id
+router.put(['/gps-distance/:id', '/gps-distances/:id'], authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { distance_code, distance_name, distance_meters, unit_name, description, is_active } = req.body;
+
+    if (!distance_name || !distance_name.trim()) {
+      return res.status(400).json({ success: false, message: 'กรุณากรอกชื่อเกณฑ์ระยะห่าง GPS' });
+    }
+
+    const meters = Number(distance_meters) >= 0 ? Number(distance_meters) : 300;
+
+    await query(
+      `UPDATE gps_distance 
+       SET distance_code = ?, distance_name = ?, distance_meters = ?, unit_name = ?, description = ?, is_active = ?, updated_at = NOW()
+       WHERE gps_distance_id = ?`,
+      [
+        distance_code ? distance_code.trim().toUpperCase() : null,
+        distance_name.trim(),
+        meters,
+        unit_name ? unit_name.trim() : 'เมตร',
+        description ? description.trim() : null,
+        is_active !== undefined ? (is_active ? 1 : 0) : 1,
+        id
+      ]
+    );
+
+    res.json({ success: true, message: 'อัปเดตข้อมูลระยะห่าง GPS เรียบร้อยแล้ว' });
+  } catch (err) {
+    console.error('PUT /gps-distance/:id error:', err);
+    if (err.code === 'ER_DUP_ENTRY') {
+      return res.status(400).json({ success: false, message: 'รหัสเกณฑ์ระยะห่างนี้ซ้ำกับรายการอื่น' });
+    }
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// DELETE /api/master/gps-distance/:id
+router.delete(['/gps-distance/:id', '/gps-distances/:id'], authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    await query('DELETE FROM gps_distance WHERE gps_distance_id = ?', [id]);
+    res.json({ success: true, message: 'ลบข้อมูลระยะห่าง GPS เรียบร้อยแล้ว' });
+  } catch (err) {
+    console.error('DELETE /gps-distance/:id error:', err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// Migration & Seed for menu_car_release
+async function initMenuCarReleaseTables() {
+  try {
+    await query(`
+      CREATE TABLE IF NOT EXISTS menu_car_release (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        menu_name VARCHAR(255) NOT NULL,
+        action_key VARCHAR(100) NOT NULL UNIQUE,
+        icon VARCHAR(100) DEFAULT 'FileText',
+        access JSON,
+        status VARCHAR(20) DEFAULT 'active',
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    `);
+
+    const countRows = await query('SELECT COUNT(*) AS total FROM menu_car_release');
+    if (countRows && countRows[0].total === 0) {
+      const defaultAccess = JSON.stringify({ "1": true, "2": true, "3": true, "4": true });
+      const defaults = [
+        ['รีเซ็ตกุญแจ', 'reset_key', 'Key', defaultAccess, 'active'],
+        ['รูปให้ของ', 'cargo_photo', 'Camera', defaultAccess, 'active'],
+        ['สถานะบัญชี', 'accounting', 'ShieldCheck', defaultAccess, 'active'],
+        ['เพิ่มร้านค้า', 'add_store', 'Plus', defaultAccess, 'active'],
+        ['ติดตาม', 'followup', 'Truck', defaultAccess, 'active'],
+        ['ฝากเงิน', 'deposit', 'Wallet', defaultAccess, 'active'],
+        ['เอกสารคืนของ', 'return_docs', 'FileText', defaultAccess, 'active'],
+        ['สินค้าควบคุม', 'controlled_items', 'PackageCheck', defaultAccess, 'active'],
+        ['คืนรถ', 'car_return', 'RotateCcw', defaultAccess, 'active'],
+        ['เบี้ยเลี้ยง', 'allowance', 'Coins', defaultAccess, 'active'],
+      ];
+      for (const item of defaults) {
+        await query(
+          'INSERT IGNORE INTO menu_car_release (menu_name, action_key, icon, access, status) VALUES (?, ?, ?, ?, ?)',
+          item
+        );
+      }
+      console.log('✅ Default operation menus seeded into menu_car_release.');
+    }
+  } catch (err) {
+    console.error('Error initializing menu_car_release table:', err.message);
+  }
+}
+initMenuCarReleaseTables();
+
+// GET /api/master/operation-menus or /api/master/menu-car-release
+router.get(['/operation-menus', '/menu-car-release'], authenticateToken, async (req, res) => {
+  try {
+    const menus = await query('SELECT * FROM menu_car_release ORDER BY id ASC');
+    const formatted = (menus || []).map((m) => {
+      let parsedAccess = {};
+      if (typeof m.access === 'string') {
+        try {
+          parsedAccess = JSON.parse(m.access);
+        } catch (e) {
+          parsedAccess = {};
+        }
+      } else if (m.access && typeof m.access === 'object') {
+        parsedAccess = m.access;
+      }
+      return {
+        ...m,
+        access: parsedAccess
+      };
+    });
+    res.json({ success: true, menus: formatted, operationMenus: formatted });
+  } catch (err) {
+    console.error('GET /operation-menus error:', err);
+    res.status(500).json({ success: false, message: err.message, menus: [], operationMenus: [] });
+  }
+});
+
+// POST /api/master/operation-menus
+router.post(['/operation-menus', '/menu-car-release'], authenticateToken, async (req, res) => {
+  try {
+    const { menu_name, action_key, icon, access, status } = req.body;
+
+    if (!menu_name || !menu_name.trim()) {
+      return res.status(400).json({ success: false, message: 'กรุณากรอกชื่อเมนู' });
+    }
+
+    const key = action_key && action_key.trim()
+      ? action_key.trim().toLowerCase().replace(/\s+/g, '_')
+      : `action_${Date.now()}`;
+
+    const accessJson = typeof access === 'object' ? JSON.stringify(access) : (access || JSON.stringify({ "1": true, "2": true }));
+    const menuStatus = status === 'inactive' || status === '0' || status === 0 ? 'inactive' : 'active';
+
+    const result = await query(
+      `INSERT INTO menu_car_release (menu_name, action_key, icon, access, status) VALUES (?, ?, ?, ?, ?)`,
+      [menu_name.trim(), key, icon ? icon.trim() : 'FileText', accessJson, menuStatus]
+    );
+
+    res.json({
+      success: true,
+      message: 'เพิ่มเมนูการดำเนินงานสำเร็จ!',
+      id: result.insertId
+    });
+  } catch (err) {
+    console.error('POST /operation-menus error:', err);
+    if (err.code === 'ER_DUP_ENTRY') {
+      return res.status(400).json({ success: false, message: 'รหัสแอคชั่นนี้มีอยู่ในระบบแล้ว' });
+    }
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// PUT /api/master/operation-menus/:id
+router.put(['/operation-menus/:id', '/menu-car-release/:id'], authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { menu_name, action_key, icon, access, status } = req.body;
+
+    if (!menu_name || !menu_name.trim()) {
+      return res.status(400).json({ success: false, message: 'กรุณากรอกชื่อเมนู' });
+    }
+
+    const key = action_key && action_key.trim()
+      ? action_key.trim().toLowerCase().replace(/\s+/g, '_')
+      : `action_${Date.now()}`;
+
+    const accessJson = typeof access === 'object' ? JSON.stringify(access) : (access || JSON.stringify({ "1": true, "2": true }));
+    const menuStatus = status === 'inactive' || status === '0' || status === 0 ? 'inactive' : 'active';
+
+    await query(
+      `UPDATE menu_car_release 
+       SET menu_name = ?, action_key = ?, icon = ?, access = ?, status = ?, updated_at = NOW()
+       WHERE id = ?`,
+      [menu_name.trim(), key, icon ? icon.trim() : 'FileText', accessJson, menuStatus, id]
+    );
+
+    res.json({ success: true, message: 'อัปเดตเมนูการดำเนินงานเรียบร้อยแล้ว' });
+  } catch (err) {
+    console.error('PUT /operation-menus/:id error:', err);
+    if (err.code === 'ER_DUP_ENTRY') {
+      return res.status(400).json({ success: false, message: 'รหัสแอคชั่นนี้ซ้ำกับรายการอื่น' });
+    }
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// DELETE /api/master/operation-menus/:id
+router.delete(['/operation-menus/:id', '/menu-car-release/:id'], authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    await query('DELETE FROM menu_car_release WHERE id = ?', [id]);
+    res.json({ success: true, message: 'ลบเมนูการดำเนินงานเรียบร้อยแล้ว' });
+  } catch (err) {
+    console.error('DELETE /operation-menus/:id error:', err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// =========================================================
+// 13. PROBLEM TYPES (ตาราง: problem_type)
+// =========================================================
+
+(async () => {
+  try {
+    await query(`
+      CREATE TABLE IF NOT EXISTS problem_type (
+        problem_type_id INT AUTO_INCREMENT PRIMARY KEY,
+        problem_type_name VARCHAR(255) NOT NULL,
+        description TEXT NULL,
+        status ENUM('active', 'inactive') DEFAULT 'active',
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    `);
+
+    const defaults = [
+      { name: "ร้านปิด", desc: "ร้านค้าปิดทำการในเวลาที่ไปส่ง" },
+      { name: "บิลผิด", desc: "เอกสารใบกำกับสินค้า/บิลไม่ถูกต้อง" },
+      { name: "ของไม่ครบ / สินค้าเสียหาย", desc: "จำนวนสินค้าขาด หรือสินค้าชำรุดระหว่างขนส่ง" },
+      { name: "ลูกค้าปฏิเสธการรับสินค้า", desc: "ลูกค้าไม่ยินยอมรับสินค้าตามออเดอร์" },
+      { name: "ติดต่อลูกค้าไม่ได้", desc: "ไม่สามารถโทรติดต่อผู้รับสินค้าได้" },
+      { name: "+ ระบุปัญหาอื่นๆ (พิมพ์เอง)", desc: "ปัญหานอกเหนือจากหมวดหมู่มาตรฐาน" },
+    ];
+
+    for (const d of defaults) {
+      const exist = await query("SELECT problem_type_id FROM problem_type WHERE problem_type_name = ?", [d.name]);
+      if (exist.length === 0) {
+        await query("INSERT INTO problem_type (problem_type_name, description, status) VALUES (?, ?, 'active')", [d.name, d.desc]);
+      }
+    }
+  } catch (err) {
+    console.error("Error creating/seeding problem_type table:", err);
+  }
+})();
+
+// GET /api/master/problem-types
+router.get('/problem-types', authenticateToken, async (req, res) => {
+  try {
+    const problemTypes = await query('SELECT * FROM problem_type ORDER BY problem_type_id ASC');
+    res.json({ success: true, problemTypes });
+  } catch (err) {
+    console.error('GET /problem-types error:', err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// POST /api/master/problem-types
+router.post('/problem-types', authenticateToken, async (req, res) => {
+  try {
+    const { problem_type_name, description, status } = req.body;
+    if (!problem_type_name || !problem_type_name.trim()) {
+      return res.status(400).json({ success: false, message: 'กรุณาระบุชื่อประเภทปัญหา' });
+    }
+
+    const typeStatus = status === 'inactive' || status === '0' || status === 0 ? 'inactive' : 'active';
+
+    const result = await query(
+      'INSERT INTO problem_type (problem_type_name, description, status) VALUES (?, ?, ?)',
+      [problem_type_name.trim(), description ? description.trim() : null, typeStatus]
+    );
+
+    res.json({
+      success: true,
+      message: 'สร้างประเภทปัญหาใหม่สำเร็จ',
+      problem_type_id: result.insertId
+    });
+  } catch (err) {
+    console.error('POST /problem-types error:', err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// PUT /api/master/problem-types/:id
+router.put('/problem-types/:id', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { problem_type_name, description, status } = req.body;
+
+    if (!problem_type_name || !problem_type_name.trim()) {
+      return res.status(400).json({ success: false, message: 'กรุณาระบุชื่อประเภทปัญหา' });
+    }
+
+    const typeStatus = status === 'inactive' || status === '0' || status === 0 ? 'inactive' : 'active';
+
+    await query(
+      'UPDATE problem_type SET problem_type_name = ?, description = ?, status = ?, updated_at = NOW() WHERE problem_type_id = ?',
+      [problem_type_name.trim(), description ? description.trim() : null, typeStatus, id]
+    );
+
+    res.json({ success: true, message: 'อัปเดตประเภทปัญหาสำเร็จ' });
+  } catch (err) {
+    console.error('PUT /problem-types/:id error:', err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// DELETE /api/master/problem-types/:id
+router.delete('/problem-types/:id', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    await query('DELETE FROM problem_type WHERE problem_type_id = ?', [id]);
+    res.json({ success: true, message: 'ลบประเภทปัญหาสำเร็จ' });
+  } catch (err) {
+    console.error('DELETE /problem-types/:id error:', err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
 module.exports = router;
+
 

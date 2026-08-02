@@ -37,6 +37,16 @@ router.post('/list-store/:id/check-in', authenticateToken, async (req, res) => {
       [list_id, imgCheckInUrl, dateTime, signatureUrl, location || '']
     );
 
+    // Update list_store status & start_service_time (เวลาเริ่มบริการ = เวลาเช็คอิน)
+    try {
+      await query(
+        `UPDATE list_store SET status = 'in_progress', start_service_time = ? WHERE list_id = ?`,
+        [dateTime, list_id]
+      );
+    } catch (eUp) {
+      await query(`UPDATE list_store SET status = 'in_progress' WHERE list_id = ?`, [list_id]);
+    }
+
     res.json({
       success: true,
       message: 'เช็คอินสำเร็จ',
@@ -59,15 +69,13 @@ router.post('/list-store/:id/check-out', authenticateToken, async (req, res) => 
       transfer = 0,
       transfer_according = 0, // 1 = โอนตามทีหลัง (ค้างชำระ)
       visit_customer = 1,
-      visit_type_id, // 1=รับสินค้า, 2=ฝากส่ง, 3=เยี่ยมลูกค้า, 4=ส่งของ, 5=เปิดลูกค้าใหม่
+      visit_type_id = 4, // default 4 = ส่งของ
       visit_note = '',
       current_location = '', // "lat,long"
       additional_images = [] // Array of base64/urls
     } = req.body;
 
-    if (!visit_type_id) {
-      return res.status(400).json({ success: false, message: 'กรุณาเลือกประเภทการแวะ (visit_type_id)' });
-    }
+    const targetVisitTypeId = visit_type_id || 4;
 
     // 1. Fetch target store location to calculate off_site flag
     const listRows = await query(
@@ -85,8 +93,16 @@ router.post('/list-store/:id/check-out', authenticateToken, async (req, res) => 
 
       if (sLat && sLon && cLat && cLon) {
         const dist = getDistanceMeters(sLat, sLon, cLat, cLon);
-        if (dist > 300) {
-          isOffSite = 1; // off_site if distance > 300 meters
+        let maxDistanceMeters = 300;
+        try {
+          const gpsCfg = await query("SELECT distance_meters FROM gps_distance WHERE distance_code = 'CHECKOUT_MAX' AND is_active = 1 LIMIT 1");
+          if (gpsCfg && gpsCfg.length > 0 && gpsCfg[0].distance_meters !== undefined) {
+            maxDistanceMeters = Number(gpsCfg[0].distance_meters);
+          }
+        } catch (e) {}
+
+        if (dist > maxDistanceMeters) {
+          isOffSite = 1; // off_site if distance exceeds maxDistanceMeters
         }
       }
     }
@@ -112,7 +128,7 @@ router.post('/list-store/:id/check-out', authenticateToken, async (req, res) => 
         transfer_according ? 0 : 1, // paid = 0 if transfer_according is 1
         totalAmount,
         visit_customer ? 1 : 0,
-        visit_type_id,
+        targetVisitTypeId,
         visit_note
       ]
     );
@@ -132,9 +148,14 @@ router.post('/list-store/:id/check-out', authenticateToken, async (req, res) => 
       }
     }
 
-    // Update list_store off_site flag if off_site
-    if (isOffSite) {
-      await query(`UPDATE list_store SET off_site = 1 WHERE list_id = ?`, [list_id]);
+    // Update list_store status to completed & end_service_time (เวลาสิ้นสุดบริการ = เวลาเช็คเอาท์)
+    try {
+      await query(
+        `UPDATE list_store SET status = 'completed', end_service_time = ? ${isOffSite ? ', off_site = 1' : ''} WHERE list_id = ?`,
+        [dateTime, list_id]
+      );
+    } catch (eUpEnd) {
+      await query(`UPDATE list_store SET status = 'completed' ${isOffSite ? ', off_site = 1' : ''} WHERE list_id = ?`, [list_id]);
     }
 
     // Recalculate totals on car_release
@@ -232,6 +253,9 @@ router.post('/list-store/:id/problem', authenticateToken, async (req, res) => {
         }
       }
     }
+
+    // Update list_store status to problem
+    await query(`UPDATE list_store SET status = 'problem', end_service_time = ? WHERE list_id = ?`, [new Date().toISOString().slice(0, 19).replace('T', ' '), list_id]);
 
     res.json({
       success: true,

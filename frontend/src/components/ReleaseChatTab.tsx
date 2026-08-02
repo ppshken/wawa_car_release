@@ -207,11 +207,6 @@ export const ReleaseChatTab: React.FC<ReleaseChatTabProps> = ({
             </div>
           </div>
         </div>
-
-        <div className="flex items-center gap-1.5 text-[10px] text-emerald-600 bg-emerald-50 px-2 py-1 rounded-full border border-emerald-200 font-medium">
-          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-          <span>Real-time Chat</span>
-        </div>
       </div>
 
       {/* Quick Reply Template Pills */}

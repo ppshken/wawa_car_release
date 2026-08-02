@@ -227,14 +227,6 @@ export const Dashboard: React.FC = () => {
               <option value="this_month">30 วันล่าสุด</option>
             </select>
           </div>
-
-          <Link
-            to="/releases/create"
-            className="bg-slate-900 hover:bg-slate-800 text-white text-xs font-medium px-4 py-2 rounded-lg transition-all shadow-sm flex items-center gap-1.5"
-          >
-            <Plus className="w-4 h-4" />
-            ออกใบปล่อยรถใหม่
-          </Link>
         </div>
       </div>
 

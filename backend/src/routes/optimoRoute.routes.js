@@ -199,6 +199,7 @@ router.get('/routes', authenticateToken, async (req, res) => {
 
         grp.stops.push({
           stopId: row.list_id || grp.stops.length + 1,
+          group_store_name: row.group_store_name,
           rowOrder: row.row_order || grp.stops.length + 1,
           row_order: row.row_order || grp.stops.length + 1,
           orderNo: row.data_store_no || row.store_id || '-',
@@ -206,6 +207,7 @@ router.get('/routes', authenticateToken, async (req, res) => {
           locationNo: row.store_id,
           storeName: row.store_name_result || row.store_name || `ร้านค้า ${row.store_id}`,
           address: row.store_address || '',
+          telephone_number: row.telephone_number || '',
           quantity: row.sum_quantity || 0,
           lat,
           lng,
@@ -672,6 +674,22 @@ router.post('/stops', authenticateToken, async (req, res) => {
            VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
           [targetStoreId, group_store_id, rowOrderNum, quantityNum, lat_long || null, storeNameResult, createdByVal, `${targetDate} 08:00:00`]
         );
+      }
+    }
+
+    const { loads } = req.body;
+    if (insertRes && insertRes.insertId && Array.isArray(loads) && loads.length > 0) {
+      try {
+        for (const l of loads) {
+          if (l.loading_type_id && parseInt(l.quantity, 10) > 0) {
+            await query(
+              `INSERT INTO list_store_load (list_id, loading_type_id, quantity) VALUES (?, ?, ?)`,
+              [insertRes.insertId, parseInt(l.loading_type_id, 10), parseInt(l.quantity, 10)]
+            );
+          }
+        }
+      } catch (eLoadIns) {
+        console.warn('Insert list_store_load error in POST /stops:', eLoadIns.message);
       }
     }
 

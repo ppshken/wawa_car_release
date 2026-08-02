@@ -60,7 +60,7 @@ export const ColumnToggleDropdown: React.FC<ColumnToggleDropdownProps> = ({
         <Columns className="w-3.5 h-3.5 text-slate-500" />
         <span>คอลัมน์</span>
         {hiddenCount > 0 && (
-          <span className="bg-amber-500 text-white text-[10px] font-bold px-1.5 py-0.2 rounded-full">
+          <span>
             -{hiddenCount}
           </span>
         )}

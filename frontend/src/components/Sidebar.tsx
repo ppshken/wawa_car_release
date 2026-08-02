@@ -32,6 +32,8 @@ import {
   Map,
   DownloadCloud,
   BarChart3,
+  ListChecks,
+  AlertTriangle,
 } from "lucide-react";
 
 export const Sidebar: React.FC = () => {
@@ -57,13 +59,13 @@ export const Sidebar: React.FC = () => {
 
   const isMenuAllowed = (key?: string) => {
     if (!key) return true; // Items without key (e.g. profile) always shown
-    if (user?.level_user_id === 1) return true; // Admin level 1 always gets access to all menus
     if (Object.keys(permissions).length > 0) {
       if (permissions[key] !== undefined) {
-        return !!permissions[key];
+        return Boolean(permissions[key]);
       }
-      return true; // Default allow new menu keys if not explicitly set to false
+      return false; // If permissions configuration exists, unlisted menu is NOT allowed
     }
+    if (user?.level_user_id === 1) return true; // Default fallback for Level 1 Admin
     return true;
   };
 
@@ -138,11 +140,29 @@ export const Sidebar: React.FC = () => {
       icon: Package,
       key: "loading_types",
     },
+    {
+      to: "/master/gps-distance",
+      label: "ระยะห่าง GPS",
+      icon: Navigation,
+      key: "gps_distance",
+    },
+    {
+      to: "/master/operation-menus",
+      label: "เมนูการดำเนินงาน",
+      icon: ListChecks,
+      key: "operation_menus",
+    },
+    {
+      to: "/master/problem-types",
+      label: "ประเภทปัญหา",
+      icon: AlertTriangle,
+      key: "problem_types",
+    },
   ].filter((item) => isMenuAllowed(item.key));
 
   const settingNavItems = [
     { to: "/reports", label: "รายงานระบบ", icon: BarChart3, key: "reports" },
-    { to: "/api-keys", label: "จัดการ API Key", icon: Key },
+    { to: "/api-keys", label: "จัดการ API Key", icon: Key, key: "api-key" },
   ].filter((item) => isMenuAllowed(item.key));
 
   const otherNavItems = [
@@ -152,12 +172,6 @@ export const Sidebar: React.FC = () => {
       label: "เช็คสินค้านอกพิกัด",
       icon: MapPinOff,
       key: "offsite",
-    },
-    {
-      to: "/distance",
-      label: "ระยะห่าง GPS",
-      icon: Navigation,
-      key: "distance",
     },
     {
       to: "/import-photos",

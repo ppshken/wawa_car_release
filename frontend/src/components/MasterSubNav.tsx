@@ -12,6 +12,9 @@ import {
   Layers,
   FileText,
   PackageCheck,
+  Navigation,
+  ListChecks,
+  AlertTriangle,
 } from "lucide-react";
 
 export const MasterSubNav: React.FC = () => {
@@ -27,11 +30,11 @@ export const MasterSubNav: React.FC = () => {
   }
 
   const isAllowed = (key: string) => {
-    if (user?.level_user_id === 1) return true;
     if (Object.keys(permissions).length > 0) {
-      if (permissions[key] !== undefined) return !!permissions[key];
-      return true;
+      if (permissions[key] !== undefined) return Boolean(permissions[key]);
+      return false;
     }
+    if (user?.level_user_id === 1) return true;
     return true;
   };
 
@@ -46,6 +49,9 @@ export const MasterSubNav: React.FC = () => {
     { to: "/master/position-product", label: "ตำแหน่งวางสินค้า", icon: Layers, key: "position_product" },
     { to: "/master/release-types", label: "ประเภทการปล่อยรถ", icon: FileText, key: "release_types" },
     { to: "/master/loading-types", label: "ประเภทการโหลด", icon: PackageCheck, key: "loading_types" },
+    { to: "/master/gps-distance", label: "ระยะห่าง GPS", icon: Navigation, key: "gps_distance" },
+    { to: "/master/operation-menus", label: "เมนูการดำเนินงาน", icon: ListChecks, key: "operation_menus" },
+    { to: "/master/problem-types", label: "ประเภทปัญหา", icon: AlertTriangle, key: "problem_types" },
   ].filter((t) => isAllowed(t.key));
 
   return (

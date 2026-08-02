@@ -230,6 +230,10 @@ router.get('/role-permissions', authenticateToken, async (req, res) => {
 // Helper function to sync role_permission table to level_user.menu_permissions JSON column
 async function syncRolePermissionsToMenuPermissions(levelUserId) {
   try {
+    // 1. Fetch all system permissions
+    const allPerms = await query(`SELECT permission_key FROM permission`);
+
+    // 2. Fetch assigned permissions for this levelUserId
     const rows = await query(
       `SELECT p.permission_key 
        FROM role_permission rp 
@@ -238,10 +242,12 @@ async function syncRolePermissionsToMenuPermissions(levelUserId) {
       [levelUserId]
     );
 
+    const activeSet = new Set(rows.map((r) => r.permission_key).filter(Boolean));
+
     const menuPermObj = {};
-    rows.forEach(r => {
-      if (r.permission_key) {
-        menuPermObj[r.permission_key] = true;
+    allPerms.forEach((p) => {
+      if (p.permission_key) {
+        menuPermObj[p.permission_key] = activeSet.has(p.permission_key);
       }
     });
 
@@ -276,7 +282,11 @@ async function syncRolePermissionsToMenuPermissions(levelUserId) {
       { key: 'parking', name: 'ข้อมูลที่จอดรถ', group: 'ข้อมูลมาสเตอร์', action: 'view', desc: 'การเข้าถึงหน้าข้อมูลที่จอดรถ' },
       { key: 'accounting_status', name: 'สถานะทางบัญชี', group: 'ข้อมูลมาสเตอร์', action: 'view', desc: 'การเข้าถึงหน้าสถานะตรวจสอบทางบัญชี' },
       { key: 'position_product', name: 'ตำแหน่งวางสินค้า', group: 'ข้อมูลมาสเตอร์', action: 'view', desc: 'การเข้าถึงหน้าตำแหน่งวางสินค้า' },
-      { key: 'release_types', name: 'ประเภทการปล่อยรถ', group: 'ข้อมูลมาสเตอร์', action: 'view', desc: 'การเข้าถึงหน้าจัดการประเภทการปล่อยรถ' }
+      { key: 'release_types', name: 'ประเภทการปล่อยรถ', group: 'ข้อมูลมาสเตอร์', action: 'view', desc: 'การเข้าถึงหน้าจัดการประเภทการปล่อยรถ' },
+      { key: 'loading_types', name: 'ประเภทการโหลด', group: 'ข้อมูลมาสเตอร์', action: 'view', desc: 'การเข้าถึงหน้าจัดการประเภทการโหลด' },
+      { key: 'gps_distance', name: 'ระยะห่าง GPS', group: 'ข้อมูลมาสเตอร์', action: 'view', desc: 'การเข้าถึงหน้าจัดการระยะห่าง GPS' },
+      { key: 'operation_menus', name: 'เมนูการดำเนินงาน', group: 'ข้อมูลมาสเตอร์', action: 'view', desc: 'การเข้าถึงหน้าจัดการเมนูการดำเนินงาน' },
+      { key: 'problem_types', name: 'ประเภทปัญหา', group: 'ข้อมูลมาสเตอร์', action: 'view', desc: 'การเข้าถึงหน้าจัดการประเภทปัญหา' }
     ];
 
     for (const p of defaultPermissions) {
@@ -299,7 +309,7 @@ async function syncRolePermissionsToMenuPermissions(levelUserId) {
     await syncRolePermissionsToMenuPermissions(1);
 
     // Grant Admin staff (level 2) default permissions
-    const lvl2Keys = ['dashboard', 'releases', 'route', 'import_optimo', 'reports', 'stores', 'keys', 'pda', 'payments', 'vehicles', 'parking', 'accounting_status', 'position_product', 'release_types'];
+    const lvl2Keys = ['dashboard', 'releases', 'route', 'import_optimo', 'reports', 'stores', 'keys', 'pda', 'payments', 'vehicles', 'parking', 'accounting_status', 'position_product', 'release_types', 'loading_types', 'gps_distance', 'operation_menus', 'problem_types'];
     const lvl2Placeholders = lvl2Keys.map(() => '?').join(',');
     const lvl2Ps = await query(`SELECT permission_id FROM permission WHERE permission_key IN (${lvl2Placeholders})`, lvl2Keys);
     for (const item of lvl2Ps) {

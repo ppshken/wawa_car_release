@@ -20,10 +20,17 @@ import { AnimatedDrawer } from "../components/AnimatedDrawer";
 import { SearchableSelect } from "../components/SearchableSelect";
 import { ConfirmModal } from "../components/ConfirmModal";
 import { CustomDatePicker } from "../components/CustomDatePicker";
+import {
+  ColumnToggleDropdown,
+  ColumnItem,
+} from "../components/ColumnToggleDropdown";
+import { DeliveryCheckInOutModal } from "../components/DeliveryCheckInOutModal";
+import { ExportDrawer } from "../components/ExportDrawer";
 import * as XLSX from "xlsx";
 import {
   Map as MapIcon,
   RefreshCw,
+  Download,
   Calendar,
   Truck,
   MapPin,
@@ -594,6 +601,68 @@ export const RoutePage: React.FC = () => {
       unit_name: string;
     }[]
   >([]);
+
+  // Table Columns Definition & Visibility State
+  const routeTableColumns = useMemo<ColumnItem[]>(() => {
+    const dynamicCols: ColumnItem[] = loadingTypesList.map((lt) => ({
+      id: `loading_type_${lt.loading_type_id}`,
+      label: lt.type_name,
+    }));
+    return [
+      { id: "status", label: "สถานะ" },
+      { id: "order_no", label: "รหัสออเดอร์" },
+      { id: "store_info", label: "ที่ตั้ง / ร้านค้า" },
+      { id: "route_vehicle", label: "สายรถ / ทะเบียน" },
+      { id: "priority", label: "ลำดับความสำคัญ" },
+      { id: "drop_point", label: "จุดวาง" },
+      { id: "scheduled_time", label: "กำหนดเวลาไว้ที่" },
+      { id: "start_service", label: "เริ่มบริการ" },
+      { id: "end_service", label: "สิ้นสุดบริการ" },
+      { id: "actual_duration", label: "ระยะเวลาจริง" },
+      { id: "proof_of_delivery", label: "หลักฐานการส่ง" },
+      ...dynamicCols,
+      { id: "total_quantity", label: "จำนวนทั้งหมด" },
+      { id: "actions", label: "จัดการ" },
+    ];
+  }, [loadingTypesList]);
+
+  const [visibleColumns, setVisibleColumns] = useState<Record<string, boolean>>(
+    () => {
+      const saved = localStorage.getItem("wawa_route_table_visible_cols");
+      if (saved) {
+        try {
+          return JSON.parse(saved);
+        } catch (e) {}
+      }
+      return {
+        status: true,
+        order_no: true,
+        store_info: true,
+        route_vehicle: true,
+        priority: true,
+        drop_point: true,
+        scheduled_time: true,
+        start_service: true,
+        end_service: true,
+        actual_duration: true,
+        proof_of_delivery: true,
+        total_quantity: true,
+        actions: true,
+      };
+    },
+  );
+
+  const handleColumnChange = (updated: Record<string, boolean>) => {
+    setVisibleColumns(updated);
+    localStorage.setItem(
+      "wawa_route_table_visible_cols",
+      JSON.stringify(updated),
+    );
+  };
+
+  const visibleColumnCount = routeTableColumns.filter(
+    (col) => visibleColumns[col.id] !== false,
+  ).length;
   const [unassignedLoads, setUnassignedLoads] = useState<
     Record<number, number>
   >({});
@@ -1603,7 +1672,83 @@ export const RoutePage: React.FC = () => {
   const [formStopRowOrder, setFormStopRowOrder] = useState<number>(1);
   const [formStopQuantity, setFormStopQuantity] = useState<number>(1);
   const [formStopLatLong, setFormStopLatLong] = useState("");
+  const [formStopLoads, setFormStopLoads] = useState<Record<string, number>>({});
   const [creatingStop, setCreatingStop] = useState(false);
+
+  // Export Drawer State & Helpers for RoutePage
+  const [isExportDrawerOpen, setIsExportDrawerOpen] = useState(false);
+
+  const routeExportColumns = useMemo(
+    () => [
+      { id: "driver_name", label: "สายรถ / พนักงานขับรถ" },
+      { id: "vehicle_plate", label: "ทะเบียนรถ" },
+      { id: "row_order", label: "ลำดับจัดส่ง" },
+      { id: "store_id", label: "รหัสร้านค้า" },
+      { id: "store_name", label: "ชื่อร้านค้า" },
+      { id: "address", label: "ที่อยู่" },
+      { id: "order_no", label: "รหัสออเดอร์" },
+      { id: "sum_quantity", label: "จำนวนสินค้า" },
+      { id: "status", label: "สถานะการจัดส่ง" },
+      { id: "scheduled_time", label: "เวลาจัดส่งที่กำหนด" },
+      { id: "priority", label: "ความสำคัญ" },
+    ],
+    []
+  );
+
+  const routeExportData = useMemo(() => {
+    const list: any[] = [];
+    routes.forEach((r) => {
+      if (Array.isArray(r.stops)) {
+        r.stops.forEach((s) => {
+          list.push({
+            ...s,
+            driver_name: r.driverName,
+            vehicle_plate: r.vehiclePlate,
+          });
+        });
+      }
+    });
+    return list;
+  }, [routes]);
+
+  const getRouteExportValue = useCallback((item: any, columnId: string): string | number => {
+    switch (columnId) {
+      case "driver_name":
+        return item.driver_name || item.driverName || "-";
+      case "vehicle_plate":
+        return item.vehicle_plate || item.vehiclePlate || "-";
+      case "row_order":
+        return item.row_order ?? item.rowOrder ?? "-";
+      case "store_id":
+        return item.store_id || item.storeId || "-";
+      case "store_name":
+        return item.storeName || item.store_name || item.store_name_result || "-";
+      case "address":
+        return item.address || item.store_address || item.storeAddress || "-";
+      case "order_no":
+        return item.data_store_no || item.dataStoreNo || item.order_no || item.orderNo || "-";
+      case "sum_quantity":
+        return item.sum_quantity ?? item.sumQuantity ?? item.quantity ?? 0;
+      case "status":
+        return item.status === "completed"
+          ? "ส่งสำเร็จ"
+          : item.status === "failed"
+          ? "ติดปัญหา"
+          : "กำลังจัดส่ง";
+      case "scheduled_time":
+        return item.scheduled_time || item.scheduledTime
+          ? String(item.scheduled_time || item.scheduledTime).slice(0, 5)
+          : "-";
+      case "priority":
+        return item.priority === "high"
+          ? "สูง"
+          : item.priority === "low"
+          ? "ต่ำ"
+          : "ปกติ";
+      default:
+        return item[columnId] ?? "-";
+    }
+  }, []);
 
   const selectedGroupRouteObj = useMemo(() => {
     if (!formStopGroupId) return null;
@@ -1687,6 +1832,20 @@ export const RoutePage: React.FC = () => {
 
     setCreatingStop(true);
     try {
+      const loadsPayload = Object.entries(formStopLoads)
+        .map(([id, qty]) => ({
+          loading_type_id: parseInt(id, 10),
+          quantity: parseInt(String(qty), 10),
+        }))
+        .filter((item) => item.quantity > 0);
+
+      const totalLoadsQty = loadsPayload.reduce(
+        (sum, item) => sum + item.quantity,
+        0,
+      );
+      const finalQuantity =
+        totalLoadsQty > 0 ? totalLoadsQty : formStopQuantity;
+
       const res = await api.post("/optimoroute/stops", {
         group_store_id: formStopGroupId,
         store_id: formStopStoreId || undefined,
@@ -1695,7 +1854,7 @@ export const RoutePage: React.FC = () => {
         store_name: formStopStoreName.trim(),
         address: formStopAddress.trim(),
         row_order: formStopRowOrder,
-        sum_quantity: formStopQuantity,
+        sum_quantity: finalQuantity,
         lat_long: formStopLatLong.trim(),
         scheduled_time: formStopScheduledTime || undefined,
         priority: formStopPriority,
@@ -1703,6 +1862,7 @@ export const RoutePage: React.FC = () => {
         date: selectedDate,
         position_product_id: formStopPositionProductId || undefined,
         position_production_order: formStopPositionOrder || 1,
+        loads: loadsPayload,
       });
 
       if (res.data.success) {
@@ -1716,6 +1876,7 @@ export const RoutePage: React.FC = () => {
         setFormStopStoreName("");
         setFormStopAddress("");
         setFormStopLatLong("");
+        setFormStopLoads({});
         setFormStopPositionProductId("");
         setFormStopPositionOrder(1);
         fetchRoutes(selectedDate);
@@ -2131,6 +2292,7 @@ export const RoutePage: React.FC = () => {
   const [activeStop, setActiveStop] = useState<{
     routeId: string;
     stopId: number | string;
+    store_id: number;
     storeName: string;
     orderNo: string;
     address: string;
@@ -2145,14 +2307,9 @@ export const RoutePage: React.FC = () => {
     arrivalTime?: string;
   } | null>(null);
 
-  const handleSelectStopRow = (stop: any) => {
-    const latNum = parseFloat(stop.lat);
-    const lngNum = parseFloat(stop.lng);
-    if (!latNum || !lngNum || isNaN(latNum) || isNaN(lngNum)) {
-      showError("ไม่พบพิกัด GPS สำหรับสถานที่นี้");
-      return;
-    }
+  const [checkInOutStore, setCheckInOutStore] = useState<any | null>(null);
 
+  const handleSelectStopRow = (stop: any) => {
     if (stop.routeId) {
       setSelectedRouteId(stop.routeId);
       setCheckedRoutes((prev) => {
@@ -2162,22 +2319,30 @@ export const RoutePage: React.FC = () => {
       });
     }
 
-    setActiveStop({
-      routeId: stop.routeId,
-      stopId: stop.stopId,
-      storeName: stop.storeName,
-      orderNo: stop.orderNo || stop.locationNo || `#${stop.stopId}`,
-      address: stop.address || "ไม่ระบุที่อยู่",
-      quantity: stop.quantity || 0,
-      lat: latNum,
-      lng: lngNum,
-      status: stop.status || "planned",
-      rowOrder: stop.rowOrder ?? stop.row_order ?? stop.stopId,
-      routeColor: stop.routeColor || stop.color || "#3b82f6",
-      driverName: stop.routeDriverName || stop.driverName || "-",
-      vehiclePlate: stop.routeVehicle || stop.vehiclePlate || "-",
-      arrivalTime: stop.arrivalTime || "",
-    });
+    const latNum = parseFloat(stop.lat);
+    const lngNum = parseFloat(stop.lng);
+
+    if (latNum && lngNum && !isNaN(latNum) && !isNaN(lngNum)) {
+      setActiveStop({
+        routeId: stop.routeId,
+        stopId: stop.stopId,
+        store_id: stop.locationNo,
+        storeName: stop.storeName,
+        orderNo: stop.orderNo || stop.locationNo || `#${stop.stopId}`,
+        address: stop.address || "ไม่ระบุที่อยู่",
+        quantity: stop.quantity || 0,
+        lat: latNum,
+        lng: lngNum,
+        status: stop.status || "planned",
+        rowOrder: stop.rowOrder ?? stop.row_order ?? stop.stopId,
+        routeColor: stop.routeColor || stop.color || "#3b82f6",
+        driverName: stop.routeDriverName || stop.driverName || "-",
+        vehiclePlate: stop.routeVehicle || stop.vehiclePlate || "-",
+        arrivalTime: stop.arrivalTime || "",
+      });
+    }
+
+    setCheckInOutStore(stop);
   };
 
   const fetchRoutes = useCallback(
@@ -2434,7 +2599,7 @@ export const RoutePage: React.FC = () => {
               <span
                 className={`w-2 h-2 rounded-full ${gpsLoading ? "bg-amber-400 animate-ping" : showGpsVehicles ? "bg-emerald-500" : "bg-slate-400"}`}
               />
-              <span>📡 GPS สด ({gpsDevices.length})</span>
+              <span>GPS สด ({gpsDevices.length})</span>
               {lastGpsUpdate && (
                 <span className="text-[9px] opacity-75 font-mono">
                   ({lastGpsUpdate})
@@ -2463,9 +2628,17 @@ export const RoutePage: React.FC = () => {
             label="เลือกวันที่:"
           />
           <button
+            onClick={() => setIsExportDrawerOpen(true)}
+            className="bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors shadow-2xs flex items-center gap-1.5 shrink-0"
+            title="ส่งออกข้อมูลสายรถ PDF / Excel"
+          >
+            <Download className="w-3.5 h-3.5 text-blue-600" />
+            <span>ส่งออก (Export)</span>
+          </button>
+          <button
             onClick={() => fetchRoutes(selectedDate)}
             disabled={loading}
-            className="bg-blue-600 hover:bg-blue-700 text-white px-2.5 sm:px-3 py-1 rounded-md text-xs font-semibold flex items-center gap-1 transition-colors disabled:opacity-50"
+            className="bg-blue-600 hover:bg-blue-700 text-white px-3.5 sm:px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1 transition-colors disabled:opacity-50"
           >
             <RefreshCw
               className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`}
@@ -2479,7 +2652,7 @@ export const RoutePage: React.FC = () => {
               );
               setIsCreateGroupModalOpen(true);
             }}
-            className="bg-emerald-600 hover:bg-emerald-700 text-white px-2.5 sm:px-3 py-1 rounded-md text-xs font-semibold flex items-center gap-1 transition-colors shadow-2xs shrink-0"
+            className="bg-emerald-600 hover:bg-emerald-700 text-white px-3.5 sm:px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1 transition-colors shadow-2xs shrink-0"
           >
             <Plus className="w-3.5 h-3.5" />
             <span>สร้างกลุ่มสายจัดส่ง</span>
@@ -2924,9 +3097,9 @@ export const RoutePage: React.FC = () => {
                                   });
                                 }
                               }}
-                              className="p-2 hover:bg-emerald-50/60 cursor-pointer transition-colors"
+                              className="px-2 py-1 hover:bg-emerald-50/60 cursor-pointer transition-colors"
                             >
-                              <div className="flex items-center justify-between gap-1 mb-1">
+                              <div className="flex items-center justify-between gap-1">
                                 <div className="flex items-center gap-1.5 min-w-0">
                                   <span
                                     className={`w-2 h-2 rounded-full shrink-0 ${dotColor}`}
@@ -2945,8 +3118,8 @@ export const RoutePage: React.FC = () => {
                               </div>
 
                               {device.address && (
-                                <div className="text-[10px] text-slate-500 line-clamp-1 truncate pl-3.5">
-                                  📍 {device.address}
+                                <div className="flex items-center gap-1 text-[10px] text-slate-500 line-clamp-1 truncate pl-3.5">
+                                  <MapPin className="w-3 h-3 text-blue-500" /> {device.address}
                                 </div>
                               )}
                             </div>
@@ -3801,16 +3974,24 @@ export const RoutePage: React.FC = () => {
                     )}
                   </div>
 
-                  {/* Search Store in Table */}
-                  <div className="relative w-44 sm:w-56">
-                    <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2 top-1.5" />
-                    <input
-                      type="text"
-                      value={searchText}
-                      onChange={(e) => setSearchText(e.target.value)}
-                      placeholder="ค้นหาร้านค้า / ออเดอร์ / ที่อยู่..."
-                      className="w-full bg-white border border-slate-200 rounded-md pl-7 pr-2 py-1 text-[11px] focus:outline-none focus:border-blue-400"
+                  {/* Column Visibility Customizer & Search Store in Table */}
+                  <div className="flex items-center gap-2">
+                    <ColumnToggleDropdown
+                      columns={routeTableColumns}
+                      visibleColumns={visibleColumns}
+                      onChange={handleColumnChange}
                     />
+
+                    <div className="relative w-44 sm:w-56">
+                      <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2 top-1.5" />
+                      <input
+                        type="text"
+                        value={searchText}
+                        onChange={(e) => setSearchText(e.target.value)}
+                        placeholder="ค้นหาร้านค้า / ออเดอร์ / ที่อยู่..."
+                        className="w-full bg-white border border-slate-200 rounded-md pl-7 pr-2 py-1 text-[11px] focus:outline-none focus:border-blue-400"
+                      />
+                    </div>
                   </div>
                 </div>
               </div>
@@ -3821,40 +4002,70 @@ export const RoutePage: React.FC = () => {
                   <table className="w-full text-[11px] min-w-[1300px] border-collapse whitespace-nowrap text-slate-700">
                     <thead className="sticky top-0 bg-slate-100/90 backdrop-blur-xs font-bold text-slate-700 border-b border-slate-200 shadow-2xs z-10">
                       <tr className="text-left text-[11px] text-slate-700 font-semibold uppercase tracking-wider">
-                        <th className="px-2.5 py-1 w-28">สถานะ</th>
-                        <th className="px-2.5 py-1 w-28">รหัสออเดอร์</th>
-                        <th className="px-2.5 py-1 min-w-[200px]">
-                          ที่ตั้ง / ร้านค้า
-                        </th>
-                        <th className="px-2.5 py-1 w-32">สายรถ / ทะเบียน</th>
-                        <th className="px-2.5 py-1 w-20">ลำดับความสำคัญ</th>
-                        <th className="px-2.5 py-1 text-center w-24">จุดวาง</th>
-                        <th className="px-2.5 py-1 w-24">กำหนดเวลาไว้ที่</th>
-                        <th className="px-2.5 py-1 w-36">เริ่มบริการ</th>
-                        <th className="px-2.5 py-1 w-36">สิ้นสุดบริการ</th>
-                        <th className="px-2.5 py-1 w-24">ระยะเวลาจริง</th>
-                        <th className="px-2.5 py-1 w-24 text-center">
-                          หลักฐานการส่ง
-                        </th>
-                        {loadingTypesList.map((lt) => (
-                          <th
-                            key={lt.loading_type_id}
-                            className="px-2.5 py-1 text-center w-20"
-                          >
-                            {lt.type_name}
+                        {visibleColumns.status !== false && (
+                          <th className="px-2.5 py-1 w-28">สถานะ</th>
+                        )}
+                        {visibleColumns.order_no !== false && (
+                          <th className="px-2.5 py-1 w-28">รหัสออเดอร์</th>
+                        )}
+                        {visibleColumns.store_info !== false && (
+                          <th className="px-2.5 py-1 min-w-[200px]">
+                            ที่ตั้ง / ร้านค้า
                           </th>
-                        ))}
-                        <th className="px-2.5 py-1 text-center w-24">
-                          จำนวนทั้งหมด
-                        </th>
-                        <th className="px-2.5 py-1 text-right w-16">จัดการ</th>
+                        )}
+                        {visibleColumns.route_vehicle !== false && (
+                          <th className="px-2.5 py-1 w-32">สายรถ / ทะเบียน</th>
+                        )}
+                        {visibleColumns.priority !== false && (
+                          <th className="px-2.5 py-1 w-20">ลำดับความสำคัญ</th>
+                        )}
+                        {visibleColumns.drop_point !== false && (
+                          <th className="px-2.5 py-1 text-center w-24">จุดวาง</th>
+                        )}
+                        {visibleColumns.scheduled_time !== false && (
+                          <th className="px-2.5 py-1 w-24">กำหนดเวลาไว้ที่</th>
+                        )}
+                        {visibleColumns.start_service !== false && (
+                          <th className="px-2.5 py-1 w-36">เริ่มบริการ</th>
+                        )}
+                        {visibleColumns.end_service !== false && (
+                          <th className="px-2.5 py-1 w-36">สิ้นสุดบริการ</th>
+                        )}
+                        {visibleColumns.actual_duration !== false && (
+                          <th className="px-2.5 py-1 w-24">ระยะเวลาจริง</th>
+                        )}
+                        {visibleColumns.proof_of_delivery !== false && (
+                          <th className="px-2.5 py-1 w-24 text-center">
+                            หลักฐานการส่ง
+                          </th>
+                        )}
+                        {loadingTypesList.map(
+                          (lt) =>
+                            visibleColumns[`loading_type_${lt.loading_type_id}`] !==
+                              false && (
+                              <th
+                                key={lt.loading_type_id}
+                                className="px-2.5 py-1 text-center w-20"
+                              >
+                                {lt.type_name}
+                              </th>
+                            ),
+                        )}
+                        {visibleColumns.total_quantity !== false && (
+                          <th className="px-2.5 py-1 text-center w-24">
+                            จำนวนทั้งหมด
+                          </th>
+                        )}
+                        {visibleColumns.actions !== false && (
+                          <th className="px-2.5 py-1 text-right w-16">จัดการ</th>
+                        )}
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
                       {unassignedStops.length === 0 ? (
                         <tr>
                           <td
-                            colSpan={13 + loadingTypesList.length}
+                            colSpan={visibleColumnCount}
                             className="text-center py-6 text-slate-400"
                           >
                             <Package className="w-7 h-7 mx-auto mb-1 text-slate-300" />
@@ -3885,83 +4096,111 @@ export const RoutePage: React.FC = () => {
                               className="hover:bg-amber-50/50 transition-colors whitespace-nowrap"
                             >
                               {/* 1. สถานะ */}
-                              <td className="px-2.5 py-1">
-                                <div className="flex items-center gap-1.5 shrink-0">
-                                  <div className="w-3.5 h-3.5 rounded-full text-white text-[8px] font-bold flex items-center justify-center shrink-0 shadow-2xs bg-slate-400">
-                                    {idx + 1}
+                              {visibleColumns.status !== false && (
+                                <td className="px-2.5 py-1">
+                                  <div className="flex items-center gap-1.5 shrink-0">
+                                    <div className="w-3.5 h-3.5 rounded-full text-white text-[8px] font-bold flex items-center justify-center shrink-0 shadow-2xs bg-slate-400">
+                                      {idx + 1}
+                                    </div>
+                                    <span className="text-[10px] font-bold px-2 py-0.2 rounded-full inline-block bg-slate-100 text-slate-600 border border-slate-200">
+                                      รอจัดสาย
+                                    </span>
                                   </div>
-                                  <span className="text-[10px] font-bold px-2 py-0.2 rounded-full inline-block bg-slate-100 text-slate-600 border border-slate-200">
-                                    รอจัดสาย
-                                  </span>
-                                </div>
-                              </td>
+                                </td>
+                              )}
 
                               {/* 2. รหัสออเดอร์ */}
-                              <td className="px-2.5 py-1 font-mono font-bold text-slate-800">
-                                {stop.orderNo || stop.locationNo || "-"}
-                              </td>
+                              {visibleColumns.order_no !== false && (
+                                <td className="px-2.5 py-1 font-mono font-bold text-slate-800">
+                                  {stop.orderNo || stop.locationNo || "-"}
+                                </td>
+                              )}
 
                               {/* 3. ที่ตั้ง / ร้านค้า */}
-                              <td className="px-2.5 py-1">
-                                <span className="font-semibold text-slate-900">
-                                  {stop.storeName}
-                                </span>
-                                {stop.address && (
-                                  <span className="text-[10px] text-slate-500 font-normal ml-1">
-                                    ({stop.address})
+                              {visibleColumns.store_info !== false && (
+                                <td className="px-2.5 py-1">
+                                  <span className="font-semibold text-slate-900">
+                                    {stop.storeName}
                                   </span>
-                                )}
-                              </td>
+                                  {stop.address && (
+                                    <span className="text-[10px] text-slate-500 font-normal ml-1">
+                                      ({stop.address})
+                                    </span>
+                                  )}
+                                </td>
+                              )}
 
                               {/* 4. สายรถ / ทะเบียน */}
-                              <td className="px-2.5 py-1 text-slate-400 font-mono">
-                                -
-                              </td>
+                              {visibleColumns.route_vehicle !== false && (
+                                <td className="px-2.5 py-1 text-slate-400 font-mono">
+                                  -
+                                </td>
+                              )}
 
                               {/* 5. ลำดับความสำคัญ */}
-                              <td className="px-2.5 py-1">
-                                {getPriorityBadge(stop.priority)}
-                              </td>
+                              {visibleColumns.priority !== false && (
+                                <td className="px-2.5 py-1">
+                                  {getPriorityBadge(stop.priority)}
+                                </td>
+                              )}
 
                               {/* 6. จุดวาง */}
-                              <td className="px-2.5 py-1 text-center font-mono font-bold">
-                                {renderPositionBadge(
-                                  stop,
-                                  positionProductsList,
-                                ) || (
-                                  <span className="text-slate-400 font-normal">
-                                    -
-                                  </span>
-                                )}
-                              </td>
+                              {visibleColumns.drop_point !== false && (
+                                <td className="px-2.5 py-1 text-center font-mono font-bold">
+                                  {renderPositionBadge(
+                                    stop,
+                                    positionProductsList,
+                                  ) || (
+                                    <span className="text-slate-400 font-normal">
+                                      -
+                                    </span>
+                                  )}
+                                </td>
+                              )}
 
                               {/* 7. กำหนดเวลาไว้ที่ */}
-                              <td className="px-2.5 py-1 text-slate-400 font-mono">
-                                -
-                              </td>
+                              {visibleColumns.scheduled_time !== false && (
+                                <td className="px-2.5 py-1 text-slate-400 font-mono">
+                                  -
+                                </td>
+                              )}
 
                               {/* 8. เริ่มบริการ */}
-                              <td className="px-2.5 py-1 text-slate-400 font-mono">
-                                -
-                              </td>
+                              {visibleColumns.start_service !== false && (
+                                <td className="px-2.5 py-1 text-slate-400 font-mono">
+                                  -
+                                </td>
+                              )}
 
                               {/* 9. สิ้นสุดบริการ */}
-                              <td className="px-2.5 py-1 text-slate-400 font-mono">
-                                -
-                              </td>
+                              {visibleColumns.end_service !== false && (
+                                <td className="px-2.5 py-1 text-slate-400 font-mono">
+                                  -
+                                </td>
+                              )}
 
                               {/* 10. ระยะเวลาจริง */}
-                              <td className="px-2.5 py-1 text-slate-400 font-mono">
-                                -
-                              </td>
+                              {visibleColumns.actual_duration !== false && (
+                                <td className="px-2.5 py-1 text-slate-400 font-mono">
+                                  -
+                                </td>
+                              )}
 
                               {/* 11. หลักฐานการส่ง */}
-                              <td className="px-2.5 py-1 text-center text-slate-400 font-mono">
-                                -
-                              </td>
+                              {visibleColumns.proof_of_delivery !== false && (
+                                <td className="px-2.5 py-1 text-center text-slate-400 font-mono">
+                                  -
+                                </td>
+                              )}
 
                               {/* 12. Dynamic Cargo Loading Type Cells */}
                               {loadingTypesList.map((lt) => {
+                                if (
+                                  visibleColumns[
+                                    `loading_type_${lt.loading_type_id}`
+                                  ] === false
+                                )
+                                  return null;
                                 const loadObj = Array.isArray(stop.loads)
                                   ? stop.loads.find(
                                       (l: any) =>
@@ -3981,33 +4220,37 @@ export const RoutePage: React.FC = () => {
                               })}
 
                               {/* 13. จำนวนทั้งหมด */}
-                              <td className="px-2.5 py-1 text-center font-mono font-bold text-amber-700">
-                                {stop.sum_quantity ?? stop.quantity ?? 0}
-                              </td>
+                              {visibleColumns.total_quantity !== false && (
+                                <td className="px-2.5 py-1 text-center font-mono font-bold text-amber-700">
+                                  {stop.sum_quantity ?? stop.quantity ?? 0}
+                                </td>
+                              )}
 
                               {/* 14. จัดการ */}
-                              <td className="px-2.5 py-1 text-right">
-                                <div className="flex items-center justify-end gap-1">
-                                  <button
-                                    type="button"
-                                    onClick={() =>
-                                      handleOpenEditUnassignedStopDrawer(stop)
-                                    }
-                                    className="p-0.5 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded transition-colors"
-                                    title="แก้ไขรายการ"
-                                  >
-                                    <Edit2 className="w-3.5 h-3.5" />
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => setStopToDelete(stop)}
-                                    className="p-0.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded transition-colors"
-                                    title="ลบรายการ"
-                                  >
-                                    <Trash2 className="w-3.5 h-3.5" />
-                                  </button>
-                                </div>
-                              </td>
+                              {visibleColumns.actions !== false && (
+                                <td className="px-2.5 py-1 text-right">
+                                  <div className="flex items-center justify-end gap-1">
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        handleOpenEditUnassignedStopDrawer(stop)
+                                      }
+                                      className="p-0.5 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded transition-colors"
+                                      title="แก้ไขรายการ"
+                                    >
+                                      <Edit2 className="w-3.5 h-3.5" />
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => setStopToDelete(stop)}
+                                      className="p-0.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded transition-colors"
+                                      title="ลบรายการ"
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5" />
+                                    </button>
+                                  </div>
+                                </td>
+                              )}
                             </tr>
                           ))
                       )}
@@ -4017,33 +4260,63 @@ export const RoutePage: React.FC = () => {
                   <table className="w-full text-[11px] min-w-[1300px] border-collapse whitespace-nowrap">
                     <thead className="sticky top-0 bg-slate-100/95 font-bold text-slate-700 border-b border-slate-200 shadow-2xs z-10">
                       <tr className="text-left text-[11px] text-slate-700 font-semibold uppercase tracking-wider">
-                        <th className="px-2.5 py-1 w-28">สถานะ</th>
-                        <th className="px-2.5 py-1 w-28">รหัสออเดอร์</th>
-                        <th className="px-2.5 py-1 min-w-[200px]">
-                          ที่ตั้ง / ร้านค้า
-                        </th>
-                        <th className="px-2.5 py-1 w-32">สายรถ / ทะเบียน</th>
-                        <th className="px-2.5 py-1 w-20">ลำดับความสำคัญ</th>
-                        <th className="px-2.5 py-1 text-center w-24">จุดวาง</th>
-                        <th className="px-2.5 py-1 w-24">กำหนดเวลาไว้ที่</th>
-                        <th className="px-2.5 py-1 w-36">เริ่มบริการ</th>
-                        <th className="px-2.5 py-1 w-36">สิ้นสุดบริการ</th>
-                        <th className="px-2.5 py-1 w-24">ระยะเวลาจริง</th>
-                        <th className="px-2.5 py-1 w-24 text-center">
-                          หลักฐานการส่ง
-                        </th>
-                        {loadingTypesList.map((lt) => (
-                          <th
-                            key={lt.loading_type_id}
-                            className="px-2.5 py-1 text-center w-20"
-                          >
-                            {lt.type_name}
+                        {visibleColumns.status !== false && (
+                          <th className="px-2.5 py-1 w-28">สถานะ</th>
+                        )}
+                        {visibleColumns.order_no !== false && (
+                          <th className="px-2.5 py-1 w-28">รหัสออเดอร์</th>
+                        )}
+                        {visibleColumns.store_info !== false && (
+                          <th className="px-2.5 py-1 min-w-[200px]">
+                            ที่ตั้ง / ร้านค้า
                           </th>
-                        ))}
-                        <th className="px-2.5 py-1 text-center w-24">
-                          จำนวนทั้งหมด
-                        </th>
-                        <th className="px-2.5 py-1 text-right w-16">จัดการ</th>
+                        )}
+                        {visibleColumns.route_vehicle !== false && (
+                          <th className="px-2.5 py-1 w-32">สายรถ / ทะเบียน</th>
+                        )}
+                        {visibleColumns.priority !== false && (
+                          <th className="px-2.5 py-1 w-20">ลำดับความสำคัญ</th>
+                        )}
+                        {visibleColumns.drop_point !== false && (
+                          <th className="px-2.5 py-1 text-center w-24">จุดวาง</th>
+                        )}
+                        {visibleColumns.scheduled_time !== false && (
+                          <th className="px-2.5 py-1 w-24">กำหนดเวลาไว้ที่</th>
+                        )}
+                        {visibleColumns.start_service !== false && (
+                          <th className="px-2.5 py-1 w-36">เริ่มบริการ</th>
+                        )}
+                        {visibleColumns.end_service !== false && (
+                          <th className="px-2.5 py-1 w-36">สิ้นสุดบริการ</th>
+                        )}
+                        {visibleColumns.actual_duration !== false && (
+                          <th className="px-2.5 py-1 w-24">ระยะเวลาจริง</th>
+                        )}
+                        {visibleColumns.proof_of_delivery !== false && (
+                          <th className="px-2.5 py-1 w-24 text-center">
+                            หลักฐานการส่ง
+                          </th>
+                        )}
+                        {loadingTypesList.map(
+                          (lt) =>
+                            visibleColumns[`loading_type_${lt.loading_type_id}`] !==
+                              false && (
+                              <th
+                                key={lt.loading_type_id}
+                                className="px-2.5 py-1 text-center w-20"
+                              >
+                                {lt.type_name}
+                              </th>
+                            ),
+                        )}
+                        {visibleColumns.total_quantity !== false && (
+                          <th className="px-2.5 py-1 text-center w-24">
+                            จำนวนทั้งหมด
+                          </th>
+                        )}
+                        {visibleColumns.actions !== false && (
+                          <th className="px-2.5 py-1 text-right w-16">จัดการ</th>
+                        )}
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
@@ -4070,163 +4343,191 @@ export const RoutePage: React.FC = () => {
                             className="hover:bg-blue-50/50 cursor-pointer transition-colors whitespace-nowrap"
                           >
                             {/* 1. สถานะ */}
-                            <td className="px-2.5 py-1">
-                              <div className="flex items-center gap-1.5 shrink-0">
-                                <div
-                                  className="w-3.5 h-3.5 rounded-full text-white text-[8px] font-bold flex items-center justify-center shrink-0 shadow-2xs"
-                                  style={{ background: stop.routeColor }}
-                                >
-                                  {isDepot
-                                    ? "★"
-                                    : (stop.rowOrder ??
-                                      stop.row_order ??
-                                      idx + 1)}
+                            {visibleColumns.status !== false && (
+                              <td className="px-2.5 py-1">
+                                <div className="flex items-center gap-1.5 shrink-0">
+                                  <div
+                                    className="w-3.5 h-3.5 rounded-full text-white text-[8px] font-bold flex items-center justify-center shrink-0 shadow-2xs"
+                                    style={{ background: stop.routeColor }}
+                                  >
+                                    {isDepot
+                                      ? "★"
+                                      : (stop.rowOrder ??
+                                        stop.row_order ??
+                                        idx + 1)}
+                                  </div>
+                                  <span
+                                    className="text-[10px] font-bold px-2 py-0.2 rounded-full inline-block"
+                                    style={{ background: sc.bg, color: sc.text }}
+                                  >
+                                    {getStatusLabel(stop.status)}
+                                  </span>
                                 </div>
-                                <span
-                                  className="text-[10px] font-bold px-2 py-0.2 rounded-full inline-block"
-                                  style={{ background: sc.bg, color: sc.text }}
-                                >
-                                  {getStatusLabel(stop.status)}
-                                </span>
-                              </div>
-                            </td>
+                              </td>
+                            )}
 
                             {/* 2. รหัสออเดอร์ */}
-                            <td className="px-2.5 py-1 font-mono font-bold text-slate-800">
-                              {stop.orderNo || stop.locationNo || "-"}
-                            </td>
+                            {visibleColumns.order_no !== false && (
+                              <td className="px-2.5 py-1 font-mono font-bold text-slate-800">
+                                {stop.orderNo || stop.locationNo || "-"}
+                              </td>
+                            )}
 
                             {/* 3. ที่ตั้ง / ร้านค้า */}
-                            <td className="px-2.5 py-1">
-                              {stop.store_id && (
-                                <span className="font-mono text-slate-500 text-[10px] mr-1">
-                                  [{stop.store_id}]
+                            {visibleColumns.store_info !== false && (
+                              <td className="px-2.5 py-1">
+                                {stop.store_id && (
+                                  <span className="font-mono text-slate-500 text-[10px] mr-1">
+                                    [{stop.store_id}]
+                                  </span>
+                                )}
+                                <span className="font-semibold text-slate-900">
+                                  {stop.storeName}
                                 </span>
-                              )}
-                              <span className="font-semibold text-slate-900">
-                                {stop.storeName}
-                              </span>
-                              {stop.address && (
-                                <span className="text-[10px] text-slate-500 font-normal ml-1">
-                                  ({stop.address})
-                                </span>
-                              )}
-                            </td>
+                                {stop.address && (
+                                  <span className="text-[10px] text-slate-500 font-normal ml-1">
+                                    ({stop.address})
+                                  </span>
+                                )}
+                              </td>
+                            )}
 
                             {/* 4. สายรถ / ทะเบียน */}
-                            <td className="px-2.5 py-1">
-                              <span className="font-medium text-slate-800 text-[11px]">
-                                {stop.routeDriverName}
-                              </span>
-                              {stop.routeVehicle && (
-                                <span className="text-[10px] font-mono text-slate-500 ml-1">
-                                  [{stop.routeVehicle}]
+                            {visibleColumns.route_vehicle !== false && (
+                              <td className="px-2.5 py-1">
+                                <span className="font-medium text-slate-800 text-[11px]">
+                                  {stop.routeDriverName}
                                 </span>
-                              )}
-                            </td>
+                                {stop.routeVehicle && (
+                                  <span className="text-[10px] font-mono text-slate-500 ml-1">
+                                    [{stop.routeVehicle}]
+                                  </span>
+                                )}
+                              </td>
+                            )}
 
                             {/* 5. ลำดับความสำคัญ */}
-                            <td className="px-2.5 py-1">
-                              {getPriorityBadge(stop.priority)}
-                            </td>
+                            {visibleColumns.priority !== false && (
+                              <td className="px-2.5 py-1">
+                                {getPriorityBadge(stop.priority)}
+                              </td>
+                            )}
 
                             {/* 6. จุดวาง */}
-                            <td className="px-2.5 py-1 text-center font-mono font-bold">
-                              {renderPositionBadge(
-                                stop,
-                                positionProductsList,
-                              ) || (
-                                <span className="text-slate-400 font-normal">
-                                  -
-                                </span>
-                              )}
-                            </td>
+                            {visibleColumns.drop_point !== false && (
+                              <td className="px-2.5 py-1 text-center font-mono font-bold">
+                                {renderPositionBadge(
+                                  stop,
+                                  positionProductsList,
+                                ) || (
+                                  <span className="text-slate-400 font-normal">
+                                    -
+                                  </span>
+                                )}
+                              </td>
+                            )}
 
                             {/* 7. กำหนดเวลาไว้ที่ (Scheduled ETA) */}
-                            <td className="px-2.5 py-1 font-mono font-bold text-slate-700">
-                              {ed?.scheduledText ||
-                                stop.scheduled_time?.slice(0, 5) ||
-                                "-"}
-                            </td>
+                            {visibleColumns.scheduled_time !== false && (
+                              <td className="px-2.5 py-1 font-mono font-bold text-slate-700">
+                                {ed?.scheduledText ||
+                                  stop.scheduled_time?.slice(0, 5) ||
+                                  "-"}
+                              </td>
+                            )}
 
                             {/* 8. เริ่มบริการ (Start Service + Early/Delay) */}
-                            <td className="px-2.5 py-1 font-mono">
-                              {ed?.startText ? (
-                                <div className="flex items-center gap-1">
-                                  <span className="font-bold text-slate-800">
-                                    {ed.startText}
-                                  </span>
-                                  {ed.earlyDelayText && (
-                                    <span
-                                      className={`text-[10px] font-bold px-1.5 py-0.2 rounded ${
-                                        ed.isEarly
-                                          ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
-                                          : "bg-amber-50 text-amber-700 border border-amber-200"
-                                      }`}
-                                    >
-                                      {ed.earlyDelayText}
+                            {visibleColumns.start_service !== false && (
+                              <td className="px-2.5 py-1 font-mono">
+                                {ed?.startText ? (
+                                  <div className="flex items-center gap-1">
+                                    <span className="font-bold text-slate-800">
+                                      {ed.startText}
                                     </span>
-                                  )}
-                                </div>
-                              ) : (
-                                <span className="text-slate-400">-</span>
-                              )}
-                            </td>
+                                    {ed.earlyDelayText && (
+                                      <span
+                                        className={`text-[10px] font-bold px-1.5 py-0.2 rounded ${
+                                          ed.isEarly
+                                            ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                                            : "bg-amber-50 text-amber-700 border border-amber-200"
+                                        }`}
+                                      >
+                                        {ed.earlyDelayText}
+                                      </span>
+                                    )}
+                                  </div>
+                                ) : (
+                                  <span className="text-slate-400">-</span>
+                                )}
+                              </td>
+                            )}
 
                             {/* 9. สิ้นสุดบริการ (End Service + Early/Delay) */}
-                            <td className="px-2.5 py-1 font-mono">
-                              {edEnd?.startText ? (
-                                <div className="flex items-center gap-1">
-                                  <span className="font-bold text-slate-800">
-                                    {edEnd.startText}
-                                  </span>
-                                  {edEnd.earlyDelayText && (
-                                    <span
-                                      className={`text-[10px] font-bold px-1.5 py-0.2 rounded ${
-                                        edEnd.isEarly
-                                          ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
-                                          : "bg-amber-50 text-amber-700 border border-amber-200"
-                                      }`}
-                                    >
-                                      {edEnd.earlyDelayText}
+                            {visibleColumns.end_service !== false && (
+                              <td className="px-2.5 py-1 font-mono">
+                                {edEnd?.startText ? (
+                                  <div className="flex items-center gap-1">
+                                    <span className="font-bold text-slate-800">
+                                      {edEnd.startText}
                                     </span>
-                                  )}
-                                </div>
-                              ) : (
-                                <span className="text-slate-400">-</span>
-                              )}
-                            </td>
+                                    {edEnd.earlyDelayText && (
+                                      <span
+                                        className={`text-[10px] font-bold px-1.5 py-0.2 rounded ${
+                                          edEnd.isEarly
+                                            ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                                            : "bg-amber-50 text-amber-700 border border-amber-200"
+                                        }`}
+                                      >
+                                        {edEnd.earlyDelayText}
+                                      </span>
+                                    )}
+                                  </div>
+                                ) : (
+                                  <span className="text-slate-400">-</span>
+                                )}
+                              </td>
+                            )}
 
                             {/* 10. ระยะเวลาจริง */}
-                            <td className="px-2.5 py-1 font-mono text-slate-700 font-bold">
-                              {actualDur}
-                            </td>
+                            {visibleColumns.actual_duration !== false && (
+                              <td className="px-2.5 py-1 font-mono text-slate-700 font-bold">
+                                {actualDur}
+                              </td>
+                            )}
 
                             {/* 11. หลักฐานการส่ง (POD) */}
-                            <td className="px-2.5 py-1 text-center">
-                              {stop.pod_image ? (
-                                <a
-                                  href={stop.pod_image}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  onClick={(e) => e.stopPropagation()}
-                                  className="inline-block"
-                                >
-                                  <img
-                                    src={stop.pod_image}
-                                    alt="POD"
-                                    className="w-5 h-5 object-cover rounded border border-slate-300 hover:scale-110 transition-transform"
-                                  />
-                                </a>
-                              ) : (
-                                <span className="text-slate-400 font-mono">
-                                  -
-                                </span>
-                              )}
-                            </td>
+                            {visibleColumns.proof_of_delivery !== false && (
+                              <td className="px-2.5 py-1 text-center">
+                                {stop.pod_image ? (
+                                  <a
+                                    href={stop.pod_image}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    onClick={(e) => e.stopPropagation()}
+                                    className="inline-block"
+                                  >
+                                    <img
+                                      src={stop.pod_image}
+                                      alt="POD"
+                                      className="w-5 h-5 object-cover rounded border border-slate-300 hover:scale-110 transition-transform"
+                                    />
+                                  </a>
+                                ) : (
+                                  <span className="text-slate-400 font-mono">
+                                    -
+                                  </span>
+                                )}
+                              </td>
+                            )}
 
                             {/* 12. Dynamic Cargo Loading Type Cells */}
                             {loadingTypesList.map((lt) => {
+                              if (
+                                visibleColumns[
+                                  `loading_type_${lt.loading_type_id}`
+                                ] === false
+                              )
+                                return null;
                               const loadObj = Array.isArray(stop.loads)
                                 ? stop.loads.find(
                                     (l: any) =>
@@ -4246,46 +4547,50 @@ export const RoutePage: React.FC = () => {
                             })}
 
                             {/* 13. จำนวนทั้งหมด */}
-                            <td className="px-2.5 py-1 text-center font-mono font-bold text-amber-800">
-                              {isDepot
-                                ? "-"
-                                : (stop.quantity ?? stop.sum_quantity ?? 1)}
-                            </td>
+                            {visibleColumns.total_quantity !== false && (
+                              <td className="px-2.5 py-1 text-center font-mono font-bold text-amber-800">
+                                {isDepot
+                                  ? "-"
+                                  : (stop.quantity ?? stop.sum_quantity ?? 1)}
+                              </td>
+                            )}
 
                             {/* 14. จัดการ */}
-                            <td className="px-2.5 py-1 text-right">
-                              <div className="flex items-center justify-end gap-1">
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleOpenEditStopDrawer(stop);
-                                  }}
-                                  className="p-0.5 rounded text-slate-400 hover:text-amber-600 hover:bg-amber-50 transition-colors"
-                                  title="แก้ไขรายการ"
-                                >
-                                  <Edit2 className="w-3.5 h-3.5" />
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setStopToDelete(stop);
-                                  }}
-                                  className="p-0.5 rounded text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
-                                  title="ลบรายการ"
-                                >
-                                  <Trash2 className="w-3.5 h-3.5" />
-                                </button>
-                              </div>
-                            </td>
+                            {visibleColumns.actions !== false && (
+                              <td className="px-2.5 py-1 text-right">
+                                <div className="flex items-center justify-end gap-1">
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleOpenEditStopDrawer(stop);
+                                    }}
+                                    className="p-0.5 rounded text-slate-400 hover:text-amber-600 hover:bg-amber-50 transition-colors"
+                                    title="แก้ไขรายการ"
+                                  >
+                                    <Edit2 className="w-3.5 h-3.5" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setStopToDelete(stop);
+                                    }}
+                                    className="p-0.5 rounded text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
+                                    title="ลบรายการ"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                              </td>
+                            )}
                           </tr>
                         );
                       })}
                       {tableStops.length === 0 && (
                         <tr>
                           <td
-                            colSpan={13 + loadingTypesList.length}
+                            colSpan={visibleColumnCount}
                             className="text-center py-6 text-slate-400"
                           >
                             <Package className="w-5 h-5 mx-auto mb-1 text-slate-300" />
@@ -4422,6 +4727,71 @@ export const RoutePage: React.FC = () => {
             }))}
           />
 
+          {/* Cargo Loading Types Breakdown Input Section - Table List with White Background */}
+          {loadingTypesList.length > 0 && (
+            <div className="space-y-1.5 bg-white rounded-xl shadow-2xs">
+              <div className="flex items-center justify-between text-slate-800 font-bold mb-1">
+                <span className="flex items-center gap-1.5 text-slate-800 text-xs">
+                  <Package className="w-4 h-4 text-blue-600" />
+                  จำนวนประเภทของการโหลด
+                </span>
+                <span className="text-[11px] text-blue-700 font-mono bg-blue-50 px-2.5 py-0.5 rounded-full font-bold border border-blue-200">
+                  รวม:{" "}
+                  {Object.values(formStopLoads).reduce(
+                    (a, b) => (Number(a) || 0) + (Number(b) || 0),
+                    0,
+                  )}{" "}
+                  ชิ้น
+                </span>
+              </div>
+              <div className="border border-slate-200 rounded-lg overflow-hidden bg-white">
+                <table className="w-full text-xs text-left border-collapse">
+                  <thead className="bg-slate-50 border-b border-slate-200 text-slate-700 font-bold text-[11px]">
+                    <tr>
+                      <th className="px-3 py-1.5 w-10 text-center">#</th>
+                      <th className="px-3 py-1.5">ประเภทการโหลด</th>
+                      <th className="px-3 py-1.5 w-24 text-center">หน่วยนับ</th>
+                      <th className="px-3 py-1.5 w-28 text-right">จำนวน</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 bg-white">
+                    {loadingTypesList.map((lt, idx) => (
+                      <tr
+                        key={lt.loading_type_id}
+                        className="hover:bg-slate-50/80 transition-colors"
+                      >
+                        <td className="px-3 py-1.5 text-center font-mono text-slate-400 text-[11px]">
+                          {idx + 1}
+                        </td>
+                        <td className="px-3 py-1.5 font-bold text-slate-800">
+                          {lt.type_name}
+                        </td>
+                        <td className="px-3 py-1.5 text-center font-mono text-slate-500 text-[11px]">
+                          {lt.unit_name || "ชิ้น"}
+                        </td>
+                        <td className="px-3 py-1.5 text-right">
+                          <input
+                            type="number"
+                            min={0}
+                            value={formStopLoads[lt.loading_type_id] || 0}
+                            onChange={(e) => {
+                              const val = parseInt(e.target.value, 10) || 0;
+                              setFormStopLoads((prev) => ({
+                                ...prev,
+                                [lt.loading_type_id]: val,
+                              }));
+                            }}
+                            className="w-20 border border-slate-300 rounded px-2 py-1 text-right font-bold text-slate-900 bg-white focus:outline-none focus:border-blue-500 font-mono text-xs"
+                          />
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-slate-700 font-semibold mb-1">
@@ -4446,7 +4816,17 @@ export const RoutePage: React.FC = () => {
               <input
                 type="number"
                 min={1}
-                value={formStopQuantity}
+                value={
+                  Object.values(formStopLoads).reduce(
+                    (a, b) => (Number(a) || 0) + (Number(b) || 0),
+                    0,
+                  ) > 0
+                    ? Object.values(formStopLoads).reduce(
+                        (a, b) => (Number(a) || 0) + (Number(b) || 0),
+                        0,
+                      )
+                    : formStopQuantity
+                }
                 onChange={(e) =>
                   setFormStopQuantity(parseInt(e.target.value, 10) || 1)
                 }
@@ -5065,7 +5445,7 @@ export const RoutePage: React.FC = () => {
 
           {/* Cargo Loading Types Breakdown Input Section - Table List with White Background */}
           {loadingTypesList.length > 0 && (
-            <div className="space-y-1.5 bg-white border border-slate-200 rounded-xl p-3 shadow-2xs">
+            <div className="space-y-1.5 bg-white shadow-2xs">
               <div className="flex items-center justify-between text-slate-800 font-bold mb-1">
                 <span className="flex items-center gap-1.5 text-slate-800 text-xs">
                   <Package className="w-4 h-4 text-blue-600" />
@@ -5315,7 +5695,7 @@ export const RoutePage: React.FC = () => {
 
           {/* Cargo Loading Types Breakdown Input Section - Table List with White Background */}
           {loadingTypesList.length > 0 && (
-            <div className="space-y-1.5 bg-white border border-slate-200 rounded-xl p-3 shadow-2xs">
+            <div className="space-y-1.5 bg-white shadow-2xs">
               <div className="flex items-center justify-between text-slate-800 font-bold mb-1">
                 <span className="flex items-center gap-1.5 text-slate-800 text-xs">
                   <Package className="w-4 h-4 text-blue-600" />
@@ -6779,6 +7159,25 @@ export const RoutePage: React.FC = () => {
         cancelText="ยกเลิก"
         onConfirm={handleClearUnassignedStops}
         onCancel={() => setIsConfirmClearUnassignedModalOpen(false)}
+      />
+
+      {/* Export PDF / Excel Drawer for RoutePage */}
+      <ExportDrawer
+        isOpen={isExportDrawerOpen}
+        onClose={() => setIsExportDrawerOpen(false)}
+        title="ส่งออกข้อมูลสายจัดส่งสินค้า (Route Report)"
+        columns={routeExportColumns}
+        data={routeExportData}
+        getValue={getRouteExportValue}
+        fileNamePrefix="Route_Stops_Report"
+      />
+
+      {/* ─── CHECK IN / CHECK OUT / PROBLEM MODAL ─── */}
+      <DeliveryCheckInOutModal
+        isOpen={!!checkInOutStore}
+        onClose={() => setCheckInOutStore(null)}
+        storeItem={checkInOutStore}
+        onStatusUpdated={() => fetchRoutes(selectedDate)}
       />
     </div>
   );

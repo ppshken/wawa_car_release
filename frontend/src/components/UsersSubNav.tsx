@@ -16,9 +16,12 @@ export const UsersSubNav: React.FC = () => {
   }
 
   const isAllowed = (key: string) => {
-    if (Object.keys(permissions).length > 0) return !!permissions[key];
+    if (Object.keys(permissions).length > 0) {
+      if (permissions[key] !== undefined) return Boolean(permissions[key]);
+      return false;
+    }
     if (user?.level_user_id === 1) return true;
-    return false;
+    return true;
   };
 
   const tabs = [

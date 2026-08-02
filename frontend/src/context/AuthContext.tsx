@@ -36,7 +36,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setUser(res.data.user);
         localStorage.setItem('wawa_user', JSON.stringify(res.data.user));
       }
-    } catch (err) {}
+    } catch (err) { }
   };
 
   useEffect(() => {
@@ -59,7 +59,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             if (stored) {
               try {
                 setUser(JSON.parse(stored));
-              } catch (e) {}
+              } catch (e) { }
             }
           }
         }
@@ -79,6 +79,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setUser(res.data.user);
         localStorage.setItem('wawa_token', res.data.token);
         localStorage.setItem('wawa_user', JSON.stringify(res.data.user));
+        localStorage.setItem('wawa_car_release_visible_cols', JSON.stringify(res.data.user.menu_permissions));
       }
       return res.data;
     } catch (err: any) {
@@ -94,6 +95,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setUser(null);
     localStorage.removeItem('wawa_token');
     localStorage.removeItem('wawa_user');
+    localStorage.removeItem('wawa_car_release_visible_cols')
   };
 
   return (

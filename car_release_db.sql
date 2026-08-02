@@ -522,6 +522,70 @@ INSERT INTO `list_store` (`list_id`, `store_id`, `group_store_id`, `row_order`, 
 -- --------------------------------------------------------
 
 --
+-- Table structure for table `gps_distance`
+--
+
+CREATE TABLE `gps_distance` (
+  `gps_distance_id` int(11) NOT NULL AUTO_INCREMENT,
+  `distance_code` varchar(50) NOT NULL,
+  `distance_name` varchar(100) NOT NULL,
+  `distance_meters` int(11) NOT NULL DEFAULT 300,
+  `unit_name` varchar(20) DEFAULT 'เมตร',
+  `description` varchar(255) DEFAULT NULL,
+  `is_active` tinyint(1) NOT NULL DEFAULT 1,
+  `created_at` datetime DEFAULT current_timestamp(),
+  `updated_at` datetime DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  PRIMARY KEY (`gps_distance_id`),
+  UNIQUE KEY `distance_code` (`distance_code`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+--
+-- Dumping data for table `gps_distance`
+--
+
+INSERT INTO `gps_distance` (`gps_distance_id`, `distance_code`, `distance_name`, `distance_meters`, `unit_name`, `description`, `is_active`, `created_at`, `updated_at`) VALUES
+(1, 'CHECKOUT_MAX', 'ระยะห่างเช็คเอาท์นอกสถานที่ (Off-site Checkout)', 300, 'เมตร', 'ระยะทางสูงสุดระหว่างตำแหน่งเช็คเอาท์กับพิกัดร้านค้า หากเกินถือว่านอกสถานที่', 1, '2026-08-02 11:50:00', '2026-08-02 11:50:00'),
+(2, 'CHECKIN_RADIUS', 'รัศมีเช็คอินร้านค้า (Store Check-in Radius)', 100, 'เมตร', 'ระยะห่างที่ยอมรับได้สำหรับแจ้งเตือนเข้าถึงบริเวณร้านค้า', 1, '2026-08-02 11:50:00', '2026-08-02 11:50:00'),
+(3, 'ALERT_RADIUS', 'รัศมีแจ้งเตือนใกล้ถึงจุดหมาย (Destination Alert)', 500, 'เมตร', 'รัศมีตรวจจับตำแหน่ง GPS ก่อนเข้าถึงจุดส่งสินค้า', 1, '2026-08-02 11:50:00', '2026-08-02 11:50:00');
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `menu_car_release`
+--
+
+CREATE TABLE `menu_car_release` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `menu_name` varchar(255) NOT NULL,
+  `action_key` varchar(100) NOT NULL,
+  `icon` varchar(100) DEFAULT 'FileText',
+  `access` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL CHECK (json_valid(`access`)),
+  `status` varchar(20) DEFAULT 'active',
+  `created_at` datetime DEFAULT current_timestamp(),
+  `updated_at` datetime DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `action_key` (`action_key`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+--
+-- Dumping data for table `menu_car_release`
+--
+
+INSERT INTO `menu_car_release` (`id`, `menu_name`, `action_key`, `icon`, `access`, `status`, `created_at`, `updated_at`) VALUES
+(1, 'รีเซ็ตกุญแจ', 'reset_key', 'Key', '{\"1\":true,\"2\":true,\"3\":true,\"4\":true}', 'active', '2026-08-02 14:40:00', '2026-08-02 14:40:00'),
+(2, 'รูปให้ของ', 'cargo_photo', 'Camera', '{\"1\":true,\"2\":true,\"3\":true,\"4\":true}', 'active', '2026-08-02 14:40:00', '2026-08-02 14:40:00'),
+(3, 'สถานะบัญชี', 'accounting', 'ShieldCheck', '{\"1\":true,\"2\":true,\"3\":true,\"4\":true}', 'active', '2026-08-02 14:40:00', '2026-08-02 14:40:00'),
+(4, 'เพิ่มร้านค้า', 'add_store', 'Plus', '{\"1\":true,\"2\":true,\"3\":true,\"4\":true}', 'active', '2026-08-02 14:40:00', '2026-08-02 14:40:00'),
+(5, 'ติดตาม', 'followup', 'Truck', '{\"1\":true,\"2\":true,\"3\":true,\"4\":true}', 'active', '2026-08-02 14:40:00', '2026-08-02 14:40:00'),
+(6, 'ฝากเงิน', 'deposit', 'Wallet', '{\"1\":true,\"2\":true,\"3\":true,\"4\":true}', 'active', '2026-08-02 14:40:00', '2026-08-02 14:40:00'),
+(7, 'เอกสารคืนของ', 'return_docs', 'FileText', '{\"1\":true,\"2\":true,\"3\":true,\"4\":true}', 'active', '2026-08-02 14:40:00', '2026-08-02 14:40:00'),
+(8, 'สินค้าควบคุม', 'controlled_items', 'PackageCheck', '{\"1\":true,\"2\":true,\"3\":true,\"4\":true}', 'active', '2026-08-02 14:40:00', '2026-08-02 14:40:00'),
+(9, 'คืนรถ', 'car_return', 'RotateCcw', '{\"1\":true,\"2\":true,\"3\":true,\"4\":true}', 'active', '2026-08-02 14:40:00', '2026-08-02 14:40:00'),
+(10, 'เบี้ยเลี้ยง', 'allowance', 'Coins', '{\"1\":true,\"2\":true,\"3\":true,\"4\":true}', 'active', '2026-08-02 14:40:00', '2026-08-02 14:40:00');
+
+-- --------------------------------------------------------
+
+--
 -- Table structure for table `parking`
 --
 

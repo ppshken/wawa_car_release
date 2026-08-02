@@ -5,6 +5,7 @@ import { ToastProvider } from './context/ToastContext';
 import { SidebarProvider } from './context/SidebarContext';
 import { Navbar } from './components/Navbar';
 import { Sidebar } from './components/Sidebar';
+import { BottomNav } from './components/BottomNav';
 
 import { Login } from './pages/Login';
 import { Dashboard } from './pages/Dashboard';
@@ -19,6 +20,9 @@ import { AccountingStatusPage } from './pages/master/AccountingStatusPage';
 import { PositionProductPage } from './pages/master/PositionProductPage';
 import { ReleaseTypesPage } from './pages/master/ReleaseTypesPage';
 import { LoadingTypesPage } from './pages/master/LoadingTypesPage';
+import { GpsDistancePage } from './pages/master/GpsDistancePage';
+import { OperationMenuPage } from './pages/master/OperationMenuPage';
+import { ProblemTypesPage } from './pages/master/ProblemTypesPage';
 
 import { UsersListPage } from './pages/users/UsersListPage';
 import { UserLevelsPage } from './pages/users/UserLevelsPage';
@@ -51,22 +55,18 @@ const ProtectedLayout: React.FC<{ children: React.ReactNode }> = ({ children }) 
         <Navbar />
         <div className="flex flex-1 bg-white overflow-hidden">
           <Sidebar />
-          <main className="flex-1 p-3 sm:p-5 w-full max-w-full bg-white overflow-y-auto overflow-x-hidden">
+          <main className="flex-1 p-3 sm:p-5 w-full max-w-full bg-white overflow-y-auto overflow-x-hidden pb-16 md:pb-5">
             {children}
           </main>
         </div>
+        <BottomNav />
       </div>
     </SidebarProvider>
   );
 };
 
-// Route-level permission guard based on menu_permissions
 const PermissionGuard: React.FC<{ permKey: string; children: React.ReactNode }> = ({ permKey, children }) => {
   const { user } = useAuth();
-
-  if (user?.level_user_id === 1) {
-    return <>{children}</>;
-  }
 
   let permissions: Record<string, boolean> = {};
   if (user?.menu_permissions) {
@@ -77,11 +77,19 @@ const PermissionGuard: React.FC<{ permKey: string; children: React.ReactNode }> 
     }
   }
 
-  // If permissions loaded, check if explicitly set to false
+  // If permissions loaded, check if allowed
   if (Object.keys(permissions).length > 0) {
-    if (permissions[permKey] === false) {
-      return <Navigate to="/" replace />;
+    if (permissions[permKey] !== undefined) {
+      if (!permissions[permKey]) {
+        return <Navigate to="/" replace />;
+      }
+      return <>{children}</>;
     }
+    return <Navigate to="/" replace />;
+  }
+
+  if (user?.level_user_id === 1) {
+    return <>{children}</>;
   }
 
   return <>{children}</>;
@@ -125,6 +133,11 @@ export const App: React.FC = () => {
           <Route path="/master/position-product" element={<ProtectedLayout><PermissionGuard permKey="position_product"><PositionProductPage /></PermissionGuard></ProtectedLayout>} />
           <Route path="/master/release-types" element={<ProtectedLayout><PermissionGuard permKey="release_types"><ReleaseTypesPage /></PermissionGuard></ProtectedLayout>} />
           <Route path="/master/loading-types" element={<ProtectedLayout><PermissionGuard permKey="loading_types"><LoadingTypesPage /></PermissionGuard></ProtectedLayout>} />
+          <Route path="/master/gps-distance" element={<ProtectedLayout><PermissionGuard permKey="gps_distance"><GpsDistancePage /></PermissionGuard></ProtectedLayout>} />
+          <Route path="/master/operation-menus" element={<ProtectedLayout><PermissionGuard permKey="operation_menus"><OperationMenuPage /></PermissionGuard></ProtectedLayout>} />
+          <Route path="/master/problem-types" element={<ProtectedLayout><PermissionGuard permKey="problem_types"><ProblemTypesPage /></PermissionGuard></ProtectedLayout>} />
+          <Route path="/operation-menu" element={<Navigate to="/master/operation-menus" replace />} />
+          <Route path="/distance" element={<Navigate to="/master/gps-distance" replace />} />
 
           {/* User Management & Permissions Standalone Pages */}
           <Route path="/users" element={<ProtectedLayout><PermissionGuard permKey="users"><UsersListPage /></PermissionGuard></ProtectedLayout>} />
