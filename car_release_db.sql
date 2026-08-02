@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: localhost
--- Generation Time: Jul 26, 2026 at 10:21 PM
+-- Generation Time: Aug 02, 2026 at 09:30 PM
 -- Server version: 10.4.28-MariaDB
 -- PHP Version: 8.2.4
 
@@ -40,8 +40,8 @@ CREATE TABLE `access` (
 
 INSERT INTO `access` (`access_id`, `access_name`, `description`, `created_at`) VALUES
 (1, 'System Administrator', NULL, '2026-07-20 15:12:13'),
-(2, 'Supervisor / Manager', NULL, '2026-07-20 15:12:13'),
-(3, 'Driver / Staff', NULL, '2026-07-20 15:12:13');
+(2, 'Admin', NULL, '2026-07-20 15:12:13'),
+(3, 'Driver', NULL, '2026-07-20 15:12:13');
 
 -- --------------------------------------------------------
 
@@ -63,11 +63,98 @@ CREATE TABLE `accounting_status` (
 --
 
 INSERT INTO `accounting_status` (`status_id`, `status_code`, `status_name`, `description`, `status`, `created_at`) VALUES
+(1, 'ACC-WAIT', 'รอ...', 'รอดำเนินการ', 'active', '2026-07-23 10:28:11'),
 (2, 'ACC_SAVEAC', 'บันทึกบัญชีแล้ว', 'ทำการบันทึกบัญชีแล้วเรียบร้อย', 'active', '2026-07-23 10:28:11'),
 (3, 'ACC_PROCESS', 'กำลังดำเนินการ', 'อยู่ระหว่างดำเนินการตรวจสอบ', 'active', '2026-07-23 10:28:11'),
 (4, 'ACC_DONE', 'เคลียร์เงินแล้ว', 'รายการเคลียร์แล้วเรียบร้อย', 'active', '2026-07-23 10:28:11'),
-(5, 'ACC_PROBLEM', 'ติดปัญหา', 'รายการติดปัญหา', 'active', '2026-07-23 10:28:11'),
-(6, 'ACC-WAIT', 'รอ...', NULL, 'active', '2026-07-23 10:28:11');
+(5, 'ACC_PROBLEM', 'ติดปัญหา', 'รายการติดปัญหา', 'active', '2026-07-23 10:28:11');
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `api_keys`
+--
+
+CREATE TABLE `api_keys` (
+  `id` int(11) NOT NULL,
+  `key_name` varchar(100) NOT NULL,
+  `key_service` varchar(100) NOT NULL,
+  `key_value` text NOT NULL,
+  `description` varchar(255) DEFAULT NULL,
+  `is_active` tinyint(1) NOT NULL DEFAULT 1,
+  `created_at` datetime DEFAULT current_timestamp(),
+  `updated_at` datetime DEFAULT current_timestamp() ON UPDATE current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+--
+-- Dumping data for table `api_keys`
+--
+
+INSERT INTO `api_keys` (`id`, `key_name`, `key_service`, `key_value`, `description`, `is_active`, `created_at`, `updated_at`) VALUES
+(1, 'OPTIMOROUTE_API_KEY', 'OptimoRoute', '430a4eb0ac4140d1a1498ddfbd7197fcPP64S5MVDFM', 'API Key สำหรับเชื่อมต่อกับ OptimoRoute API ในการจัดวางเส้นทางเดินรถและนำเข้าข้อมูล', 1, '2026-07-31 12:20:01', '2026-07-31 12:20:01'),
+(2, 'GPS_API_TOKEN', 'GPS IAM', '13dade62-5bd6-4082-b0ce-36757dec0d47', 'Bearer Token สำหรับเรียกใช้ GPS IAM API ติดตามพิกัดตำแหน่งรถจัดส่งสินค้า', 1, '2026-07-31 12:20:01', '2026-07-31 12:20:01'),
+(3, 'GPS_API_URL', 'GPS IAM', 'https://api.gpsiam.app/devices', 'Endpoint URL หลักสำหรับเรียกดูอุปกรณ์ GPS รถยนต์ทั้งหมดในระบบ', 1, '2026-07-31 12:20:01', '2026-07-31 12:20:01');
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `audit_log`
+--
+
+CREATE TABLE `audit_log` (
+  `log_id` int(10) UNSIGNED NOT NULL,
+  `user_id` int(10) UNSIGNED DEFAULT NULL,
+  `username` varchar(100) DEFAULT NULL,
+  `user_name` varchar(255) DEFAULT NULL,
+  `action` varchar(100) NOT NULL,
+  `target_type` varchar(50) NOT NULL,
+  `target_id` varchar(100) DEFAULT NULL,
+  `details` text DEFAULT NULL,
+  `ip_address` varchar(50) DEFAULT NULL,
+  `created_at` datetime DEFAULT current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- Dumping data for table `audit_log`
+--
+
+INSERT INTO `audit_log` (`log_id`, `user_id`, `username`, `user_name`, `action`, `target_type`, `target_id`, `details`, `ip_address`, `created_at`) VALUES
+(1, 1, 'admin', 'ผู้ดูแลระบบ (Admin)', 'DELETE_CAR_RELEASE', 'car_release', '19', '{\"car_release_id\":\"19\"}', '::1', '2026-07-30 11:25:11'),
+(2, 1, 'admin', 'ผู้ดูแลระบบ (Admin)', 'DELETE_CAR_RELEASE', 'car_release', '20', '{\"car_release_id\":\"20\"}', '::1', '2026-07-30 11:25:12'),
+(3, 1, 'admin', 'ผู้ดูแลระบบ (Admin)', 'CREATE_CAR_RELEASE', 'car_release', '21', '{\"releaseNo\":\"TMS-2026730-0001\",\"car_id\":\"A1810313-660D-4A1A-A37C-F1BBD350FDB7\",\"user_id\":11,\"mileage\":25000,\"followersCount\":2}', '::1', '2026-07-30 11:26:41'),
+(4, 1, 'admin', 'ผู้ดูแลระบบ (Admin)', 'CREATE_CAR_RELEASE', 'car_release', '22', '{\"releaseNo\":\"TMS-2026730-0002\",\"car_id\":\"8654808D-557B-46DD-9AC4-5BA5514041D6\",\"user_id\":12,\"mileage\":0,\"followersCount\":1}', '::1', '2026-07-30 11:39:13'),
+(5, 1, 'admin', 'ผู้ดูแลระบบ (Admin)', 'UPDATE_CAR_RELEASE', 'car_release', '22', '{\"car_id\":\"8654808D-557B-46DD-9AC4-5BA5514041D6\",\"user_id\":12,\"mileage\":120000,\"accounting_status\":1}', '::1', '2026-07-30 11:39:34'),
+(6, 1, 'admin', 'ผู้ดูแลระบบ (Admin)', 'CREATE_CAR_RELEASE', 'car_release', '23', '{\"releaseNo\":\"TMS-2026730-0003\",\"car_id\":\"BA55C959-C493-4899-B8F7-BB291D20C11F\",\"user_id\":6,\"mileage\":280000,\"followersCount\":1}', '::1', '2026-07-30 11:52:31'),
+(7, 1, 'admin', 'ผู้ดูแลระบบ (Admin)', 'CREATE_CAR_RELEASE', 'car_release', '24', '{\"releaseNo\":\"TMS-2026730-0004\",\"car_id\":\"B918C15B-83A7-4E9E-B181-78E357D10AE0\",\"user_id\":12,\"mileage\":0,\"followersCount\":0}', '::1', '2026-07-30 11:52:54'),
+(8, 1, 'admin', 'ผู้ดูแลระบบ (Admin)', 'CREATE_CAR_RELEASE', 'car_release', '25', '{\"releaseNo\":\"TMS-2026730-0005\",\"car_id\":\"A9609BCC-1C9A-44A4-9C6E-3D6C8109C7EC\",\"user_id\":12,\"mileage\":0,\"followersCount\":0}', '::1', '2026-07-30 11:52:59'),
+(9, 1, 'admin', 'ผู้ดูแลระบบ (Admin)', 'CREATE_CAR_RELEASE', 'car_release', '26', '{\"releaseNo\":\"TMS-2026730-0006\",\"car_id\":\"BA55C959-C493-4899-B8F7-BB291D20C11F\",\"user_id\":12,\"mileage\":0,\"followersCount\":0}', '::1', '2026-07-30 11:59:40'),
+(10, 1, 'admin', 'ผู้ดูแลระบบ (Admin)', 'DELETE_CAR_RELEASE', 'car_release', '26', '{\"car_release_id\":\"26\"}', '::1', '2026-07-30 11:59:57'),
+(11, 1, 'admin', 'ผู้ดูแลระบบ (Admin)', 'DELETE_CAR_RELEASE', 'car_release', '21', '{\"car_release_id\":\"21\"}', '::1', '2026-07-30 12:03:25'),
+(12, 1, 'admin', 'ผู้ดูแลระบบ (Admin)', 'DELETE_CAR_RELEASE', 'car_release', '22', '{\"car_release_id\":\"22\"}', '::1', '2026-07-30 12:03:27'),
+(13, 1, 'admin', 'ผู้ดูแลระบบ (Admin)', 'DELETE_CAR_RELEASE', 'car_release', '23', '{\"car_release_id\":\"23\"}', '::1', '2026-07-30 12:03:29'),
+(14, 1, 'admin', 'ผู้ดูแลระบบ (Admin)', 'DELETE_CAR_RELEASE', 'car_release', '24', '{\"car_release_id\":\"24\"}', '::1', '2026-07-30 12:03:32'),
+(15, 1, 'admin', 'ผู้ดูแลระบบ (Admin)', 'DELETE_CAR_RELEASE', 'car_release', '25', '{\"car_release_id\":\"25\"}', '::1', '2026-07-30 12:03:34'),
+(16, 1, 'admin', 'ผู้ดูแลระบบ (Admin)', 'CREATE_CAR_RELEASE', 'car_release', '27', '{\"releaseNo\":\"TMS-2026730-0001\",\"car_id\":\"8654808D-557B-46DD-9AC4-5BA5514041D6\",\"user_id\":12,\"mileage\":0,\"followersCount\":2}', '::1', '2026-07-30 12:05:31'),
+(17, 1, 'admin', 'ผู้ดูแลระบบ (Admin)', 'UPDATE_CAR_RELEASE', 'car_release', '27', '{\"car_id\":\"8654808D-557B-46DD-9AC4-5BA5514041D6\",\"user_id\":12,\"mileage\":0,\"accounting_status\":1}', '::1', '2026-07-30 12:07:57'),
+(18, 1, 'admin', 'ผู้ดูแลระบบ (Admin)', 'CREATE_CAR_RELEASE', 'car_release', '1', '{\"releaseNo\":\"TMS-2026731-0001\",\"car_id\":\"BA55C959-C493-4899-B8F7-BB291D20C11F\",\"user_id\":12,\"mileage\":0,\"followersCount\":1}', '::1', '2026-07-31 11:36:57'),
+(19, 1, 'admin', 'ผู้ดูแลระบบ (Admin)', 'DELETE_CAR_RELEASE', 'car_release', '1', '{\"car_release_id\":\"1\"}', '::1', '2026-07-31 11:48:40'),
+(20, 1, 'admin', 'ผู้ดูแลระบบ (Admin)', 'CREATE_CAR_RELEASE', 'car_release', '2', '{\"releaseNo\":\"TMS-2026731-0001\",\"car_id\":\"B918C15B-83A7-4E9E-B181-78E357D10AE0\",\"user_id\":12,\"mileage\":0,\"followersCount\":1}', '::1', '2026-07-31 11:52:31'),
+(21, 1, 'admin', 'ผู้ดูแลระบบ (Admin)', 'DELETE_CAR_RELEASE', 'car_release', '2', '{\"car_release_id\":\"2\"}', '::1', '2026-07-31 13:26:04'),
+(22, 1, 'admin', 'ผู้ดูแลระบบ (Admin)', 'CREATE_CAR_RELEASE', 'car_release', '3', '{\"releaseNo\":\"TMS-2026731-0001\",\"car_id\":\"B7BEA9BB-79BA-4B77-BC85-BCF71B34747D\",\"user_id\":12,\"mileage\":249999,\"followersCount\":1}', '::ffff:127.0.0.1', '2026-07-31 16:42:55'),
+(23, 1, 'admin', 'ผู้ดูแลระบบ (Admin)', 'DELETE_CAR_RELEASE', 'car_release', '3', '{\"car_release_id\":\"3\"}', '::1', '2026-07-31 16:48:41'),
+(24, 1, 'admin', 'ผู้ดูแลระบบ (Admin)', 'CREATE_CAR_RELEASE', 'car_release', '4', '{\"releaseNo\":\"TMS-2026731-0001\",\"car_id\":\"56F2B993-D77D-45F2-9699-B8F80B631D21\",\"user_id\":20,\"mileage\":25000,\"followersCount\":1}', '::1', '2026-07-31 17:52:45'),
+(25, 1, 'admin', 'ผู้ดูแลระบบ (Admin)', 'CREATE_CAR_RELEASE', 'car_release', '5', '{\"releaseNo\":\"TMS-2026731-0002\",\"car_id\":\"6AA6A18E-CA40-4AEE-B1DA-EF5B29F06ADE\",\"user_id\":18,\"mileage\":2399978,\"followersCount\":0}', '::1', '2026-07-31 17:54:14'),
+(26, 1, 'admin', 'ผู้ดูแลระบบ (Admin)', 'CREATE_CAR_RELEASE', 'car_release', '6', '{\"releaseNo\":\"TMS-2026731-0003\",\"car_id\":\"7975AFB1-FAD0-4FF3-95D2-2C2F742E1E0C\",\"user_id\":17,\"mileage\":125000,\"followersCount\":0}', '::1', '2026-07-31 17:55:05'),
+(27, 1, 'admin', 'ผู้ดูแลระบบ (Admin)', 'CREATE_CAR_RELEASE', 'car_release', '7', '{\"releaseNo\":\"TMS-2026731-0004\",\"car_id\":\"5DC35337-8370-49C3-8402-1A471A3F0BF2\",\"user_id\":16,\"mileage\":25000,\"followersCount\":0}', '::1', '2026-07-31 21:26:51'),
+(28, 1, 'admin', 'ผู้ดูแลระบบ (Admin)', 'RETURN_CAR', 'car_return', '1', '{\"car_release_id\":\"4\",\"mileage\":27000,\"key_holder_id\":3,\"parking_id\":4,\"gas_bill\":25000}', '::1', '2026-07-31 21:58:47'),
+(29, 1, 'admin', 'ผู้ดูแลระบบ (Admin)', 'DELETE_CAR_RELEASE', 'car_release', '7', '{\"car_release_id\":\"7\"}', '::1', '2026-08-01 10:23:40'),
+(30, 1, 'admin', 'ผู้ดูแลระบบ (Admin)', 'UPDATE_CAR_RELEASE', 'car_release', '4', '{\"car_id\":\"56F2B993-D77D-45F2-9699-B8F80B631D21\",\"user_id\":20,\"mileage\":25000,\"accounting_status\":1}', '::1', '2026-08-01 12:45:49'),
+(31, 1, 'admin', 'ผู้ดูแลระบบ (Admin)', 'UPDATE_CAR_RELEASE', 'car_release', '6', '{\"car_id\":\"7975AFB1-FAD0-4FF3-95D2-2C2F742E1E0C\",\"user_id\":17,\"mileage\":125000,\"accounting_status\":1}', '::1', '2026-08-01 13:43:32'),
+(32, 1, 'admin', 'ผู้ดูแลระบบ (Admin)', 'UPDATE_ACCOUNTING_STATUS', 'car_release', '4', '{\"accounting_status\":\"2\",\"accounting_note\":\"ปล่อยรถ ทะเบียน ผธ4108 [18] คนขับ แม็ก\"}', '::1', '2026-08-02 15:03:06'),
+(33, 16, '007', 'เอ็ม', 'CREATE_CAR_RELEASE', 'car_release', '8', '{\"releaseNo\":\"TMS-202682-0001\",\"car_id\":\"B918C15B-83A7-4E9E-B181-78E357D10AE0\",\"user_id\":16,\"mileage\":25000,\"followersCount\":1}', '::1', '2026-08-02 15:53:55'),
+(34, 1, 'admin', 'ผู้ดูแลระบบ (Admin)', 'RETURN_CAR', 'car_return', '2', '{\"car_release_id\":\"4\",\"mileage\":25000,\"key_holder_id\":3,\"parking_id\":5,\"gas_bill\":15000}', '::1', '2026-08-03 01:39:21'),
+(35, 16, '007', 'เอ็ม', 'UPDATE_ACCOUNTING_STATUS', 'car_release', '8', '{\"accounting_status\":2,\"accounting_note\":\"ปล่อยรถ ทะเบียน ผบ 3876 [37] คนขับ เอ็ม\"}', '::1', '2026-08-03 01:48:53'),
+(36, 16, '007', 'เอ็ม', 'UPDATE_ACCOUNTING_STATUS', 'car_release', '8', '{\"accounting_status\":2,\"accounting_note\":\"เรียบร้อยมั้ย\"}', '::1', '2026-08-03 01:49:56');
 
 -- --------------------------------------------------------
 
@@ -138,7 +225,7 @@ CREATE TABLE `car_release` (
   `image_around_4` varchar(500) DEFAULT NULL,
   `image_around_5` varchar(500) DEFAULT NULL,
   `image_pda` varchar(500) DEFAULT NULL COMMENT 'รูปเครื่อง PDA',
-  `pda_device` varchar(100) DEFAULT NULL COMMENT 'รหัส/หมายเลขเครื่อง PDA',
+  `pda_device` int(11) UNSIGNED DEFAULT NULL COMMENT 'รหัส/หมายเลขเครื่อง PDA',
   `description` text DEFAULT NULL,
   `total_number_of_bills` int(11) DEFAULT 0,
   `total_amount` decimal(12,2) DEFAULT 0.00,
@@ -152,8 +239,38 @@ CREATE TABLE `car_release` (
 --
 
 INSERT INTO `car_release` (`car_release_id`, `car_release_no`, `car_id`, `car_release_type_id`, `user_id`, `group_store_id`, `mileage`, `image_mileage`, `image_front`, `image_around_1`, `image_around_2`, `image_around_3`, `image_around_4`, `image_around_5`, `image_pda`, `pda_device`, `description`, `total_number_of_bills`, `total_amount`, `accounting_status`, `accounting_note`, `created_at`) VALUES
-(13, 'CR-20260726-4988', 'B7BEA9BB-79BA-4B77-BC85-BCF71B34747D', 1, 11, 29, 254000, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 'PDA-10', 'ปล่อยรถ ทะเบียน 84-6565 [41] คนขับ สมชาย ใจดี', 0, 0.00, 6, NULL, '2026-07-27 02:22:24'),
-(14, 'TMS-2026727-0002', 'BA55C959-C493-4899-B8F7-BB291D20C11F', 1, 12, 31, 256000, '/uploads/TMS-2026727-0002/img-1785094546955-569776688.jpg', '/uploads/TMS-2026727-0002/img-1785094546959-438463869.jpg', '/uploads/TMS-2026727-0002/img-1785094546962-862214236.jpg', '/uploads/TMS-2026727-0002/img-1785094546965-235007830.jpg', '/uploads/TMS-2026727-0002/img-1785094546968-771767514.jpg', '/uploads/TMS-2026727-0002/img-1785094546970-595454738.jpg', '/uploads/TMS-2026727-0002/img-1785094546973-841161554.jpg', '/uploads/TMS-2026727-0002/img-1785094546976-347124111.jpg', 'PDA-10', 'ปล่อยรถ ทะเบียน ผบ152[27] คนขับ สมหญิง นาใจ', 0, 0.00, 5, NULL, '2026-07-27 02:35:46');
+(4, 'TMS-2026731-0001', '56F2B993-D77D-45F2-9699-B8F80B631D21', 2, 20, 12, 25000, '/uploads/car_release/TMS-2026731-0001/img-1785495165436-6065990.jpg', '/uploads/car_release/TMS-2026731-0001/img-1785495165449-541204779.jpg', '/uploads/car_release/TMS-2026731-0001/img-1785495165459-629011412.jpg', '/uploads/car_release/TMS-2026731-0001/img-1785495165469-572550741.jpg', '/uploads/car_release/TMS-2026731-0001/img-1785495165477-119228384.jpg', '/uploads/car_release/TMS-2026731-0001/img-1785495165485-55869163.jpg', '/uploads/car_release/TMS-2026731-0001/img-1785495165494-930241823.jpg', '/uploads/car_release/TMS-2026731-0001/img-1785495165505-121991634.jpg', 3, 'ปล่อยรถ ทะเบียน ผธ4108 [18] คนขับ แม็ก', 5, 52500.00, 2, 'ปล่อยรถ ทะเบียน ผธ4108 [18] คนขับ แม็ก', '2026-07-31 17:52:45'),
+(5, 'TMS-2026731-0002', '6AA6A18E-CA40-4AEE-B1DA-EF5B29F06ADE', 1, 18, 14, 2399978, '/uploads/car_release/TMS-2026731-0002/img-1785495254592-331598955.jpg', '/uploads/car_release/TMS-2026731-0002/img-1785495254605-641852252.jpg', '/uploads/car_release/TMS-2026731-0002/img-1785495254614-448504032.jpg', '/uploads/car_release/TMS-2026731-0002/img-1785495254624-758549223.jpg', '/uploads/car_release/TMS-2026731-0002/img-1785495254633-83928781.jpg', '/uploads/car_release/TMS-2026731-0002/img-1785495254642-875000383.jpg', '/uploads/car_release/TMS-2026731-0002/img-1785495254651-441029730.jpg', '/uploads/car_release/TMS-2026731-0002/img-1785495254661-397983546.jpg', 2, 'ปล่อยรถ ทะเบียน ผบ 4772 [46] คนขับ เน็ต', 0, 0.00, 1, NULL, '2026-07-31 17:54:14'),
+(6, 'TMS-2026731-0003', '7975AFB1-FAD0-4FF3-95D2-2C2F742E1E0C', 1, 17, 15, 125000, '/uploads/car_release/TMS-2026731-0003/img-1785495305093-673700896.jpg', '/uploads/car_release/TMS-2026731-0003/img-1785495305106-716300308.jpg', '/uploads/car_release/TMS-2026731-0003/img-1785495305118-313399946.jpg', '/uploads/car_release/TMS-2026731-0003/img-1785495305130-73207731.jpg', '/uploads/car_release/TMS-2026731-0003/img-1785495305139-575709679.jpg', '/uploads/car_release/TMS-2026731-0003/img-1785495305147-83420584.jpg', '/uploads/car_release/TMS-2026731-0003/img-1785495305155-850580737.jpg', '/uploads/car_release/TMS-2026731-0003/img-1785495305165-673371598.jpg', 4, 'ปล่อยรถ ทะเบียน ผธ 4253 [19] คนขับ เก๋ง', 0, 0.00, 1, NULL, '2026-07-31 17:55:05'),
+(8, 'TMS-202682-0001', 'B918C15B-83A7-4E9E-B181-78E357D10AE0', 1, 16, 19, 25000, '/uploads/car_release/TMS-202682-0001/img-1785660835073-297934478.jpg', '/uploads/car_release/TMS-202682-0001/img-1785660835077-910350456.jpg', '/uploads/car_release/TMS-202682-0001/img-1785660835080-422862504.jpg', '/uploads/car_release/TMS-202682-0001/img-1785660835083-264660809.jpg', '/uploads/car_release/TMS-202682-0001/img-1785660835086-582583753.jpg', '/uploads/car_release/TMS-202682-0001/img-1785660835089-679121432.jpg', '/uploads/car_release/TMS-202682-0001/img-1785660835093-662090965.jpg', '/uploads/car_release/TMS-202682-0001/img-1785660835095-62910924.jpg', 3, 'ปล่อยรถ ทะเบียน ผบ 3876 [37] คนขับ เอ็ม', 10, 118110.00, 2, 'เรียบร้อยมั้ย', '2026-08-02 15:53:55');
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `car_release_chat`
+--
+
+CREATE TABLE `car_release_chat` (
+  `chat_id` int(10) UNSIGNED NOT NULL,
+  `car_release_id` int(10) UNSIGNED NOT NULL,
+  `user_id` int(10) UNSIGNED NOT NULL,
+  `sender_name` varchar(255) NOT NULL,
+  `message` text NOT NULL,
+  `image_url` varchar(500) DEFAULT NULL,
+  `created_at` datetime DEFAULT current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- Dumping data for table `car_release_chat`
+--
+
+INSERT INTO `car_release_chat` (`chat_id`, `car_release_id`, `user_id`, `sender_name`, `message`, `image_url`, `created_at`) VALUES
+(1, 19, 1, 'ผู้ดูแลระบบ (Admin)', 'พร้อมไหม', NULL, '2026-07-30 11:15:36'),
+(2, 19, 1, 'ผู้ดูแลระบบ (Admin)', 'ว่ายังไงครับ', NULL, '2026-07-30 11:15:41'),
+(3, 6, 1, 'ผู้ดูแลระบบ (Admin)', 'ติดตามรถครับ รถเป็นยังไงบ้างครับ', NULL, '2026-07-31 17:56:07'),
+(4, 4, 1, 'ผู้ดูแลระบบ (Admin)', 'ติดปัญหา ทำไงดีครับ', '/uploads/chat/4/img-1785516793329-787950654.jpg', '2026-07-31 23:53:13'),
+(5, 6, 1, 'ผู้ดูแลระบบ (Admin)', 'ติดต่อลูกค้าไม่ได้ ส่งสินค้าเรียบร้อย ติดจราจร / รถติด ถึงร้านค้าแล้ว กำลังเดินทางไปร้านค้า', NULL, '2026-08-02 16:26:47'),
+(6, 8, 1, 'ผู้ดูแลระบบ (Admin)', '555', NULL, '2026-08-02 22:46:09');
 
 -- --------------------------------------------------------
 
@@ -173,8 +290,8 @@ CREATE TABLE `car_release_follower` (
 --
 
 INSERT INTO `car_release_follower` (`follower_id`, `car_release_id`, `follower_name`, `created_at`) VALUES
-(7, 14, 'สมชาย ใจดี', '2026-07-27 02:50:32'),
-(8, 14, 'พงษ์พัฒน์ เสาหิน', '2026-07-27 02:50:32');
+(30, 4, 'บอย', '2026-08-01 12:45:49'),
+(31, 8, 'แม็ก', '2026-08-02 15:53:55');
 
 -- --------------------------------------------------------
 
@@ -194,9 +311,11 @@ CREATE TABLE `car_release_type` (
 --
 
 INSERT INTO `car_release_type` (`car_release_type_id`, `type`, `quantity`, `created_at`) VALUES
-(1, 'ปล่อยรถส่งสินค้าประจำวัน', 50, '2026-07-20 15:12:14'),
-(2, 'ปล่อยรถส่งสินค้าด่วนพิเศษ', 20, '2026-07-20 15:12:14'),
-(3, 'ปล่อยรถเยี่ยมชมลูกค้า / เปิดตลาด', 10, '2026-07-20 15:12:14');
+(1, 'ส่งของ', 50, '2026-07-20 15:12:14'),
+(2, 'รับสินค้า', 20, '2026-07-20 15:12:14'),
+(3, 'ฝากส่ง', 10, '2026-07-20 15:12:14'),
+(4, 'เยี่ยมลูกค้า', 0, '2026-07-31 16:30:36'),
+(5, 'เปิดลูกค้าใหม่', 0, '2026-07-31 16:30:42');
 
 -- --------------------------------------------------------
 
@@ -223,6 +342,13 @@ CREATE TABLE `car_return` (
   `created_at` datetime DEFAULT current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
+--
+-- Dumping data for table `car_return`
+--
+
+INSERT INTO `car_return` (`car_return_id`, `car_release_id`, `key_holder_id`, `parking_id`, `mileage`, `image_mileage`, `image_front`, `image_around_1`, `image_around_2`, `image_around_3`, `image_around_4`, `image_return`, `image_pda`, `gas_bill`, `note`, `created_at`) VALUES
+(2, 4, 3, 5, 25000, '/uploads/img-1785695961205-820167541.jpg', '/uploads/img-1785695961209-251026462.jpg', '/uploads/img-1785695961212-43324304.jpg', '/uploads/img-1785695961216-47572646.jpg', '/uploads/img-1785695961219-172647615.jpg', '/uploads/img-1785695961222-253401325.jpg', '/uploads/img-1785695961225-611143820.jpg', '/uploads/img-1785695961228-430739486.jpg', 15000.00, '', '2026-08-03 01:39:21');
+
 -- --------------------------------------------------------
 
 --
@@ -238,6 +364,30 @@ CREATE TABLE `check_in` (
   `location` varchar(100) DEFAULT NULL COMMENT 'lat,long ตอนเช็คอินจริง',
   `created_at` datetime DEFAULT current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- Dumping data for table `check_in`
+--
+
+INSERT INTO `check_in` (`check_in_id`, `list_id`, `image_check_in`, `date_time_check_in`, `signature`, `location`, `created_at`) VALUES
+(1, 512, '/uploads/img-1785554394919-488400322.jpg', '2026-08-01 03:19:54', '/uploads/img-1785554394922-369675267.png', '13.72140455399831,100.79650748562555', '2026-08-01 10:19:54'),
+(2, 511, '/uploads/img-1785554962336-930289507.jpg', '2026-08-01 03:29:22', '/uploads/img-1785554962339-521047656.png', '13.72111683098654,100.79633287980175', '2026-08-01 10:29:22'),
+(3, 511, '/uploads/img-1785555194725-178972873.jpg', '2026-08-01 03:33:14', '/uploads/img-1785555194726-494600157.png', '13.721466901645856,100.79664320405406', '2026-08-01 10:33:14'),
+(4, 510, '/uploads/img-1785556309893-454481942.jpg', '2026-08-01 03:51:49', '/uploads/img-1785556309895-295333974.png', '13.72121707086566,100.79650518623811', '2026-08-01 10:51:49'),
+(5, 509, '/uploads/img-1785647256667-391057056.jpg', '2026-08-02 05:07:36', '/uploads/img-1785647256668-681272327.png', '13.72112114447993,100.7963898835252', '2026-08-02 12:07:36'),
+(6, 507, '/uploads/img-1785656628880-225673641.jpg', '2026-08-02 07:43:48', '/uploads/img-1785656628885-448920247.png', '13.72104396334996,100.79652355576718', '2026-08-02 14:43:48'),
+(7, 508, '/uploads/img-1785656937442-93108205.jpg', '2026-08-02 07:48:57', '/uploads/img-1785656937444-566890818.png', '13.721131532062042,100.79625957352306', '2026-08-02 14:48:57'),
+(8, 611, '/uploads/img-1785661853546-707451707.jpg', '2026-08-02 09:10:53', '/uploads/img-1785661853549-567879820.png', '13.721117703259047,100.79653457865281', '2026-08-02 16:10:53'),
+(9, 673, '/uploads/img-1785662073098-627937359.jpg', '2026-08-02 09:14:33', '/uploads/img-1785662073099-861446579.png', '13.72111806757727,100.79634990255698', '2026-08-02 16:14:33'),
+(10, 672, '/uploads/img-1785662137153-301414622.jpg', '2026-08-02 09:15:37', '/uploads/img-1785662137156-497705665.png', '13.72135828877501,100.79648898558943', '2026-08-02 16:15:37'),
+(11, 612, '/uploads/img-1785694336979-68732484.jpg', '2026-08-02 18:12:16', '/uploads/img-1785694336981-942253480.png', '13.721546936604613,100.79648136300014', '2026-08-03 01:12:16'),
+(12, 627, '/uploads/img-1785694795910-269687582.jpg', '2026-08-02 18:19:55', '/uploads/img-1785694795914-291708329.png', '13.721111576784391,100.79639647518775', '2026-08-03 01:19:55'),
+(13, 587, '/uploads/img-1785695071677-52939693.jpg', '2026-08-02 18:24:31', '/uploads/img-1785695071678-134799032.png', '13.721124996182834,100.79633668516124', '2026-08-03 01:24:31'),
+(14, 586, '/uploads/img-1785695131153-97773010.jpg', '2026-08-02 18:25:31', '/uploads/img-1785695131154-754365273.png', '13.721111754051593,100.79639559546783', '2026-08-03 01:25:31'),
+(15, 591, '/uploads/img-1785695196757-568647393.jpg', '2026-08-02 18:26:36', '/uploads/img-1785695196758-186189650.png', '13.721118176914807,100.79630710487369', '2026-08-03 01:26:36'),
+(16, 588, '/uploads/img-1785695312151-121075404.jpg', '2026-08-02 18:28:32', '/uploads/img-1785695312151-796038508.png', '13.721118172755688,100.79630716120847', '2026-08-03 01:28:32'),
+(17, 590, '/uploads/img-1785695460919-833482504.jpg', '2026-08-02 18:31:00', '/uploads/img-1785695460920-486486600.png', '13.721459381875329,100.79656606630873', '2026-08-03 01:31:00'),
+(18, 620, '/uploads/img-1785696755796-431584680.jpg', '2026-08-02 18:52:35', '/uploads/img-1785696755799-888340426.png', '13.721327003982694,100.79656091837523', '2026-08-03 01:52:35');
 
 -- --------------------------------------------------------
 
@@ -263,6 +413,27 @@ CREATE TABLE `check_out` (
   `created_at` datetime DEFAULT current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
+--
+-- Dumping data for table `check_out`
+--
+
+INSERT INTO `check_out` (`check_out_id`, `list_id`, `payment_id`, `image_bill`, `date_time_check_out`, `cash`, `transfer`, `transfer_according`, `off_site`, `paid`, `amount`, `visit_customer`, `visit_type_id`, `visit_note`, `created_at`) VALUES
+(1, 512, 1, '/uploads/img-1785554435889-49492977.jpg', '2026-08-01 03:20:35', 15000.00, 0.00, 0, 1, 1, 15000.00, 1, 4, '', '2026-08-01 10:20:35'),
+(2, 511, 1, '/uploads/img-1785555249839-813662709.jpg', '2026-08-01 03:34:09', 15000.00, 0.00, 0, 1, 1, 15000.00, 1, 4, '', '2026-08-01 10:34:09'),
+(3, 510, 4, '/uploads/img-1785556328750-314501576.jpg', '2026-08-01 03:52:08', 1000.00, 1500.00, 0, 1, 1, 2500.00, 1, 4, 'ส่งของครับ', '2026-08-01 10:52:08'),
+(4, 509, 1, '/uploads/img-1785647919427-625431349.jpg', '2026-08-02 05:18:39', 5000.00, 0.00, 0, 1, 1, 5000.00, 1, 4, '', '2026-08-02 12:18:39'),
+(5, 507, 2, '/uploads/img-1785656710786-374412546.jpg', '2026-08-02 07:45:10', 0.00, 15000.00, 0, 1, 1, 15000.00, 1, 4, '-', '2026-08-02 14:45:10'),
+(6, 611, 1, '/uploads/img-1785661888398-634312692.jpg', '2026-08-02 09:11:28', 5000.00, 0.00, 0, 1, 1, 5000.00, 1, 4, '', '2026-08-02 16:11:28'),
+(7, 673, 2, '/uploads/img-1785662086508-541444893.jpg', '2026-08-02 09:14:46', 0.00, 15000.00, 0, 1, 1, 15000.00, 1, 4, '', '2026-08-02 16:14:46'),
+(8, 672, 1, '/uploads/img-1785662148465-355689694.jpg', '2026-08-02 09:15:48', 1500.00, 0.00, 0, 1, 1, 1500.00, 1, 4, '', '2026-08-02 16:15:48'),
+(9, 612, 1, '/uploads/img-1785694737164-863370209.jpg', '2026-08-02 18:18:57', 2500.00, 0.00, 0, 1, 1, 2500.00, 1, 4, '', '2026-08-03 01:18:57'),
+(10, 627, 1, '/uploads/img-1785695029926-76830162.jpg', '2026-08-02 18:23:49', 45000.00, 0.00, 0, 1, 1, 45000.00, 1, 4, '', '2026-08-03 01:23:49'),
+(11, 587, 3, '/uploads/img-1785695093440-281359959.jpg', '2026-08-02 18:24:53', 45000.00, 0.00, 0, 1, 1, 45000.00, 1, 4, '', '2026-08-03 01:24:53'),
+(12, 586, 2, '/uploads/img-1785695175204-258470249.jpg', '2026-08-02 18:26:15', 0.00, 1200.00, 0, 1, 1, 1200.00, 1, 4, '', '2026-08-03 01:26:15'),
+(13, 591, 4, '/uploads/img-1785695218240-171054075.jpg', '2026-08-02 18:26:58', 555.00, 555.00, 0, 1, 1, 1110.00, 1, 4, '', '2026-08-03 01:26:58'),
+(14, 590, 2, '/uploads/img-1785695484788-147558278.jpg', '2026-08-02 18:31:24', 0.00, 1500.00, 0, 1, 1, 1500.00, 1, 4, '', '2026-08-03 01:31:24'),
+(15, 590, 1, '/uploads/img-1785695510569-28106576.jpg', '2026-08-02 18:31:50', 300.00, 0.00, 0, 1, 1, 300.00, 1, 4, '', '2026-08-03 01:31:50');
+
 -- --------------------------------------------------------
 
 --
@@ -275,6 +446,16 @@ CREATE TABLE `check_out_image` (
   `image_check_out` varchar(500) NOT NULL,
   `created_at` datetime DEFAULT current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- Dumping data for table `check_out_image`
+--
+
+INSERT INTO `check_out_image` (`image_check_out_id`, `check_out_id`, `image_check_out`, `created_at`) VALUES
+(1, 1, '/uploads/img-1785554435896-882958256.jpg', '2026-08-01 10:20:35'),
+(2, 6, '/uploads/img-1785661888406-177331700.jpg', '2026-08-02 16:11:28'),
+(3, 6, '/uploads/img-1785661888414-839714927.jpg', '2026-08-02 16:11:28'),
+(4, 14, '/uploads/img-1785695484796-161661677.jpg', '2026-08-03 01:31:24');
 
 -- --------------------------------------------------------
 
@@ -296,7 +477,34 @@ CREATE TABLE `delivery_settings` (
 --
 
 INSERT INTO `delivery_settings` (`id`, `service_time_per_stop`, `priority_strategy`, `depot_start_time`, `buffer_time_per_route`, `updated_at`) VALUES
-(1, 10, 'distance_first', '08:00', 15, '2026-07-27 01:33:15');
+(1, 5, 'fastest_time', '10:30', 15, '2026-08-02 15:37:12');
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `gps_distance`
+--
+
+CREATE TABLE `gps_distance` (
+  `gps_distance_id` int(11) NOT NULL,
+  `distance_code` varchar(50) NOT NULL,
+  `distance_name` varchar(100) NOT NULL,
+  `distance_meters` int(11) NOT NULL DEFAULT 300,
+  `unit_name` varchar(20) DEFAULT 'เมตร',
+  `description` varchar(255) DEFAULT NULL,
+  `is_active` tinyint(1) NOT NULL DEFAULT 1,
+  `created_at` datetime DEFAULT current_timestamp(),
+  `updated_at` datetime DEFAULT current_timestamp() ON UPDATE current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+--
+-- Dumping data for table `gps_distance`
+--
+
+INSERT INTO `gps_distance` (`gps_distance_id`, `distance_code`, `distance_name`, `distance_meters`, `unit_name`, `description`, `is_active`, `created_at`, `updated_at`) VALUES
+(1, 'CHECKOUT_MAX', 'ระยะห่างเช็คเอาท์นอกสถานที่ (Off-site Checkout)', 300, 'เมตร', 'ระยะทางสูงสุดระหว่างตำแหน่งเช็คเอาท์กับพิกัดร้านค้า หากเกินถือว่านอกสถานที่', 1, '2026-08-02 11:49:48', '2026-08-02 11:51:44'),
+(2, 'CHECKIN_RADIUS', 'รัศมีเช็คอินร้านค้า (Store Check-in Radius)', 500000, 'เมตร', 'ระยะห่างที่ยอมรับได้สำหรับแจ้งเตือนเข้าถึงบริเวณร้านค้า', 1, '2026-08-02 11:49:48', '2026-08-02 16:10:18'),
+(3, 'ALERT_RADIUS', 'รัศมีแจ้งเตือนใกล้ถึงจุดหมาย (Destination Alert)', 500, 'เมตร', 'รัศมีตรวจจับตำแหน่ง GPS ก่อนเข้าถึงจุดส่งสินค้า', 1, '2026-08-02 11:49:48', '2026-08-02 22:33:29');
 
 -- --------------------------------------------------------
 
@@ -320,14 +528,14 @@ CREATE TABLE `group_store` (
 --
 
 INSERT INTO `group_store` (`group_store_id`, `group_store_name`, `car_id`, `group_color`, `date`, `status`, `load1`, `created_at`) VALUES
-(24, 'Auto-Route001', '281AB033-F649-404F-98C7-6CAC178639CF', '#3b82f6', '2026-07-26', 0, 240, '2026-07-27 01:33:15'),
-(25, 'Auto-Route002', '56F2B993-D77D-45F2-9699-B8F80B631D21', '#10b981', '2026-07-26', 0, 200, '2026-07-27 01:33:16'),
-(26, 'Auto-Route003', '5DC35337-8370-49C3-8402-1A471A3F0BF2', '#f59e0b', '2026-07-26', 0, 220, '2026-07-27 01:33:16'),
-(27, 'Auto-Route004', '6AA6A18E-CA40-4AEE-B1DA-EF5B29F06ADE', '#ef4444', '2026-07-26', 0, 210, '2026-07-27 01:33:16'),
-(28, 'Auto-Route005', '7975AFB1-FAD0-4FF3-95D2-2C2F742E1E0C', '#8b5cf6', '2026-07-26', 0, 220, '2026-07-27 01:33:16'),
-(29, 'Auto-Route006', 'B7BEA9BB-79BA-4B77-BC85-BCF71B34747D', '#ec4899', '2026-07-26', 0, 329, '2026-07-27 01:33:16'),
-(30, 'Auto-Route007', 'B918C15B-83A7-4E9E-B181-78E357D10AE0', '#06b6d4', '2026-07-26', 0, 212, '2026-07-27 01:33:16'),
-(31, 'Auto-Route008', 'BA55C959-C493-4899-B8F7-BB291D20C11F', '#64748b', '2026-07-26', 0, 196, '2026-07-27 01:33:16');
+(12, 'Auto-Route001', '56F2B993-D77D-45F2-9699-B8F80B631D21', '#3b82f6', '2026-07-31', 1, 200, '2026-07-31 17:26:51'),
+(13, 'Auto-Route002', '5DC35337-8370-49C3-8402-1A471A3F0BF2', '#10b981', '2026-07-31', 1, 12, '2026-07-31 17:26:51'),
+(14, 'Auto-Route003', '6AA6A18E-CA40-4AEE-B1DA-EF5B29F06ADE', '#f59e0b', '2026-07-31', 1, 88, '2026-07-31 17:26:51'),
+(15, 'Auto-Route004', '7975AFB1-FAD0-4FF3-95D2-2C2F742E1E0C', '#ef4444', '2026-07-31', 1, 213, '2026-07-31 17:26:51'),
+(16, 'Auto-Route001', '30BC5F89-A597-4D38-8D3A-4A109F060A3E', '#3b82f6', '2026-08-02', 0, 20, '2026-08-02 15:37:12'),
+(17, 'Auto-Route002', '31D6E73A-5746-4CA7-9FEB-2EFFEF814801', '#10b981', '2026-08-02', 0, 100, '2026-08-02 15:37:12'),
+(18, 'Auto-Route003', 'B4D007CE-1DF9-469C-8FFD-607B5F976BE4', '#f59e0b', '2026-08-02', 0, 100, '2026-08-02 15:37:12'),
+(19, 'Auto-Route004', 'B918C15B-83A7-4E9E-B181-78E357D10AE0', '#ef4444', '2026-08-02', 1, 208, '2026-08-02 15:37:12');
 
 -- --------------------------------------------------------
 
@@ -370,9 +578,9 @@ CREATE TABLE `level_user` (
 --
 
 INSERT INTO `level_user` (`level_user_id`, `level_user_name`, `access_id`, `setting_car_release`, `created_at`, `menu_permissions`) VALUES
-(1, 'แอดมินระบบ', 1, 1, '2026-07-20 15:12:13', '{\"dashboard\":true,\"releases\":true,\"create_release\":true,\"driver\":true,\"return\":true,\"stores\":true,\"reports\":true,\"users\":true}'),
-(2, 'หัวหน้างานปล่อยรถ', 2, 1, '2026-07-20 15:12:13', '{\"dashboard\":true,\"releases\":true,\"create_release\":true,\"driver\":true,\"return\":true,\"stores\":true,\"reports\":true,\"users\":true}'),
-(3, 'พนักงานขับรถ / เซลส์', 3, 0, '2026-07-20 15:12:13', '{\"dashboard\":true,\"releases\":true,\"create_release\":true,\"driver\":true,\"return\":true,\"stores\":true,\"reports\":true,\"users\":true}');
+(1, 'แอดมินระบบ', 1, 1, '2026-07-20 15:12:13', '{\"accounting_status\":true,\"api-key\":true,\"dashboard\":true,\"gps_distance\":true,\"import_optimo\":true,\"keys\":true,\"loading_types\":true,\"operation_menus\":true,\"parking\":true,\"payments\":true,\"pda\":true,\"permissions\":true,\"position_product\":true,\"problem_types\":true,\"releases\":true,\"release_types\":true,\"reports\":true,\"route\":true,\"stores\":true,\"users\":true,\"user_access\":true,\"user_levels\":true,\"vehicles\":true}'),
+(2, 'แอดมิน', 2, 1, '2026-07-20 15:12:13', '{\"accounting_status\":true,\"api-key\":false,\"dashboard\":true,\"gps_distance\":true,\"import_optimo\":true,\"keys\":true,\"loading_types\":true,\"operation_menus\":true,\"parking\":true,\"payments\":true,\"pda\":true,\"permissions\":false,\"position_product\":true,\"problem_types\":true,\"releases\":true,\"release_types\":true,\"reports\":true,\"route\":true,\"stores\":true,\"users\":false,\"user_access\":false,\"user_levels\":false,\"vehicles\":true}'),
+(3, 'พนักงานขับรถ', 3, 0, '2026-07-20 15:12:13', '{\"accounting_status\":false,\"api-key\":false,\"dashboard\":true,\"gps_distance\":false,\"import_optimo\":false,\"keys\":false,\"loading_types\":false,\"operation_menus\":false,\"parking\":false,\"payments\":false,\"pda\":false,\"permissions\":false,\"position_product\":false,\"problem_types\":false,\"releases\":true,\"release_types\":false,\"reports\":false,\"route\":true,\"stores\":false,\"users\":false,\"user_access\":false,\"user_levels\":false,\"vehicles\":false}');
 
 -- --------------------------------------------------------
 
@@ -388,7 +596,7 @@ CREATE TABLE `list_store` (
   `sum_quantity` int(11) DEFAULT 0 COMMENT 'จำนวนสินค้ารวมสำหรับร้านนี้',
   `lat_long` varchar(100) DEFAULT NULL COMMENT 'พิกัด ณ จุดที่วางแผน',
   `store_name_result` varchar(255) DEFAULT NULL COMMENT 'ชื่อร้าน ณ เวลาบันทึกผล (snapshot)',
-  `position_product_id` int(11) DEFAULT NULL,
+  `position_product_id` int(11) DEFAULT NULL COMMENT 'ตำแหน่งวางสินค้า',
   `position_production_order` int(11) DEFAULT NULL,
   `bypass` tinyint(1) DEFAULT 0 COMMENT 'ข้ามรายการนี้ (เป็นร้านซ้ำ/store เดียวกันกับรายการอื่นในรอบเดียวกัน)',
   `off_site` tinyint(1) DEFAULT 0 COMMENT 'นอกพื้นที่ที่กำหนดหรือไม่ -- ??',
@@ -408,145 +616,843 @@ CREATE TABLE `list_store` (
 --
 
 INSERT INTO `list_store` (`list_id`, `store_id`, `group_store_id`, `row_order`, `sum_quantity`, `lat_long`, `store_name_result`, `position_product_id`, `position_production_order`, `bypass`, `off_site`, `created_by`, `created_at`, `data_store_no`, `status`, `scheduled_time`, `start_service_time`, `end_service_time`, `priority`, `pod_image`) VALUES
-(124, 'AR00481', 24, 1, 3, '17.0951,103.001834', 'แม่อื๋อ บ้านโพธิ์สง่า (1)', 2, 2, 0, 0, NULL, '2026-07-26 08:00:00', 'POSW-26071543', 'in_progress', '08:09:00', NULL, NULL, 'medium', NULL),
-(125, 'OR-00700', 24, 6, 6, '17.075451,103.03', 'น้องน็อต บ.ท่าม่วง', NULL, NULL, 0, 0, NULL, '2026-07-26 08:00:00', 'POSW-26071593', 'in_progress', '09:21:00', NULL, NULL, 'medium', NULL),
-(126, 'AR00177', 24, 7, 10, '17.059551,103.015573', 'นางสาวคนา จิตธรรมมา (ร้านจิตธรรมา)(2)', NULL, NULL, 0, 0, NULL, '2026-07-26 08:00:00', 'SOW-26070540', 'in_progress', '09:35:00', NULL, NULL, 'medium', NULL),
-(127, 'AR00094', 24, 8, 12, '17.04585,103.029', 'ตาประดิษ ท่าสัง (2)', NULL, NULL, 0, 0, NULL, '2026-07-26 08:00:00', 'POSW-26071552', 'in_progress', '09:49:00', NULL, NULL, 'medium', NULL),
-(128, 'OR-00258', 24, 9, 39, '17.046679, 103.032000', 'ร้านริมปาว (2)', NULL, NULL, 0, 0, NULL, '2026-07-26 08:00:00', 'POSW-26071557', 'in_progress', '10:02:00', NULL, NULL, 'medium', NULL),
-(129, 'OR-00111', 28, 9, 28, '16.999720, 103.054428', 'เปรี้ยว หน้าวัดบ้านสีออ (2)', NULL, NULL, 0, 0, NULL, '2026-07-26 08:00:00', 'POSW-26071533', 'in_progress', '11:08:00', NULL, NULL, 'medium', NULL),
-(130, 'OR-00746', 27, 11, 14, '16.995685,103.050345', 'ศูนย์สาธิตการตลาดบ้านโคกสว่าง', NULL, NULL, 0, 0, NULL, '2026-07-26 08:00:00', 'POSW-26071559', 'in_progress', '10:55:00', NULL, NULL, 'medium', NULL),
-(131, 'OR-00746', 27, 12, 2, '16.995685,103.050345', 'ศูนย์สาธิตการตลาดบ้านโคกสว่าง', NULL, NULL, 0, 0, NULL, '2026-07-26 08:00:00', 'SOW-26070548', 'in_progress', '11:08:00', NULL, NULL, 'medium', NULL),
-(132, 'OR-00886', 24, 16, 1, '16.995162, 103.048724', 'ร้านณัฐพร การค้า', NULL, NULL, 0, 0, NULL, '2026-07-26 08:00:00', 'POSW-26071566', 'in_progress', '11:56:00', NULL, NULL, 'medium', NULL),
-(133, 'AR00101', 27, 5, 50, '16.95591,103.04452', 'กิลาภรณ์ คำพันธ์/แม่พร กุดยาง (2)', NULL, NULL, 0, 0, NULL, '2026-07-26 08:00:00', 'SOW-26070557', 'in_progress', '09:31:00', NULL, NULL, 'medium', NULL),
-(134, 'AR00101', 27, 6, 3, '16.95591,103.04452', 'กิลาภรณ์ คำพันธ์/แม่พร กุดยาง (2)', NULL, NULL, 0, 0, NULL, '2026-07-26 08:00:00', 'SOW-26070542', 'in_progress', '09:44:00', NULL, NULL, 'medium', NULL),
-(135, 'AR00101', 27, 7, 6, '16.95591,103.04452', 'กิลาภรณ์ คำพันธ์/แม่พร กุดยาง (2)', NULL, NULL, 0, 0, NULL, '2026-07-26 08:00:00', 'SOW-26070541', 'in_progress', '09:57:00', NULL, NULL, 'medium', NULL),
-(136, 'OR-00165', 27, 8, 10, '16.955641, 103.054936', 'นางเบ้า จันทพงษ์ (2)', NULL, NULL, 0, 0, NULL, '2026-07-26 08:00:00', 'POSW-26071574', 'in_progress', '10:10:00', NULL, NULL, 'medium', NULL),
-(137, 'OR-00155', 27, 9, 12, '16.963895, 103.077064', 'ร้าน ดีดีการค้า (2)', NULL, NULL, 0, 0, NULL, '2026-07-26 08:00:00', 'POSW-26071511', 'in_progress', '10:24:00', NULL, NULL, 'medium', NULL),
-(138, 'OR-01066', 27, 10, 39, '16.963685, 103.077323', 'นางพิชญากร สีหาโคตร', NULL, NULL, 0, 0, NULL, '2026-07-26 08:00:00', 'ฝากส่ง', 'in_progress', '10:37:00', NULL, NULL, 'medium', NULL),
-(139, 'OR-01766', 28, 7, 28, '16.997921,103.116781', 'ร้าน อิงฟ้า มินิมาร์ท', NULL, NULL, 0, 0, NULL, '2026-07-26 08:00:00', 'POSW-26071580', 'in_progress', '10:33:00', NULL, NULL, 'medium', NULL),
-(140, 'OR-01766', 28, 8, 14, '16.997921,103.116781', 'ร้าน อิงฟ้า มินิมาร์ท', NULL, NULL, 0, 0, NULL, '2026-07-26 08:00:00', 'POSW-26071589', 'in_progress', '10:46:00', NULL, NULL, 'medium', NULL),
-(141, 'OR-01766', 27, 13, 2, '16.997921,103.116781', 'ร้าน อิงฟ้า มินิมาร์ท', NULL, NULL, 0, 0, NULL, '2026-07-26 08:00:00', 'POSW-26071541', 'in_progress', '11:31:00', NULL, NULL, 'medium', NULL),
-(142, 'OR-01729', 25, 17, 1, '16.997491, 103.117690', 'ร้าน ตะวัน', NULL, NULL, 0, 0, NULL, '2026-07-26 08:00:00', 'POSW-26071530', 'in_progress', '13:10:00', NULL, NULL, 'medium', NULL),
-(143, 'OR-01729', 28, 6, 50, '16.997491, 103.117690', 'ร้าน ตะวัน', NULL, NULL, 0, 0, NULL, '2026-07-26 08:00:00', 'POSW-26071594', 'in_progress', '10:20:00', NULL, NULL, 'medium', NULL),
-(144, 'OR-00747', 27, 14, 3, '16.980945, 103.186090', 'นายพจนาท นัตธิลม (ร้าน พีทูเอ เซฟมาร์)', NULL, NULL, 0, 0, NULL, '2026-07-26 08:00:00', 'POSW-26071528', 'in_progress', '11:55:00', NULL, NULL, 'medium', NULL),
-(145, 'OR-00151', 25, 15, 6, '17.026390, 103.237979', 'นางรังสิต น้อยนิล (ว.มินิมาร์ท ศรีธาตุ) (3)', NULL, NULL, 0, 0, NULL, '2026-07-26 08:00:00', 'POSW-26071544', 'in_progress', '12:23:00', NULL, NULL, 'medium', NULL),
-(146, 'OR-00151', 25, 16, 10, '17.026390, 103.237979', 'นางรังสิต น้อยนิล (ว.มินิมาร์ท ศรีธาตุ) (3)', NULL, NULL, 0, 0, NULL, '2026-07-26 08:00:00', 'POSW-26071553', 'in_progress', '12:36:00', NULL, NULL, 'medium', NULL),
-(147, 'OR-00785', 31, 2, 12, '16.979951,103.264662', 'ร้านภูไท [วิภาดา แก้วอินทร์]', NULL, NULL, 0, 0, NULL, '2026-07-26 08:00:00', 'POSW-26071576', 'in_progress', '09:21:00', NULL, NULL, 'medium', NULL),
-(148, 'OR-00785', 31, 3, 39, '16.979951,103.264662', 'ร้านภูไท [วิภาดา แก้วอินทร์]', NULL, NULL, 0, 0, NULL, '2026-07-26 08:00:00', 'ฝากส่ง', 'in_progress', '09:34:00', NULL, NULL, 'medium', NULL),
-(149, 'OR-00434', 31, 6, 28, '17.072537, 103.355509', 'ร้านรักษาผลการค้า (ต.ตี้)', NULL, NULL, 0, 0, NULL, '2026-07-26 08:00:00', 'POSW-26071513', 'in_progress', '12:21:00', NULL, NULL, 'medium', NULL),
-(150, 'AR9900174', 25, 12, 14, '17.073451, 103.249043', 'ร้านเจียมจิตเฟอร์นิเจอร์ (3)', NULL, NULL, 0, 0, NULL, '2026-07-26 08:00:00', 'POSW-26071587', 'in_progress', '11:38:00', NULL, NULL, 'medium', NULL),
-(151, 'AR9900174', 25, 13, 2, '17.073451, 103.249043', 'ร้านเจียมจิตเฟอร์นิเจอร์ (3)', NULL, NULL, 0, 0, NULL, '2026-07-26 08:00:00', 'POSW-26071555', 'in_progress', '11:51:00', NULL, NULL, 'medium', NULL),
-(152, 'AR9900174', 25, 14, 1, '17.073451, 103.249043', 'ร้านเจียมจิตเฟอร์นิเจอร์ (3)', NULL, NULL, 0, 0, NULL, '2026-07-26 08:00:00', 'POSW-26071556', 'in_progress', '12:04:00', NULL, NULL, 'medium', NULL),
-(153, 'AR9900216', 28, 5, 50, '17.075834,103.186978', 'ร้านสุวรรณี บ้านโคกใหญ่ (3)', NULL, NULL, 0, 0, NULL, '2026-07-26 08:00:00', 'SOJ-26070067', 'in_progress', '09:50:00', NULL, NULL, 'medium', NULL),
-(154, 'OR-6684', 25, 11, 3, '17.09958, 103.2035', 'ร้านค้าชุมชนบ้านดูนเลา', NULL, NULL, 0, 0, NULL, '2026-07-26 08:00:00', 'POSW-26071561', 'in_progress', '11:18:00', NULL, NULL, 'medium', NULL),
-(155, 'JK-00113', 28, 1, 6, '17.105279, 103.077912', 'ร้าน. P.top หินฮาว', NULL, NULL, 0, 0, NULL, '2026-07-26 08:00:00', 'SOW-26070547', 'in_progress', '08:22:00', NULL, NULL, 'medium', NULL),
-(156, 'OR-01080', 24, 2, 10, '17.110873, 103.014948', 'เจ้แดง ติดร้านตุ๊กตาตลาดสด กว.', NULL, NULL, 0, 0, NULL, '2026-07-26 08:00:00', 'POSW-26071536', 'in_progress', '08:23:00', NULL, NULL, 'medium', NULL),
-(157, 'OR-00521', 24, 3, 12, '17.106882, 103.020000', 'ขนมไข่หงส์ พันล้าน ดงเมือง', NULL, NULL, 0, 0, NULL, '2026-07-26 08:00:00', 'SOW-26070536', 'in_progress', '08:36:00', NULL, NULL, 'medium', NULL),
-(158, 'OR-00341', 31, 1, 39, '16.943200, 103.187000', 'แม่สิน บ.กุดขอนแก่น(4)', NULL, NULL, 0, 0, NULL, '2026-07-26 08:00:00', 'SOWL-26070252', 'in_progress', '08:55:00', NULL, NULL, 'medium', NULL),
-(159, 'OR-01223', 31, 4, 28, '16.863135, 103.267396', 'ร้าน พีรวัส หมูสด', NULL, NULL, 0, 0, NULL, '2026-07-26 08:00:00', 'POSW-26071507', 'in_progress', '10:06:00', NULL, NULL, 'medium', NULL),
-(160, 'OR-01759', 30, 9, 14, '16.911120, 103.175262', 'ชมพู่ มินิมาร์ท', NULL, NULL, 0, 0, NULL, '2026-07-26 08:00:00', 'SOWL-26070250', 'in_progress', '11:34:00', NULL, NULL, 'medium', NULL),
-(161, 'OR-01759', 30, 10, 2, '16.911120, 103.175262', 'ชมพู่ มินิมาร์ท', NULL, NULL, 0, 0, NULL, '2026-07-26 08:00:00', 'SOWL-26070247', 'in_progress', '11:47:00', NULL, NULL, 'medium', NULL),
-(162, 'OR-6413', 29, 21, 1, '16.845144, 103.046294', 'ดีดีทวีทรัพย์ บ้านหัวนาคำ(กระนวน)', NULL, NULL, 0, 0, NULL, '2026-07-26 08:00:00', 'POSW-26071542', 'in_progress', '14:24:00', NULL, NULL, 'medium', NULL),
-(163, 'OR-6413', 31, 5, 50, '16.845144, 103.046294', 'ดีดีทวีทรัพย์ บ้านหัวนาคำ(กระนวน)', NULL, NULL, 0, 0, NULL, '2026-07-26 08:00:00', 'SOJ-26070068', 'in_progress', '10:58:00', NULL, NULL, 'medium', NULL),
-(164, 'OR-01637', 30, 8, 3, '16.908892, 103.004209', 'ยุรี นกเทศน้อย', NULL, NULL, 0, 0, NULL, '2026-07-26 08:00:00', 'POSW-26071562', 'in_progress', '10:51:00', NULL, NULL, 'medium', NULL),
-(165, 'OR-2657', 27, 4, 6, '16.946936, 103.016023', 'ชนะกิจ บะยาว', NULL, NULL, 0, 0, NULL, '2026-07-26 08:00:00', 'POSW-26071573', 'in_progress', '09:15:00', NULL, NULL, 'medium', NULL),
-(166, 'AR00088', 27, 3, 10, '16.969544, 102.956560', 'สัมฤทธิ์ มิตรภาพ(ยายปราณี) (2)', NULL, NULL, 0, 0, NULL, '2026-07-26 08:00:00', 'SOW-26070544', 'in_progress', '08:53:00', NULL, NULL, 'medium', NULL),
-(167, 'OR-00023', 24, 15, 12, '16.971451, 102.976021', 'นายศักรินทร์ พันธ์รอด (2)', NULL, NULL, 0, 0, NULL, '2026-07-26 08:00:00', 'POSW-26071540', 'in_progress', '11:31:00', NULL, NULL, 'medium', NULL),
-(168, 'OR-01510', 24, 14, 39, '16.984016,103.006787', 'ร้านค้า 5 แยกต้นมะขามใหญ่', NULL, NULL, 0, 0, NULL, '2026-07-26 08:00:00', 'SOWL-26070254', 'in_progress', '11:15:00', NULL, NULL, 'medium', NULL),
-(169, 'OR-00925', 24, 13, 28, '16.996683, 103.012766', 'ครูสุพรรณ (ร้านใจดี 20 บ้านโนนทิง)', NULL, NULL, 0, 0, NULL, '2026-07-26 08:00:00', 'POSW-26071516', 'in_progress', '11:02:00', NULL, NULL, 'medium', NULL),
-(170, 'OR-01469', 24, 10, 14, '17.022554, 102.995573', 'แม่โสภา บ.ห้วยบง', NULL, NULL, 0, 0, NULL, '2026-07-26 08:00:00', 'POSW-26071572', 'in_progress', '10:20:00', NULL, NULL, 'medium', NULL),
-(171, 'OR-01469', 24, 11, 2, '17.022554, 102.995573', 'แม่โสภา บ.ห้วยบง', NULL, NULL, 0, 0, NULL, '2026-07-26 08:00:00', 'POSW-26071510', 'in_progress', '10:33:00', NULL, NULL, 'medium', NULL),
-(172, 'OR-01469', 24, 12, 1, '17.022554, 102.995573', 'แม่โสภา บ.ห้วยบง', NULL, NULL, 0, 0, NULL, '2026-07-26 08:00:00', 'SOW-26070556', 'in_progress', '10:46:00', NULL, NULL, 'medium', NULL),
-(173, 'AR00409', 27, 1, 50, '17.020498, 102.950290', 'แม่ลี หนองเหี้ย (1)', NULL, NULL, 0, 0, NULL, '2026-07-26 08:00:00', 'POSW-26071520', 'in_progress', '08:20:00', NULL, NULL, 'medium', NULL),
-(174, 'AR00409', 27, 2, 3, '17.020498, 102.950290', 'แม่ลี หนองเหี้ย (1)', NULL, NULL, 0, 0, NULL, '2026-07-26 08:00:00', 'SOWL-26070251', 'in_progress', '08:33:00', NULL, NULL, 'medium', NULL),
-(175, 'OR-00271', 26, 3, 6, '17.042482, 102.927000', 'นุ้ย ห้วยเกิ้ง (1)', NULL, NULL, 0, 0, NULL, '2026-07-26 08:00:00', 'SOW-26070552', 'in_progress', '08:42:00', NULL, NULL, 'medium', NULL),
-(176, 'AR00207', 26, 1, 10, '17.048427, 102.926713', 'พี่สำลี (1)', NULL, NULL, 0, 0, NULL, '2026-07-26 08:00:00', 'POSW-26071546', 'in_progress', '08:16:00', NULL, NULL, 'medium', NULL),
-(177, 'AR00329', 26, 6, 12, '17.066792, 102.889403', 'น้าแสง บ้านบุ่งหมากลาน (1)', NULL, NULL, 0, 0, NULL, '2026-07-26 08:00:00', 'SOW-26070550', 'in_progress', '09:30:00', NULL, NULL, 'medium', NULL),
-(178, 'AR00329', 26, 7, 39, '17.066792, 102.889403', 'น้าแสง บ้านบุ่งหมากลาน (1)', NULL, NULL, 0, 0, NULL, '2026-07-26 08:00:00', 'SOW-26070551', 'in_progress', '09:43:00', NULL, NULL, 'medium', NULL),
-(180, 'JK-00335', 26, 2, 14, '17.044723, 102.929060', 'ร้าน Double T บิงซู&เบียร์วุ้น', NULL, NULL, 0, 0, NULL, '2026-07-26 08:00:00', 'POSW-26071527', 'in_progress', '08:29:00', NULL, NULL, 'medium', NULL),
-(181, 'AR9900042', 26, 4, 2, '17.028790, 102.906946', 'แม่พลอย เกิ้งน้อย (1)', NULL, NULL, 0, 0, NULL, '2026-07-26 08:00:00', 'SOW-26070546', 'in_progress', '08:57:00', NULL, NULL, 'medium', NULL),
-(182, 'AR00418', 26, 5, 1, '17.033290, 102.873914', 'แม่กอง บ้านหนองหญ้า (1)', NULL, NULL, 0, 0, NULL, '2026-07-26 08:00:00', 'SOW-26070537', 'in_progress', '09:13:00', NULL, NULL, 'medium', NULL),
-(183, 'OR-00281', 30, 5, 50, '17.021431,102.798688', 'กองทุนหมู่บ้านหนองกุงทอง (1)', NULL, NULL, 0, 0, NULL, '2026-07-26 08:00:00', 'POSW-26071591', 'in_progress', '09:33:00', NULL, NULL, 'medium', NULL),
-(184, 'OR-00222', 30, 6, 3, '16.986562, 102.826021', 'ร้านธงชัยการค้า', NULL, NULL, 0, 0, NULL, '2026-07-26 08:00:00', 'POSW-26071583', 'in_progress', '09:51:00', NULL, NULL, 'medium', NULL),
-(185, 'OR-00222', 30, 7, 6, '16.986562, 102.826021', 'ร้านธงชัยการค้า', NULL, NULL, 0, 0, NULL, '2026-07-26 08:00:00', 'POSW-26071564', 'in_progress', '10:04:00', NULL, NULL, 'medium', NULL),
-(186, 'OR-00414', 29, 20, 10, '17.023211, 102.739009', 'โซนัว ครัวคันนา', NULL, NULL, 0, 0, NULL, '2026-07-26 08:00:00', 'POSW-26071582', 'in_progress', '13:06:00', NULL, NULL, 'medium', NULL),
-(187, 'JK-00156', 29, 19, 12, '17.038221, 102.771458', 'ร้าน BM&ใยไหม', NULL, NULL, 0, 0, NULL, '2026-07-26 08:00:00', 'POSW-26071567', 'in_progress', '12:49:00', NULL, NULL, 'medium', NULL),
-(188, 'JK-00156', 30, 2, 39, '17.038221, 102.771458', 'ร้าน BM&ใยไหม', NULL, NULL, 0, 0, NULL, '2026-07-26 08:00:00', 'SOJ-26070069', 'in_progress', '08:51:00', NULL, NULL, 'medium', NULL),
-(189, 'JK-00156', 30, 3, 28, '17.038221, 102.771458', 'ร้าน BM&ใยไหม', NULL, NULL, 0, 0, NULL, '2026-07-26 08:00:00', 'SOW-26070543', 'in_progress', '09:04:00', NULL, NULL, 'medium', NULL),
-(190, 'JK-00156', 30, 4, 14, '17.038221, 102.771458', 'ร้าน BM&ใยไหม', NULL, NULL, 0, 0, NULL, '2026-07-26 08:00:00', 'POSW-26071504', 'in_progress', '09:17:00', NULL, NULL, 'medium', NULL),
-(191, 'OR-01040', 29, 18, 2, '17.058719,102.786587', 'นางผกามาศ จันทร์ดี', NULL, NULL, 0, 0, NULL, '2026-07-26 08:00:00', 'POSW-26071535', 'in_progress', '12:34:00', NULL, NULL, 'medium', NULL),
-(192, 'AR00048', 29, 17, 1, '17.060593,102.787189', 'นายบวร ไชยสิทธิ์ (บวรพานิช) (1)', NULL, NULL, 0, 0, NULL, '2026-07-26 08:00:00', 'POSW-26071534', 'in_progress', '12:21:00', NULL, NULL, 'medium', NULL),
-(193, 'AR00372', 30, 1, 50, '17.061772, 102.787043', 'ประณีพานิชย์ (แม่ตุ๋ย บ้านนาเหล่า) (1)', NULL, NULL, 0, 0, NULL, '2026-07-26 08:00:00', 'POSW-26071586', 'in_progress', '08:36:00', NULL, NULL, 'medium', NULL),
-(194, 'AR00395', 29, 16, 3, '17.061731, 102.786957', 'กุหลาบการค้า (1)', NULL, NULL, 0, 0, NULL, '2026-07-26 08:00:00', 'SOW-26070535', 'in_progress', '12:08:00', NULL, NULL, 'medium', NULL),
-(195, 'JK-00355', 29, 15, 6, '17.107483, 102.772170', 'น.ส. ธวัลรัตน์ บิลจรัญ', NULL, NULL, 0, 0, NULL, '2026-07-26 08:00:00', 'POSW-26071558', 'in_progress', '11:49:00', NULL, NULL, 'medium', NULL),
-(196, 'OR-99992', 29, 14, 10, '17.109072,102.774917', 'น้อง มะปราง', NULL, NULL, 0, 0, NULL, '2026-07-26 08:00:00', 'POSW-26071560', 'in_progress', '11:36:00', NULL, NULL, 'medium', NULL),
-(197, 'AR00332', 26, 14, 12, '17.130661, 102.783032', 'แม่สี ท่าสี (1)', NULL, NULL, 0, 0, NULL, '2026-07-26 08:00:00', 'POSW-26071581', 'in_progress', '11:28:00', NULL, NULL, 'medium', NULL),
-(198, 'AR00419', 29, 12, 39, '17.154667, 102.788989', 'สนธิพันธตระกูลพาณิชย์ (พ่อสน เก่า (1)', NULL, NULL, 0, 0, NULL, '2026-07-26 08:00:00', 'POSW-26071551', 'in_progress', '11:07:00', NULL, NULL, 'medium', NULL),
-(199, 'AR00118', 29, 3, 28, '17.174080, 102.774740', 'พ่อสมจิตร ทับกุง (1)', NULL, NULL, 0, 0, NULL, '2026-07-26 08:00:00', 'POSW-26071569', 'in_progress', '09:08:00', NULL, NULL, 'medium', NULL),
-(200, 'AR00055', 29, 4, 14, '17.176665,102.771809', 'กองทุนหมู่บ้านทับกุง หมู่ที่1 (1)', NULL, NULL, 0, 0, NULL, '2026-07-26 08:00:00', 'POSW-26071571', 'in_progress', '09:21:00', NULL, NULL, 'medium', NULL),
-(201, 'AR00055', 29, 5, 2, '17.176665,102.771809', 'กองทุนหมู่บ้านทับกุง หมู่ที่1 (1)', NULL, NULL, 0, 0, NULL, '2026-07-26 08:00:00', 'POSW-26071529', 'in_progress', '09:34:00', NULL, NULL, 'medium', NULL),
-(202, 'JK-00133', 26, 16, 1, '17.176551,102.771684', 'พาขวัญพาณิชย์ 3', NULL, NULL, 0, 0, NULL, '2026-07-26 08:00:00', 'SOW-26070534', 'in_progress', '11:59:00', NULL, NULL, 'medium', NULL),
-(203, 'AR00139', 29, 9, 50, '17.171558, 102.767979', 'นางสาวพจนา จำปาวัตตะ (สมหมายการค้า) (1)', NULL, NULL, 0, 0, NULL, '2026-07-26 08:00:00', 'POSW-26071525', 'in_progress', '10:26:00', NULL, NULL, 'medium', NULL),
-(204, 'AR00139', 29, 10, 3, '17.171558, 102.767979', 'นางสาวพจนา จำปาวัตตะ (สมหมายการค้า) (1)', NULL, NULL, 0, 0, NULL, '2026-07-26 08:00:00', 'POSW-26071526', 'in_progress', '10:39:00', NULL, NULL, 'medium', NULL),
-(205, 'AR00139', 29, 11, 6, '17.171558, 102.767979', 'นางสาวพจนา จำปาวัตตะ (สมหมายการค้า) (1)', NULL, NULL, 0, 0, NULL, '2026-07-26 08:00:00', 'POSW-26071531', 'in_progress', '10:52:00', NULL, NULL, 'medium', NULL),
-(206, 'AR00128', 29, 6, 10, '17.170800, 102.769989', 'ร้านแสงประเสริฐ/ทับกุง (1)', NULL, NULL, 0, 0, NULL, '2026-07-26 08:00:00', 'POSW-26071575', 'in_progress', '09:47:00', NULL, NULL, 'medium', NULL),
-(207, 'AR00128', 29, 7, 12, '17.170800, 102.769989', 'ร้านแสงประเสริฐ/ทับกุง (1)', NULL, NULL, 0, 0, NULL, '2026-07-26 08:00:00', 'POSW-26071517', 'in_progress', '10:00:00', NULL, NULL, 'medium', NULL),
-(208, 'AR9900137', 29, 8, 39, '17.170220, 102.771925', 'แม่ติ๋ม ทับกุง (1)', NULL, NULL, 0, 0, NULL, '2026-07-26 08:00:00', 'SOW-26070538', 'in_progress', '10:13:00', NULL, NULL, 'medium', NULL),
-(209, 'AR00078', 29, 13, 28, '17.139190, 102.785011', 'ท่ายม (1)', NULL, NULL, 0, 0, NULL, '2026-07-26 08:00:00', 'POSW-26071579', 'in_progress', '11:20:00', NULL, NULL, 'medium', NULL),
-(210, 'AR00005', 26, 11, 14, '17.12069,102.822', 'โอพาณิช(1)', NULL, NULL, 0, 0, NULL, '2026-07-26 08:00:00', 'POSW-26071538', 'in_progress', '10:45:00', NULL, NULL, 'medium', NULL),
-(217, 'AR00071', 24, 4, 12, '17.116098, 103.032021', 'ห่อเงิน (3)', NULL, NULL, 0, 0, NULL, '2026-07-26 08:00:00', 'POSW-26071508', 'in_progress', '08:49:00', NULL, NULL, 'medium', NULL),
-(218, 'JK-00283', 24, 5, 39, '17.122036, 103.032002', 'ปราณีคาร์แคร์', NULL, NULL, 0, 0, NULL, '2026-07-26 08:00:00', 'POSW-26071549', 'in_progress', '09:02:00', NULL, NULL, 'medium', NULL),
-(219, 'AR00076', 28, 2, 28, '17.1748,103.07', 'พี่เดือน (3)', NULL, NULL, 0, 0, NULL, '2026-07-26 08:00:00', 'POSW-26071523', 'in_progress', '08:45:00', NULL, NULL, 'medium', NULL),
-(220, 'AR00076', 28, 3, 14, '17.1748,103.07', 'พี่เดือน (3)', NULL, NULL, 0, 0, NULL, '2026-07-26 08:00:00', 'POSW-26071522', 'in_progress', '08:58:00', NULL, NULL, 'medium', NULL),
-(221, 'AR00076', 28, 4, 2, '17.1748,103.07', 'พี่เดือน (3)', NULL, NULL, 0, 0, NULL, '2026-07-26 08:00:00', 'SOWL-26070249', 'in_progress', '09:11:00', NULL, NULL, 'medium', NULL),
-(222, 'OR-01389', 25, 10, 1, '17.157564, 103.159376', 'บัวสวัสดิ์การค้า', NULL, NULL, 0, 0, NULL, '2026-07-26 08:00:00', 'POSW-26071521', 'in_progress', '10:54:00', NULL, NULL, 'medium', NULL),
-(223, 'OR-00614', 25, 9, 50, '17.209800, 103.144032', 'นางลำไพ ลาไป (ร้านแม่ลำไพ อ.กู่แก้ว)', NULL, NULL, 0, 0, NULL, '2026-07-26 08:00:00', 'POSW-26071577', 'in_progress', '10:34:00', NULL, NULL, 'medium', NULL),
-(224, 'OR-6218', 30, 11, 3, '17.30205,103.195052', 'อินเตอร์ การค้า', NULL, NULL, 0, 0, NULL, '2026-07-26 08:00:00', 'POSW-26071578', 'in_progress', '13:11:00', NULL, NULL, 'medium', NULL),
-(225, 'OR-01840', 25, 8, 6, '17.245609, 103.132717', 'ร้านบุญดี', NULL, NULL, 0, 0, NULL, '2026-07-26 08:00:00', 'POSW-26071585', 'in_progress', '10:17:00', NULL, NULL, 'medium', NULL),
-(226, 'OR-3220', 25, 7, 10, '17.253747, 103.093803', 'แก้มกัน บ้านพังซ่อน', NULL, NULL, 0, 0, NULL, '2026-07-26 08:00:00', 'POSW-26071590', 'in_progress', '09:59:00', NULL, NULL, 'medium', NULL),
-(227, 'AR00150', 25, 6, 12, '17.232851, 103.025043', 'แม่พรไพร สวนม่อน (5)', NULL, NULL, 0, 0, NULL, '2026-07-26 08:00:00', 'SOWL-26070253', 'in_progress', '09:35:00', NULL, NULL, 'medium', NULL),
-(228, 'AR00473', 25, 4, 39, '17.230376, 102.947120', 'ปรารถนา ศรีทอง (โคกสง่ามาร์เก็ต)', NULL, NULL, 0, 0, NULL, '2026-07-26 08:00:00', 'POSW-26071518', 'in_progress', '08:57:00', NULL, NULL, 'medium', NULL),
-(229, 'AR00473', 25, 5, 28, '17.230376, 102.947120', 'ปรารถนา ศรีทอง (โคกสง่ามาร์เก็ต)', NULL, NULL, 0, 0, NULL, '2026-07-26 08:00:00', 'POSW-26071524', 'in_progress', '09:10:00', NULL, NULL, 'medium', NULL),
-(230, 'AR00511', 25, 3, 14, '17.215956, 102.937968', 'ร้านไพบูลย์มินิมาร์ท', NULL, NULL, 0, 0, NULL, '2026-07-26 08:00:00', 'POSW-26071547', 'in_progress', '08:44:00', NULL, NULL, 'medium', NULL),
-(231, 'OR-00592', 25, 1, 2, '17.169241,102.929166', 'ร้านแม่ตุ่น บ้านสี่แจ', NULL, NULL, 0, 0, NULL, '2026-07-26 08:00:00', 'POSW-26071563', 'in_progress', '08:10:00', NULL, NULL, 'medium', NULL),
-(232, 'OR-01794', 25, 2, 1, '17.180443, 102.903388', 'ร้านสุภาพร', NULL, NULL, 0, 0, NULL, '2026-07-26 08:00:00', 'POSW-26071548', 'in_progress', '08:25:00', NULL, NULL, 'medium', NULL),
-(233, 'OR-01810', 29, 1, 50, '17.222607, 102.860861', 'ร้าน เพชรการค้า', NULL, NULL, 0, 0, NULL, '2026-07-26 08:00:00', 'POSW-26071554', 'in_progress', '08:27:00', NULL, NULL, 'medium', NULL),
-(234, 'JK-00332', 29, 2, 3, '17.169864, 102.785220', 'ร้านขวัญใจของชำ', NULL, NULL, 0, 0, NULL, '2026-07-26 08:00:00', 'POSW-26071568', 'in_progress', '08:55:00', NULL, NULL, 'medium', NULL),
-(235, 'OR-01313', 26, 15, 6, '17.138831,102.786287', 'นิตยา ถามีมาก', NULL, NULL, 0, 0, NULL, '2026-07-26 08:00:00', 'POSW-26071584', 'in_progress', '11:41:00', NULL, NULL, 'medium', NULL),
-(236, 'AR9900020', 26, 13, 10, '17.128788, 102.783087', 'ร้านค้าชุมชนบ้านท่าสี (1)', NULL, NULL, 0, 0, NULL, '2026-07-26 08:00:00', 'POSW-26071532', 'in_progress', '11:15:00', NULL, NULL, 'medium', NULL),
-(237, 'OR-01156', 26, 12, 12, '17.119059,102.820003', 'ร้าน อ.เจริญพานิชย์', NULL, NULL, 0, 0, NULL, '2026-07-26 08:00:00', 'POSW-26071565', 'in_progress', '10:58:00', NULL, NULL, 'medium', NULL),
-(238, 'OR-00288', 26, 10, 39, '17.086867, 102.853010', 'บีมบีม', NULL, NULL, 0, 0, NULL, '2026-07-26 08:00:00', 'POSW-26071550', 'in_progress', '10:26:00', NULL, NULL, 'medium', NULL),
-(239, 'OR-00296', 26, 9, 28, '17.087567, 102.855021', 'แม่ประยงค์ (1)', NULL, NULL, 0, 0, NULL, '2026-07-26 08:00:00', 'ฝากส่ง', 'in_progress', '10:13:00', NULL, NULL, 'medium', NULL),
-(240, 'AR00440', 26, 8, 14, '17.068855,102.886939', 'แม่ไล บุ่งหมากลาน ม.4 (1)', NULL, NULL, 0, 0, NULL, '2026-07-26 08:00:00', 'POSW-26071588', 'in_progress', '09:56:00', NULL, NULL, 'medium', NULL);
+(433, 'OR-00515', 15, 60, 3, '17.135584, 102.944292', 'ยอยุ้ย กวดวิชา', 1, 1, 0, 0, 1, '2026-07-31 08:00:00', 'ฝากส่ง', 'in_progress', '19:53:00', NULL, NULL, 'medium', NULL),
+(434, 'AR00210', 15, 56, 3, '17.057607,102.923154', 'โฟนแอนเฟรม (1)', 2, 2, 0, 0, 1, '2026-07-31 08:00:00', 'SOW-26070722', 'in_progress', '19:06:00', NULL, NULL, 'medium', NULL),
+(435, 'AR00210', 15, 55, 4, '17.057607,102.923154', 'โฟนแอนเฟรม (1)', 3, 4, 0, 0, 1, '2026-07-31 08:00:00', 'SOW-26070719', 'in_progress', '19:01:00', NULL, NULL, 'medium', NULL),
+(436, 'AR00203', 15, 51, 5, '17.050438, 102.925268', 'นิตยา สาย2 (1)', 4, 8, 0, 0, 1, '2026-07-31 08:00:00', 'SOWL-26070309', 'in_progress', '18:37:00', NULL, NULL, 'medium', NULL),
+(437, 'ARI00009', 15, 52, 3, '17.057351, 102.919907', 'ไข่ย่างห้วยเกิ้ง', 5, 7, 0, 0, 1, '2026-07-31 08:00:00', 'SOWL-26070306', 'in_progress', '18:44:00', NULL, NULL, 'medium', NULL),
+(438, 'AR00552', 15, 44, 3, '17.063710, 102.896979', 'แม่จันทร์ บ้านหัวขัว(1)', 1, 1, 0, 0, 1, '2026-07-31 08:00:00', 'SOW-26070712', 'in_progress', '17:42:00', NULL, NULL, 'medium', NULL),
+(439, 'AR00525', 15, 40, 3, '17.08472,102.855989', 'ร้านเต็มศิริ นาฝาย (1)', 2, 2, 0, 0, 1, '2026-07-31 08:00:00', 'SOWL-26070303', 'in_progress', '17:00:00', NULL, NULL, 'medium', NULL),
+(440, 'OR-00550', 15, 39, 4, '17.086099, 102.855968', 'ทูวเจ', 3, 4, 0, 0, 1, '2026-07-31 08:00:00', 'POSW-26072041', 'in_progress', '16:54:00', NULL, NULL, 'medium', NULL),
+(441, 'OR-00343', 15, 38, 5, '17.086241, 102.855979', 'โบสบาย (ยุ่งบายทะเก่า) (1)', 4, 8, 0, 0, 1, '2026-07-31 08:00:00', 'SOW-26070705', 'in_progress', '16:48:00', NULL, NULL, 'medium', NULL),
+(442, 'OR-100003', 15, 37, 3, '17.087573, 102.854592', 'นาฝาย ซุปเปอร์', 5, 7, 0, 0, 1, '2026-07-31 08:00:00', 'SO-26070007', 'in_progress', '16:42:00', NULL, NULL, 'medium', NULL),
+(443, 'AR00440', 15, 43, 3, '17.068855,102.886939', 'แม่ไล บุ่งหมากลาน ม.4 (1)', 1, 1, 0, 0, 1, '2026-07-31 08:00:00', 'POSW-26072063', 'in_progress', '17:34:00', NULL, NULL, 'medium', NULL),
+(444, 'AR00440', 15, 42, 3, '17.068855,102.886939', 'แม่ไล บุ่งหมากลาน ม.4 (1)', 2, 2, 0, 0, 1, '2026-07-31 08:00:00', 'SOW-26070724', 'in_progress', '17:29:00', NULL, NULL, 'medium', NULL),
+(445, 'OR-2962', 12, 10, 4, '16.852949, 103.049370', 'เจเจออยแอนด์มินิมาร์ทบ.สนามชัย(กระนวน)', 3, 4, 0, 1, 1, '2026-07-31 08:00:00', 'POSW-26071965', 'in_progress', '12:42:00', NULL, NULL, 'medium', NULL),
+(446, 'OR-3715', 12, 13, 5, '16.792617,103.176369', 'นางภารดี ตรุสคาท(แม่จู่)บ้านนามูล(กระนวน)', 4, 8, 0, 0, 1, '2026-07-31 08:00:00', 'POSW-26072067', 'in_progress', '13:29:00', NULL, NULL, 'medium', NULL),
+(447, 'OR-7434', 12, 11, 3, '16.863231, 103.086651', 'สมบูรณ์การค้า บ.โคกล่าม(กระนวน)', 5, 7, 0, 0, 1, '2026-07-31 08:00:00', 'POSW-26072054', 'in_progress', '12:57:00', NULL, NULL, 'medium', NULL),
+(448, 'OR-3454', 12, 12, 3, '16.866791, 103.108149', 'คุณเก๋ มินิมาร์ทบ.โนนสมบูรณ์(กระนวน)', 1, 1, 0, 0, 1, '2026-07-31 08:00:00', 'POSW-26072061', 'in_progress', '13:08:00', NULL, NULL, 'medium', NULL),
+(449, 'OR-01759', 12, 43, 3, '16.911120, 103.175262', 'ชมพู่ มินิมาร์ท', 2, 2, 0, 0, 1, '2026-07-31 08:00:00', 'POSW-26072020', 'in_progress', '18:44:00', NULL, NULL, 'medium', NULL),
+(450, 'OR-4144', 12, 36, 4, '16.94524,103.196563', 'วิภารัตน์ บ้านโนนมะค่า', 3, 4, 0, 0, 1, '2026-07-31 08:00:00', 'SOWL-26070315', 'in_progress', '17:40:00', NULL, NULL, 'medium', NULL),
+(451, 'OR-3173', 12, 33, 5, '17.009529,103.212184', 'ร้านฌอกะเฌอ มินิมาร์ท', 4, 8, 0, 0, 1, '2026-07-31 08:00:00', 'POSW-26072000', 'in_progress', '17:05:00', NULL, NULL, 'medium', NULL),
+(452, 'OR-00151', 12, 32, 3, '17.026390, 103.237979', 'นางรังสิต น้อยนิล (ว.มินิมาร์ท ศรีธาตุ) (3)', 5, 7, 0, 0, 1, '2026-07-31 08:00:00', 'SOWL-26070311', 'in_progress', '16:52:00', NULL, NULL, 'medium', NULL),
+(453, 'OR-00151', 12, 31, 3, '17.026390, 103.237979', 'นางรังสิต น้อยนิล (ว.มินิมาร์ท ศรีธาตุ) (3)', 1, 1, 0, 0, 1, '2026-07-31 08:00:00', 'POSW-26072052', 'in_progress', '16:47:00', NULL, NULL, 'medium', NULL),
+(454, 'AR9900174', 12, 30, 3, '17.073451, 103.249043', 'ร้านเจียมจิตเฟอร์นิเจอร์ (3)', 2, 2, 0, 0, 1, '2026-07-31 08:00:00', 'POSW-26072028', 'in_progress', '16:34:00', NULL, NULL, 'medium', NULL),
+(455, 'AR9900174', 12, 29, 4, '17.073451, 103.249043', 'ร้านเจียมจิตเฟอร์นิเจอร์ (3)', 3, 4, 0, 0, 1, '2026-07-31 08:00:00', 'SOW-26070720', 'in_progress', '16:29:00', NULL, NULL, 'medium', NULL),
+(456, 'AR9900174', 12, 28, 5, '17.073451, 103.249043', 'ร้านเจียมจิตเฟอร์นิเจอร์ (3)', 4, 8, 0, 0, 1, '2026-07-31 08:00:00', 'SOW-26070716', 'in_progress', '16:24:00', NULL, NULL, 'medium', NULL),
+(457, 'AR9900174', 12, 27, 3, '17.073451, 103.249043', 'ร้านเจียมจิตเฟอร์นิเจอร์ (3)', 5, 7, 0, 0, 1, '2026-07-31 08:00:00', 'POSW-26072029', 'in_progress', '16:19:00', NULL, NULL, 'medium', NULL),
+(458, 'OR-00434', 12, 23, 3, '17.072537, 103.355509', 'ร้านรักษาผลการค้า (ต.ตี้)', 1, 1, 0, 0, 1, '2026-07-31 08:00:00', 'POSW-26072035', 'in_progress', '15:38:00', NULL, NULL, 'medium', NULL),
+(459, 'AR9900216', 12, 52, 3, '17.075834,103.186978', 'ร้านสุวรรณี บ้านโคกใหญ่ (3)', 2, 2, 0, 0, 1, '2026-07-31 08:00:00', 'SOW-26070717', 'in_progress', '20:22:00', NULL, NULL, 'medium', NULL),
+(460, 'JK-00354', 12, 54, 4, '17.087509,103.167612', 'อาภาพร ภูพาลัย', 3, 4, 0, 0, 1, '2026-07-31 08:00:00', 'POSW-26072022', 'in_progress', '20:38:00', NULL, NULL, 'medium', NULL),
+(461, 'JK-00354', 12, 55, 5, '17.087509,103.167612', 'อาภาพร ภูพาลัย', 4, 8, 0, 0, 1, '2026-07-31 08:00:00', 'SOW-26070707', 'in_progress', '20:43:00', NULL, NULL, 'medium', NULL),
+(462, 'OR-00380', 14, 23, 3, '17.1702,103.067', 'โกดังเงิน (ร้านโชคสมหวัง สมคำ) (3)', 5, 7, 0, 0, 1, '2026-07-31 08:00:00', 'SOJ-26070082', 'in_progress', '15:21:00', NULL, NULL, 'medium', NULL),
+(463, 'AR00076', 14, 22, 3, '17.1748,103.07', 'พี่เดือน (3)', 1, 1, 0, 0, 1, '2026-07-31 08:00:00', 'POSW-26072014', 'in_progress', '15:15:00', NULL, NULL, 'medium', NULL),
+(464, 'OR-01755', 14, 21, 3, '17.17421, 103.072027', 'ศรีปัญญา ประสงค์สุข (คันธมาทน์ เก่า)', 2, 2, 0, 0, 1, '2026-07-31 08:00:00', 'POSW-26072032', 'in_progress', '15:09:00', NULL, NULL, 'medium', NULL),
+(465, 'OR-00198', 14, 20, 4, '17.16371,103.085946', 'สหกรณ์บ้านเหล่ากกเค็ง (3)', 3, 4, 0, 0, 1, '2026-07-31 08:00:00', 'POSW-26072031', 'in_progress', '14:59:00', NULL, NULL, 'medium', NULL),
+(466, 'OR-00614', 14, 19, 5, '17.209800, 103.144032', 'นางลำไพ ลาไป (ร้านแม่ลำไพ อ.กู่แก้ว)', 1, 1, 0, 0, 1, '2026-07-31 08:00:00', 'POSW-26072016', 'in_progress', '14:42:00', NULL, NULL, 'medium', NULL),
+(467, 'OR-3508', 14, 14, 3, '17.238323, 103.121116', 'บีพี ไทยนิยม บ้านพังงู', 2, 2, 0, 0, 1, '2026-07-31 08:00:00', 'POSW-26072033', 'in_progress', '13:16:00', NULL, NULL, 'medium', NULL),
+(468, 'OR-01464', 14, 15, 3, '17.274351,103.199812', 'สุกัญญา หนองหลักไชยวาน', 3, 4, 0, 0, 1, '2026-07-31 08:00:00', 'POSW-26072037', 'in_progress', '13:35:00', NULL, NULL, 'medium', NULL),
+(469, 'OR-00919', 14, 16, 3, '17.264979, 103.198011', 'จ.ซุปเปอร์', 4, 8, 0, 0, 1, '2026-07-31 08:00:00', 'SOW-26070702', 'in_progress', '13:43:00', NULL, NULL, 'medium', NULL),
+(470, 'AR9900074', 12, 24, 4, '17.086685, 103.249221', 'ร้านวันวาน (นายไวยากรณ์ อาจเอี่ยม) (3)', 5, 7, 0, 0, 1, '2026-07-31 08:00:00', 'SOJ-26070081', 'in_progress', '16:00:00', NULL, NULL, 'medium', NULL),
+(471, 'OR-00177', 12, 26, 5, '17.086111, 103.249361', 'ถูกดี ราชาการค้า (3)', 1, 1, 0, 0, 1, '2026-07-31 08:00:00', 'POSW-26072076', 'in_progress', '16:11:00', NULL, NULL, 'medium', NULL),
+(472, 'OR-00177', 12, 25, 3, '17.086111, 103.249361', 'ถูกดี ราชาการค้า (3)', 2, 2, 0, 0, 1, '2026-07-31 08:00:00', 'POSW-26072068', 'in_progress', '16:06:00', NULL, NULL, 'medium', NULL),
+(473, 'AR9900216', 12, 53, 3, '17.075834,103.186978', 'ร้านสุวรรณี บ้านโคกใหญ่ (3)', 3, 4, 0, 0, 1, '2026-07-31 08:00:00', 'SOW-26070708', 'in_progress', '20:27:00', NULL, NULL, 'medium', NULL),
+(474, 'OR-00469', 12, 47, 3, '17.013651, 103.115968', 'ร้านสุรีย์พร (3)', 4, 8, 0, 0, 1, '2026-07-31 08:00:00', 'SOW-26070709', 'in_progress', '19:27:00', NULL, NULL, 'medium', NULL),
+(475, 'AR9900014', 12, 46, 4, '17.001763, 103.115875', 'นางสาววรรณวิสา หอมอ้ม (เจ้จูโคกข่า)', 5, 7, 0, 0, 1, '2026-07-31 08:00:00', 'SOW-26070730', 'in_progress', '19:19:00', NULL, NULL, 'medium', NULL),
+(476, 'JK-00254', 12, 50, 5, '17.038438,103.114439', 'พรพิมการค้า', 1, 1, 0, 0, 1, '2026-07-31 08:00:00', 'POSW-26072069', 'in_progress', '19:56:00', NULL, NULL, 'medium', NULL),
+(477, 'JK-00254', 12, 49, 3, '17.038438,103.114439', 'พรพิมการค้า', 2, 2, 0, 0, 1, '2026-07-31 08:00:00', 'POSW-26072075', 'in_progress', '19:51:00', NULL, NULL, 'medium', NULL),
+(478, 'OR-00420', 12, 48, 3, '17.024515,103.091018', 'นางนวลศรี คำวิเศษ (3)', 3, 4, 0, 0, 1, '2026-07-31 08:00:00', 'SOWL-26070305', 'in_progress', '19:39:00', NULL, NULL, 'medium', NULL),
+(479, 'AR00409', 15, 9, 3, '17.020498, 102.950290', 'แม่ลี หนองเหี้ย (1)', 4, 8, 0, 0, 1, '2026-07-31 08:00:00', 'SOWL-26070313', 'in_progress', '12:07:00', NULL, NULL, 'medium', NULL),
+(480, 'JK-00209', 15, 8, 4, '17.040821, 102.961833', 'นางราตรี ปัญญาใส [ล้านหลานเอิ้น]', 5, 7, 0, 0, 1, '2026-07-31 08:00:00', 'POSW-26071998', 'in_progress', '11:56:00', NULL, NULL, 'medium', NULL),
+(481, 'JK-00209', 15, 7, 3, '17.040821, 102.961833', 'นางราตรี ปัญญาใส [ล้านหลานเอิ้น]', 1, 1, 0, 0, 1, '2026-07-31 08:00:00', 'POSW-26072010', 'in_progress', '11:51:00', NULL, NULL, 'medium', NULL),
+(482, 'JK-00209', 15, 6, 3, '17.040821, 102.961833', 'นางราตรี ปัญญาใส [ล้านหลานเอิ้น]', 2, 2, 0, 0, 1, '2026-07-31 08:00:00', 'POSW-26072059', 'in_progress', '11:46:00', NULL, NULL, 'medium', NULL),
+(483, 'AR9900032', 15, 5, 4, '17.041394, 102.961979', 'แม่ประไพ กุดจิก (1)', 3, 4, 0, 0, 1, '2026-07-31 08:00:00', 'SOWL-26070312', 'in_progress', '11:40:00', NULL, NULL, 'medium', NULL),
+(484, 'OR-00475', 15, 57, 5, '17.069431, 102.954000', 'นางสาวอรณี พิมวาปี (ร้าน 69 เจริญทรัพย์) (1)', 4, 8, 0, 0, 1, '2026-07-31 08:00:00', 'POSW-26072072', 'in_progress', '19:19:00', NULL, NULL, 'medium', NULL),
+(485, 'OR-01742', 15, 1, 3, '17.094487, 102.976150', 'ร้านน้องไอด้า(น.ส.อ้อยทิพย์ อินทร์อุดม)', 5, 7, 0, 0, 1, '2026-07-31 08:00:00', 'POSW-26072030', 'in_progress', '10:54:00', NULL, NULL, 'medium', NULL),
+(486, 'OR-00933', 15, 58, 3, '17.09572,102.94179', 'นายอัศวิน สิงห์สาย', 1, 1, 0, 0, 1, '2026-07-31 08:00:00', 'POSW-26072021', 'in_progress', '19:32:00', NULL, NULL, 'medium', NULL),
+(487, 'OR-00933', 15, 59, 3, '17.09572,102.94179', 'นายอัศวิน สิงห์สาย', 2, 2, 0, 0, 1, '2026-07-31 08:00:00', 'POSW-26072045', 'in_progress', '19:37:00', NULL, NULL, 'medium', NULL),
+(488, 'AR00311', 15, 53, 4, '17.057792, 102.919989', 'สุภาพรพาณิชย์ (3)', 3, 4, 0, 0, 1, '2026-07-31 08:00:00', 'SOW-26070714', 'in_progress', '18:50:00', NULL, NULL, 'medium', NULL),
+(489, 'AR00311', 15, 54, 5, '17.057792, 102.919989', 'สุภาพรพาณิชย์ (3)', 4, 8, 0, 0, 1, '2026-07-31 08:00:00', 'SOWL-26070304', 'in_progress', '18:55:00', NULL, NULL, 'medium', NULL),
+(490, 'AR00196', 15, 47, 3, '17.044435, 102.930979', 'ร้านสุกานดา (1)', 5, 7, 0, 0, 1, '2026-07-31 08:00:00', 'SOW-26070695', 'in_progress', '18:14:00', NULL, NULL, 'medium', NULL),
+(491, 'AR00196', 15, 48, 3, '17.044435, 102.930979', 'ร้านสุกานดา (1)', 1, 1, 0, 0, 1, '2026-07-31 08:00:00', 'POSW-26071951', 'in_progress', '18:19:00', NULL, NULL, 'medium', NULL),
+(492, 'AR00207', 15, 49, 3, '17.048427, 102.926713', 'พี่สำลี (1)', 1, 1, 0, 0, 1, '2026-07-31 08:00:00', 'POSW-26072017', 'in_progress', '18:26:00', NULL, NULL, 'medium', NULL),
+(493, 'AR00203', 15, 50, 4, '17.050438, 102.925268', 'นิตยา สาย2 (1)', 2, 2, 0, 0, 1, '2026-07-31 08:00:00', 'SOWL-26070310', 'in_progress', '18:32:00', NULL, NULL, 'medium', NULL),
+(494, 'AR9900042', 15, 46, 5, '17.028790, 102.906946', 'แม่พลอย เกิ้งน้อย (1)', 3, 4, 0, 0, 1, '2026-07-31 08:00:00', 'POSW-26072060', 'in_progress', '18:02:00', NULL, NULL, 'medium', NULL),
+(495, 'AR9900042', 15, 45, 3, '17.028790, 102.906946', 'แม่พลอย เกิ้งน้อย (1)', 4, 8, 0, 0, 1, '2026-07-31 08:00:00', 'SOW-26070723', 'in_progress', '17:57:00', NULL, NULL, 'medium', NULL),
+(496, 'OR-01577', 15, 12, 3, '16.993594, 102.892831', 'บริษัท เอ็น ที โฮม มาร์ท จำกัด', 5, 7, 0, 0, 1, '2026-07-31 08:00:00', 'POSW-26072048', 'in_progress', '12:42:00', NULL, NULL, 'medium', NULL),
+(497, 'OR-01577', 15, 13, 3, '16.993594, 102.892831', 'บริษัท เอ็น ที โฮม มาร์ท จำกัด', 1, 1, 0, 0, 1, '2026-07-31 08:00:00', 'POSW-26072023', 'in_progress', '12:47:00', NULL, NULL, 'medium', NULL),
+(498, 'OR-99998', 13, 1, 4, '17.110084, 103.019494', 'ร้าน นพเก้าพาณิชย์ (ตลาดล่าง)', 2, 2, 0, 0, 1, '2026-07-31 08:00:00', 'POSW-26072058', 'in_progress', '18:23:00', NULL, NULL, 'medium', NULL),
+(499, 'OR-99997', 13, 2, 5, '17.158139, 103.061889', 'น.ส. รำไพร ฤทธิมาน [ แม่ไพร ]', 3, 4, 0, 0, 1, '2026-07-31 08:00:00', 'POSW-26072055', 'in_progress', '18:28:00', NULL, NULL, 'medium', NULL),
+(500, 'OR-9196', 13, 3, 3, '17.279318, 102.981635', 'โซโม่ฮาดแวร์ บ้านหนองลุมพุก', 4, 8, 0, 0, 1, '2026-07-31 08:00:00', 'SOWL-26070314', 'in_progress', '18:33:00', NULL, NULL, 'medium', NULL),
+(501, 'OR-00222', 15, 14, 3, '16.986562, 102.826021', 'ร้านธงชัยการค้า', 5, 7, 0, 0, 1, '2026-07-31 08:00:00', 'POSW-26072051', 'in_progress', '13:03:00', NULL, NULL, 'medium', NULL),
+(502, 'AR00088', 15, 11, 3, '16.969544, 102.956560', 'สัมฤทธิ์ มิตรภาพ(ยายปราณี) (2)', 1, 1, 0, 0, 1, '2026-07-31 08:00:00', 'SOW-26070701', 'in_progress', '12:26:00', NULL, NULL, 'medium', NULL),
+(503, 'OR-00312', 15, 10, 4, '16.971271, 102.961267', 'ร้าน ปิยะพงค์ (2)', 2, 2, 0, 0, 1, '2026-07-31 08:00:00', 'SOWL-26070308', 'in_progress', '12:20:00', NULL, NULL, 'medium', NULL),
+(504, 'OR-2657', 12, 9, 3, '16.946936, 103.016023', 'ชนะกิจ บะยาว', 3, 4, 0, 1, 1, '2026-07-31 08:00:00', 'SOWL-26070302', 'in_progress', '12:20:00', NULL, NULL, 'medium', NULL),
+(505, 'OR-00101', 12, 8, 3, '16.949931, 103.022903', 'ร้านการ์ตูนโฟโต้ (ร้านการ์ตูน บ.บะยาว เก่า) (2)', 4, 8, 0, 1, 1, '2026-07-31 08:00:00', 'SOJ-26070086', 'in_progress', '12:13:00', NULL, NULL, 'medium', NULL),
+(506, 'OR-00101', 12, 7, 4, '16.949931, 103.022903', 'ร้านการ์ตูนโฟโต้ (ร้านการ์ตูน บ.บะยาว เก่า) (2)', 5, 7, 0, 1, 1, '2026-07-31 08:00:00', 'POSW-26072070', 'in_progress', '12:08:00', NULL, NULL, 'medium', NULL),
+(507, 'JK-00104', 12, 5, 5, '16.949552, 103.024110', 'พรสวรรค์(วิทรูการค้า)', 1, 1, 0, 1, 1, '2026-07-31 08:00:00', 'POSW-26072046', 'completed', '11:56:00', '2026-08-02 07:43:48', '2026-08-02 07:45:10', 'medium', NULL),
+(508, 'OR-01453', 12, 6, 3, '16.949115, 103.023889', 'มินิ ณินิว', 2, 2, 0, 1, 1, '2026-07-31 08:00:00', 'POSW-26072064', 'in_progress', '12:02:00', '2026-08-02 07:48:57', NULL, 'medium', NULL),
+(509, 'AR00107', 12, 4, 3, '16.951021, 103.025979', 'นางรจนา นาถมทอง(พี่รส) (2)', 3, 4, 0, 1, 1, '2026-07-31 08:00:00', 'SOW-26070706', 'completed', '11:50:00', '2026-08-02 05:07:36', '2026-08-02 05:18:39', 'medium', NULL),
+(510, 'OR-00165', 12, 3, 3, '16.955641, 103.054936', 'นางเบ้า จันทพงษ์ (2)', 4, 8, 0, 1, 1, '2026-07-31 08:00:00', 'POSW-26072038', 'completed', '11:38:00', '2026-08-01 03:51:49', '2026-08-01 03:52:08', 'medium', NULL),
+(511, 'OR-00155', 12, 2, 4, '16.963895, 103.077064', 'ร้าน ดีดีการค้า (2)', 5, 7, 0, 1, 1, '2026-07-31 08:00:00', 'POSW-26072011', 'completed', '11:27:00', '2026-08-01 03:33:14', '2026-08-01 03:34:09', 'medium', NULL),
+(512, 'AR00237', 12, 1, 5, '16.996172, 103.053000', 'ธงฟ้า ศรีสว่าง (2)', 1, 1, 0, 1, 1, '2026-07-31 08:00:00', 'SOJ-26070085', 'completed', '11:11:00', '2026-08-01 03:19:54', '2026-08-01 03:20:35', 'medium', NULL),
+(513, 'AR00095', 15, 3, 3, '17.045913, 103.029968', 'ตาโกเมศ ท่าสัง (2)', 2, 2, 0, 0, 1, '2026-07-31 08:00:00', 'POSW-26072027', 'in_progress', '11:18:00', NULL, NULL, 'medium', NULL),
+(514, 'OR-00228', 15, 4, 3, '17.045942, 103.028674', 'มัชเรศน์ (น้องเฟริสเก่า) (2)', 3, 4, 0, 0, 1, '2026-07-31 08:00:00', 'POSW-26072026', 'in_progress', '11:24:00', NULL, NULL, 'medium', NULL),
+(515, 'AR00177', 15, 2, 3, '17.059551,103.015573', 'นางสาวคนา จิตธรรมมา (ร้านจิตธรรมา)(2)', 4, 8, 0, 0, 1, '2026-07-31 08:00:00', 'SOW-26070715', 'in_progress', '11:08:00', NULL, NULL, 'medium', NULL),
+(516, 'AR00205', 14, 25, 4, '17.103972, 103.010968', 'สมคิด ศรีสมพาน (พี่ษา) (1)', 5, 7, 0, 0, 1, '2026-07-31 08:00:00', 'SOW-26070710', 'in_progress', '15:45:00', NULL, NULL, 'medium', NULL),
+(517, 'AR00205', 14, 24, 5, '17.103972, 103.010968', 'สมคิด ศรีสมพาน (พี่ษา) (1)', 1, 1, 0, 0, 1, '2026-07-31 08:00:00', 'POSW-26072025', 'in_progress', '15:40:00', NULL, NULL, 'medium', NULL),
+(518, 'OR-00109', 14, 1, 3, '17.190549,102.93514', 'น้อง บี', 1, 1, 0, 0, 1, '2026-07-31 08:00:00', 'POSW-26071994', 'in_progress', '10:57:00', NULL, NULL, 'medium', NULL),
+(519, 'AR00511', 14, 2, 3, '17.215956, 102.937968', 'ร้านไพบูลย์มินิมาร์ท', 2, 2, 0, 0, 1, '2026-07-31 08:00:00', 'POSW-26072056', 'in_progress', '11:09:00', NULL, NULL, 'medium', NULL),
+(520, 'AR9900161', 14, 3, 3, '17.228481, 102.942584', 'สมบูรณ์ บริการ (5)', 3, 4, 0, 0, 1, '2026-07-31 08:00:00', 'POSW-26072001', 'in_progress', '11:18:00', NULL, NULL, 'medium', NULL),
+(521, 'OR-01630', 14, 10, 4, '17.267531, 103.000979', 'บริษัท เฟิสท์มาร์ท กรุ๊ป จำกัด (สำนักงานใหญ่)', 4, 8, 0, 0, 1, '2026-07-31 08:00:00', 'POSW-26072009', 'in_progress', '12:19:00', NULL, NULL, 'medium', NULL),
+(522, 'OR-01630', 14, 9, 5, '17.267531, 103.000979', 'บริษัท เฟิสท์มาร์ท กรุ๊ป จำกัด (สำนักงานใหญ่)', 5, 7, 0, 0, 1, '2026-07-31 08:00:00', 'POSW-26072018', 'in_progress', '12:14:00', NULL, NULL, 'medium', NULL),
+(523, 'AR00158', 14, 8, 3, '17.265270, 103.004925', 'แม่ไพร ดอนม่วง (5)', 1, 1, 0, 0, 1, '2026-07-31 08:00:00', 'POSW-26072081', 'in_progress', '12:08:00', NULL, NULL, 'medium', NULL),
+(524, 'OR-5349', 14, 12, 3, '17.264930, 103.047812', 'น้องออร่า บ้านหนองเม็กน้อย', 2, 2, 0, 0, 1, '2026-07-31 08:00:00', 'SOJ-26070084', 'in_progress', '12:50:00', NULL, NULL, 'medium', NULL),
+(525, 'OR-8073', 14, 11, 3, '17.319388, 103.050241', 'โบว์พาณิชย์ บ้านดงบาก', 3, 4, 0, 0, 1, '2026-07-31 08:00:00', 'POSW-26072073', 'in_progress', '12:36:00', NULL, NULL, 'medium', NULL),
+(526, 'OR-3220', 14, 13, 4, '17.253747, 103.093803', 'แก้มกัน บ้านพังซ่อน', 4, 8, 0, 0, 1, '2026-07-31 08:00:00', 'SOW-26070731', 'in_progress', '13:03:00', NULL, NULL, 'medium', NULL),
+(527, 'OR-01232', 14, 7, 3, '17.211242, 102.995751', 'มาดามหมูสด', 5, 7, 0, 0, 1, '2026-07-31 08:00:00', 'POSW-26072049', 'in_progress', '11:54:00', NULL, NULL, 'medium', NULL),
+(528, 'OR-01232', 14, 6, 3, '17.211242, 102.995751', 'มาดามหมูสด', 1, 1, 0, 0, 1, '2026-07-31 08:00:00', 'POSW-26072034', 'in_progress', '11:49:00', NULL, NULL, 'medium', NULL),
+(529, 'OR-01232', 14, 5, 4, '17.211242, 102.995751', 'มาดามหมูสด', 2, 2, 0, 0, 1, '2026-07-31 08:00:00', 'POSW-26072003', 'in_progress', '11:44:00', NULL, NULL, 'medium', NULL),
+(530, 'OR-00588', 14, 4, 5, '17.209032, 102.961925', 'ฐิติรัตน์การค้า บ.โคกกลาง (2)', 3, 4, 0, 0, 1, '2026-07-31 08:00:00', 'SOW-26070711', 'in_progress', '11:30:00', NULL, NULL, 'medium', NULL),
+(531, 'OR-00592', 15, 61, 3, '17.169241,102.929166', 'ร้านแม่ตุ่น บ้านสี่แจ', 4, 8, 0, 0, 1, '2026-07-31 08:00:00', 'POSW-26072050', 'in_progress', '20:08:00', NULL, NULL, 'medium', NULL),
+(532, 'AR00185', 15, 32, 3, '17.146961, 102.850097', 'นายชัยวัฒน์ เจิมปรุ (พ่อสง่า) (1)', 5, 7, 0, 0, 1, '2026-07-31 08:00:00', 'POSW-26071997', 'in_progress', '15:53:00', NULL, NULL, 'medium', NULL),
+(533, 'JK-00217', 15, 33, 3, '17.143707,102.849633', 'ร้านรจนาซุปเปอร์มาร์ท [นาย ยงยุธ น้อยชนะ]', 1, 1, 0, 0, 1, '2026-07-31 08:00:00', 'SOWL-26070307', 'in_progress', '15:59:00', NULL, NULL, 'medium', NULL),
+(534, 'AR00125', 15, 31, 4, '17.157551,102.831002', 'พี่หน่อย บ้านดง (1)', 2, 2, 0, 0, 1, '2026-07-31 08:00:00', 'POSW-26072015', 'in_progress', '15:42:00', NULL, NULL, 'medium', NULL),
+(535, 'OR-00687', 15, 30, 5, '17.175452, 102.802413', 'พี่แอน บ้านสามเหลี่ยม', 3, 4, 0, 0, 1, '2026-07-31 08:00:00', 'SOW-26070726', 'in_progress', '15:28:00', NULL, NULL, 'medium', NULL),
+(536, 'AR00055', 15, 29, 3, '17.176665,102.771809', 'กองทุนหมู่บ้านทับกุง หมู่ที่1 (1)', 4, 8, 0, 0, 1, '2026-07-31 08:00:00', 'POSW-26072007', 'in_progress', '15:15:00', NULL, NULL, 'medium', NULL),
+(537, 'AR00139', 15, 28, 3, '17.171558, 102.767979', 'นางสาวพจนา จำปาวัตตะ (สมหมายการค้า) (1)', 5, 7, 0, 0, 1, '2026-07-31 08:00:00', 'SOJ-26070083', 'in_progress', '15:08:00', NULL, NULL, 'medium', NULL),
+(538, 'AR00139', 15, 27, 3, '17.171558, 102.767979', 'นางสาวพจนา จำปาวัตตะ (สมหมายการค้า) (1)', 1, 1, 0, 0, 1, '2026-07-31 08:00:00', 'POSW-26072012', 'in_progress', '15:03:00', NULL, NULL, 'medium', NULL),
+(539, 'AR9900137', 15, 26, 4, '17.170220, 102.771925', 'แม่ติ๋ม ทับกุง (1)', 2, 2, 0, 0, 1, '2026-07-31 08:00:00', 'SOW-26070703', 'in_progress', '14:57:00', NULL, NULL, 'medium', NULL),
+(540, 'AR00005', 15, 34, 5, '17.12069,102.822', 'โอพาณิช(1)', 3, 4, 0, 0, 1, '2026-07-31 08:00:00', 'POSW-26072019', 'in_progress', '16:13:00', NULL, NULL, 'medium', NULL),
+(541, 'ARI00004', 15, 35, 3, '17.118813, 102.820693', 'โอ-กุ้ง แสงสว่าง (1)', 4, 8, 0, 0, 1, '2026-07-31 08:00:00', 'POSW-26072053', 'in_progress', '16:19:00', NULL, NULL, 'medium', NULL),
+(542, 'OR-00903', 15, 36, 3, '17.117543, 102.822062', 'สุพัตตรา วรศิริ [ลีโอพลัสตรา]', 5, 7, 0, 0, 1, '2026-07-31 08:00:00', 'POSW-26072040', 'in_progress', '16:25:00', NULL, NULL, 'medium', NULL),
+(543, 'OR-01313', 15, 25, 3, '17.138831,102.786287', 'นิตยา ถามีมาก', 1, 1, 0, 0, 1, '2026-07-31 08:00:00', 'POSW-26072024', 'in_progress', '14:43:00', NULL, NULL, 'medium', NULL),
+(544, 'AR9900020', 15, 24, 4, '17.128788, 102.783087', 'ร้านค้าชุมชนบ้านท่าสี (1)', 1, 1, 0, 0, 1, '2026-07-31 08:00:00', 'POSW-26072044', 'in_progress', '14:35:00', NULL, NULL, 'medium', NULL),
+(545, 'OR-99992', 15, 23, 5, '17.109072,102.774917', 'น้อง มะปราง', 2, 2, 0, 0, 1, '2026-07-31 08:00:00', 'POSW-26072057', 'in_progress', '14:24:00', NULL, NULL, 'medium', NULL),
+(546, 'JK-00136', 15, 22, 3, '17.109199, 102.774670', 'ร้านบอลลูน', 3, 4, 0, 0, 1, '2026-07-31 08:00:00', 'ฝากส่ง', 'in_progress', '14:18:00', NULL, NULL, 'medium', NULL),
+(547, 'JK-00355', 15, 21, 3, '17.107483, 102.772170', 'น.ส. ธวัลรัตน์ บิลจรัญ', 4, 8, 0, 0, 1, '2026-07-31 08:00:00', 'POSW-26072042', 'in_progress', '14:12:00', NULL, NULL, 'medium', NULL),
+(548, 'AR00395', 15, 20, 3, '17.061731, 102.786957', 'กุหลาบการค้า (1)', 5, 7, 0, 0, 1, '2026-07-31 08:00:00', 'SOW-26070704', 'in_progress', '13:59:00', NULL, NULL, 'medium', NULL),
+(549, 'OR-01040', 15, 19, 4, '17.058719,102.786587', 'นางผกามาศ จันทร์ดี', 1, 1, 0, 0, 1, '2026-07-31 08:00:00', 'POSW-26072013', 'in_progress', '13:53:00', NULL, NULL, 'medium', NULL),
+(550, 'OR-00281', 15, 15, 3, '17.021431,102.798688', 'กองทุนหมู่บ้านหนองกุงทอง (1)', 2, 2, 0, 0, 1, '2026-07-31 08:00:00', 'POSW-26072036', 'in_progress', '13:20:00', NULL, NULL, 'medium', NULL),
+(551, 'AR9900162', 15, 16, 3, '17.035138,102.80881', 'กองทุนบ้านโนนจำปา', 3, 4, 0, 0, 1, '2026-07-31 08:00:00', 'POSW-26072066', 'in_progress', '13:29:00', NULL, NULL, 'medium', NULL),
+(552, 'AR9900162', 15, 17, 4, '17.035138,102.80881', 'กองทุนบ้านโนนจำปา', 4, 8, 0, 0, 1, '2026-07-31 08:00:00', 'POSW-26072005', 'in_progress', '13:34:00', NULL, NULL, 'medium', NULL),
+(553, 'OR-00589', 15, 18, 5, '17.035921, 102.808989', 'ร้าน เจอามาเก็ต', 5, 7, 0, 0, 1, '2026-07-31 08:00:00', 'SOW-26070713', 'in_progress', '13:40:00', NULL, NULL, 'medium', NULL),
+(554, 'OR-00080', 15, 41, 3, '17.045621, 102.843000', 'นางขนิษฐา พรมเลิศ (ร้านขนิษฐา)', 1, 1, 0, 0, 1, '2026-07-31 08:00:00', 'POSW-26071996', 'in_progress', '17:16:00', NULL, NULL, 'medium', NULL),
+(555, 'AR00060', 14, 18, 3, '17.169577, 103.160686', 'จันทร์เพ็ญ', 2, 2, 0, 0, 1, '2026-07-31 08:00:00', 'POSW-26072074', 'in_progress', '14:25:00', NULL, NULL, 'medium', NULL),
+(556, 'OR-01538', 14, 17, 3, '17.159978, 103.244181', 'ยุทธชัย สินธ์สิริวัตร', 3, 4, 0, 0, 1, '2026-07-31 08:00:00', 'POSW-26072071', 'in_progress', '14:07:00', NULL, NULL, 'medium', NULL),
+(557, 'AR00044', 12, 51, 4, '17.051821, 103.136011', 'ร้านละมัย (พี่นิด ศรีธาตุ)(3)', 4, 8, 0, 0, 1, '2026-07-31 08:00:00', 'SOW-26070725', 'in_progress', '20:08:00', NULL, NULL, 'medium', NULL),
+(558, 'AR00174', 12, 35, 5, '16.980759, 103.186126', 'น.ส.มะณีกรร ชินวิ (ร้านวันดี ซุปเปอร์) (3)', 5, 7, 0, 0, 1, '2026-07-31 08:00:00', 'POSW-26072082', 'in_progress', '17:25:00', NULL, NULL, 'medium', NULL),
+(559, 'AR00174', 12, 34, 3, '16.980759, 103.186126', 'น.ส.มะณีกรร ชินวิ (ร้านวันดี ซุปเปอร์) (3)', 1, 1, 0, 0, 1, '2026-07-31 08:00:00', 'SOWL-26070316', 'in_progress', '17:20:00', NULL, NULL, 'medium', NULL),
+(560, 'OR-00325', 12, 45, 3, '16.912137, 103.173288', 'เจ้นารี บ.กุงเก่า (4)', 2, 2, 0, 0, 1, '2026-07-31 08:00:00', 'POSW-26072004', 'in_progress', '18:56:00', NULL, NULL, 'medium', NULL),
+(561, 'OR-01542', 12, 44, 3, '16.911097, 103.173680', 'ร้านเพื่อนเกษตร (กรุงเก่า)', 3, 4, 0, 0, 1, '2026-07-31 08:00:00', 'SO-26070008-01', 'in_progress', '18:50:00', NULL, NULL, 'medium', NULL),
+(562, 'OR-01805', 12, 22, 4, '16.816237, 103.370407', 'ร้านเจ้ไล', 4, 8, 0, 0, 1, '2026-07-31 08:00:00', 'POSW-26071999', 'in_progress', '14:50:00', NULL, NULL, 'medium', NULL),
+(563, 'OR-00816', 12, 21, 5, '16.811966, 103.284962', 'ร้านวิไล เต็มไทยสงค์', 5, 7, 0, 0, 1, '2026-07-31 08:00:00', 'SOW-26070718', 'in_progress', '14:31:00', NULL, NULL, 'medium', NULL),
+(564, 'OR-00816', 12, 20, 3, '16.811966, 103.284962', 'ร้านวิไล เต็มไทยสงค์', 1, 1, 0, 0, 1, '2026-07-31 08:00:00', 'SOW-26070728', 'in_progress', '14:26:00', NULL, NULL, 'medium', NULL),
+(565, 'OR-00816', 12, 19, 3, '16.811966, 103.284962', 'ร้านวิไล เต็มไทยสงค์', 2, 2, 0, 0, 1, '2026-07-31 08:00:00', 'SOW-26070727', 'in_progress', '14:21:00', NULL, NULL, 'medium', NULL),
+(566, 'OR-00362', 12, 18, 3, '16.81218, 103.284968', 'ร้านวิชัยบริการ บ.ภูฮัง(4)', 3, 4, 0, 0, 1, '2026-07-31 08:00:00', 'SOW-26070721', 'in_progress', '14:15:00', NULL, NULL, 'medium', NULL),
+(567, 'OR-00362', 12, 17, 4, '16.81218, 103.284968', 'ร้านวิชัยบริการ บ.ภูฮัง(4)', 4, 8, 0, 0, 1, '2026-07-31 08:00:00', 'SOW-26070732', 'in_progress', '14:10:00', NULL, NULL, 'medium', NULL),
+(568, 'OR-00240', 12, 16, 5, '16.823411,103.277898', 'โชคสัมฤทธิ์การค้า(4)', 5, 7, 0, 0, 1, '2026-07-31 08:00:00', 'SOW-26070729', 'in_progress', '14:02:00', NULL, NULL, 'medium', NULL),
+(569, 'OR-00240', 12, 15, 3, '16.823411,103.277898', 'โชคสัมฤทธิ์การค้า(4)', 1, 1, 0, 0, 1, '2026-07-31 08:00:00', 'POSW-26072065', 'in_progress', '13:57:00', NULL, NULL, 'medium', NULL),
+(570, 'OR-01323', 12, 14, 3, '16.824698, 103.278375', 'ยุภาการค้า', 1, 1, 0, 0, 1, '2026-07-31 08:00:00', 'POSW-26072002', 'in_progress', '13:51:00', NULL, NULL, 'medium', NULL),
+(571, 'OR-1299', 12, 42, 3, '16.905827, 103.239174', 'แม่โสภา เกิ้งท่าคันโท', 2, 2, 0, 0, 1, '2026-07-31 08:00:00', 'POSW-26072039', 'in_progress', '18:29:00', NULL, NULL, 'medium', NULL),
+(572, 'OR-1299', 12, 41, 4, '16.905827, 103.239174', 'แม่โสภา เกิ้งท่าคันโท', 3, 4, 0, 0, 1, '2026-07-31 08:00:00', 'POSW-26072047', 'in_progress', '18:24:00', NULL, NULL, 'medium', NULL),
+(573, 'OR-1299', 12, 40, 3, '16.905827, 103.239174', 'แม่โสภา เกิ้งท่าคันโท', 4, 8, 0, 0, 1, '2026-07-31 08:00:00', 'POSW-26072008', 'in_progress', '18:19:00', NULL, NULL, 'medium', NULL),
+(574, 'AR00172', 12, 39, 3, '16.936813, 103.241032', 'เจ้อร(4)', 5, 7, 0, 0, 1, '2026-07-31 08:00:00', 'SOW-26070742', 'in_progress', '18:06:00', NULL, NULL, 'medium', NULL),
+(575, 'AR00172', 12, 38, 3, '16.936813, 103.241032', 'เจ้อร(4)', 1, 1, 0, 0, 1, '2026-07-31 08:00:00', 'POSW-26072006', 'in_progress', '18:01:00', NULL, NULL, 'medium', NULL),
+(576, 'AR00165', 12, 37, 4, '16.938662, 103.232054', 'ห้างหุ้นส่วนจำกัด บุญพาณิชย์ 2564 (4)', 1, 1, 0, 0, 1, '2026-07-31 08:00:00', 'POSW-26072043', 'in_progress', '17:54:00', NULL, NULL, 'medium', NULL),
+(578, 'OR-99999', 12, 56, 6, '17.172386, 102.770031', 'โรงเรียนทับกุงประชานุกูล', 3, 1, 0, 0, 1, '2026-07-31 08:00:00', 'LOW-13467953416', 'in_progress', '20:53:00', NULL, NULL, 'medium', NULL),
+(579, 'AR00481', 16, 1, 1, '17.0951,103.001834', 'แม่อื๋อ บ้านโพธิ์สง่า (1)', 1, 1, 0, 0, 1, '2026-08-02 08:00:00', 'POSW-26071543', 'in_progress', '10:53:00', NULL, NULL, 'medium', NULL),
+(580, 'OR-00700', 16, 2, 2, '17.075451,103.03', 'น้องน็อต บ.ท่าม่วง', 2, 2, 0, 0, 1, '2026-08-02 08:00:00', 'POSW-26071593', 'in_progress', '11:07:00', NULL, NULL, 'medium', NULL),
+(581, 'AR00177', 16, 7, 3, '17.059551,103.015573', 'นางสาวคนา จิตธรรมมา (ร้านจิตธรรมา)(2)', 3, 1, 0, 0, 1, '2026-08-02 08:00:00', 'SOW-26070540', 'in_progress', '12:21:00', NULL, NULL, 'medium', NULL),
+(582, 'AR00094', 16, 6, 4, '17.04585,103.029', 'ตาประดิษ ท่าสัง (2)', 4, 5, 0, 0, 1, '2026-08-02 08:00:00', 'POSW-26071552', 'in_progress', '12:11:00', NULL, NULL, 'medium', NULL),
+(583, 'OR-00258', 16, 3, 6, '17.046679, 103.032000', 'ร้านริมปาว (2)', 5, 7, 0, 0, 1, '2026-08-02 08:00:00', 'POSW-26071557', 'in_progress', '11:20:00', NULL, NULL, 'medium', NULL),
+(584, 'OR-00111', 16, 4, 3, '16.999720, 103.054428', 'เปรี้ยว หน้าวัดบ้านสีออ (2)', 6, 3, 0, 0, 1, '2026-08-02 08:00:00', 'POSW-26071533', 'in_progress', '11:34:00', NULL, NULL, 'medium', NULL),
+(585, 'OR-00746', 17, 28, 2, '16.995685,103.050345', 'ศูนย์สาธิตการตลาดบ้านโคกสว่าง', 2, 4, 0, 0, 1, '2026-08-02 08:00:00', 'POSW-26071559', 'in_progress', '15:23:00', NULL, NULL, 'medium', NULL),
+(586, 'OR-00746', 19, 7, 6, '16.995685,103.050345', 'ศูนย์สาธิตการตลาดบ้านโคกสว่าง', 4, 2, 0, 1, 1, '2026-08-02 08:00:00', 'SOW-26070548', 'completed', '12:01:00', '2026-08-02 18:25:31', '2026-08-02 18:26:15', 'medium', NULL),
+(587, 'OR-00886', 19, 6, 6, '16.995162, 103.048724', 'ร้านณัฐพร การค้า', 5, 1, 0, 1, 1, '2026-08-02 08:00:00', 'POSW-26071566', 'completed', '11:55:00', '2026-08-02 18:24:31', '2026-08-02 18:24:53', 'medium', NULL),
+(588, 'AR00101', 19, 9, 4, '16.95591,103.04452', 'กิลาภรณ์ คำพันธ์/แม่พร กุดยาง (2)', 7, 2, 0, 0, 1, '2026-08-02 08:00:00', 'SOW-26070557', 'problem', '12:25:00', '2026-08-02 18:28:32', NULL, 'medium', NULL),
+(589, 'AR00101', 16, 5, 1, '16.95591,103.04452', 'กิลาภรณ์ คำพันธ์/แม่พร กุดยาง (2)', 1, 2, 0, 0, 1, '2026-08-02 08:00:00', 'SOW-26070542', 'in_progress', '11:51:00', NULL, NULL, 'medium', NULL),
+(590, 'AR00101', 19, 10, 2, '16.95591,103.04452', 'กิลาภรณ์ คำพันธ์/แม่พร กุดยาง (2)', 6, 3, 0, 1, 1, '2026-08-02 08:00:00', 'SOW-26070541', 'completed', '12:30:00', '2026-08-02 18:31:00', '2026-08-02 18:31:50', 'medium', NULL),
+(591, 'OR-00165', 19, 8, 3, '16.955641, 103.054936', 'นางเบ้า จันทพงษ์ (2)', 2, 1, 0, 1, 1, '2026-08-02 08:00:00', 'POSW-26071574', 'completed', '12:17:00', '2026-08-02 18:26:36', '2026-08-02 18:26:58', 'medium', NULL),
+(592, 'OR-00155', 19, 19, 4, '16.963895, 103.077064', 'ร้าน ดีดีการค้า (2)', 4, 2, 0, 0, 1, '2026-08-02 08:00:00', 'POSW-26071511', 'in_progress', '14:40:00', NULL, NULL, 'medium', NULL),
+(593, 'OR-01066', 19, 20, 6, '16.963685, 103.077323', 'นางพิชญากร สีหาโคตร', 5, 1, 0, 0, 1, '2026-08-02 08:00:00', 'ฝากส่ง', 'in_progress', '14:46:00', NULL, NULL, 'medium', NULL),
+(594, 'OR-01766', 19, 32, 3, '16.997921,103.116781', 'ร้าน อิงฟ้า มินิมาร์ท', 2, 5, 0, 0, 1, '2026-08-02 08:00:00', 'POSW-26071580', 'in_progress', '17:16:00', NULL, NULL, 'medium', NULL),
+(595, 'OR-01766', 19, 31, 2, '16.997921,103.116781', 'ร้าน อิงฟ้า มินิมาร์ท', 4, 7, 0, 0, 1, '2026-08-02 08:00:00', 'POSW-26071589', 'in_progress', '17:11:00', NULL, NULL, 'medium', NULL),
+(596, 'OR-01766', 19, 30, 6, '16.997921,103.116781', 'ร้าน อิงฟ้า มินิมาร์ท', 5, 3, 0, 0, 1, '2026-08-02 08:00:00', 'POSW-26071541', 'in_progress', '17:06:00', NULL, NULL, 'medium', NULL),
+(597, 'OR-01729', 19, 29, 6, '16.997491, 103.117690', 'ร้าน ตะวัน', 7, 4, 0, 0, 1, '2026-08-02 08:00:00', 'POSW-26071530', 'in_progress', '17:00:00', NULL, NULL, 'medium', NULL),
+(598, 'OR-01729', 19, 28, 4, '16.997491, 103.117690', 'ร้าน ตะวัน', 1, 2, 0, 0, 1, '2026-08-02 08:00:00', 'POSW-26071594', 'in_progress', '16:55:00', NULL, NULL, 'medium', NULL),
+(599, 'OR-00747', 19, 27, 1, '16.980945, 103.186090', 'นายพจนาท นัตธิลม (ร้าน พีทูเอ เซฟมาร์)', 6, 1, 0, 0, 1, '2026-08-02 08:00:00', 'POSW-26071528', 'in_progress', '16:39:00', NULL, NULL, 'medium', NULL),
+(600, 'OR-00151', 19, 40, 2, '17.026390, 103.237979', 'นางรังสิต น้อยนิล (ว.มินิมาร์ท ศรีธาตุ) (3)', 2, 2, 0, 0, 1, '2026-08-02 08:00:00', 'POSW-26071544', 'in_progress', '19:14:00', NULL, NULL, 'medium', NULL),
+(601, 'OR-00151', 19, 41, 3, '17.026390, 103.237979', 'นางรังสิต น้อยนิล (ว.มินิมาร์ท ศรีธาตุ) (3)', 4, 2, 0, 0, 1, '2026-08-02 08:00:00', 'POSW-26071553', 'in_progress', '19:19:00', NULL, NULL, 'medium', NULL),
+(602, 'OR-00785', 19, 25, 4, '16.979951,103.264662', 'ร้านภูไท [วิภาดา แก้วอินทร์]', 5, 3, 0, 0, 1, '2026-08-02 08:00:00', 'POSW-26071576', 'in_progress', '16:05:00', NULL, NULL, 'medium', NULL),
+(603, 'OR-00785', 19, 24, 6, '16.979951,103.264662', 'ร้านภูไท [วิภาดา แก้วอินทร์]', 7, 1, 0, 0, 1, '2026-08-02 08:00:00', 'ฝากส่ง', 'in_progress', '16:00:00', NULL, NULL, 'medium', NULL),
+(604, 'OR-00434', 19, 45, 3, '17.072537, 103.355509', 'ร้านรักษาผลการค้า (ต.ตี้)', 1, 2, 0, 0, 1, '2026-08-02 08:00:00', 'POSW-26071513', 'in_progress', '20:04:00', NULL, NULL, 'medium', NULL),
+(605, 'AR9900174', 19, 42, 2, '17.073451, 103.249043', 'ร้านเจียมจิตเฟอร์นิเจอร์ (3)', 6, 1, 0, 0, 1, '2026-08-02 08:00:00', 'POSW-26071587', 'in_progress', '19:32:00', NULL, NULL, 'medium', NULL),
+(606, 'AR9900174', 19, 43, 6, '17.073451, 103.249043', 'ร้านเจียมจิตเฟอร์นิเจอร์ (3)', 2, 5, 0, 0, 1, '2026-08-02 08:00:00', 'POSW-26071555', 'in_progress', '19:37:00', NULL, NULL, 'medium', NULL),
+(607, 'AR9900174', 19, 44, 6, '17.073451, 103.249043', 'ร้านเจียมจิตเฟอร์นิเจอร์ (3)', 4, 7, 0, 0, 1, '2026-08-02 08:00:00', 'POSW-26071556', 'in_progress', '19:42:00', NULL, NULL, 'medium', NULL),
+(608, 'AR9900216', 19, 39, 4, '17.075834,103.186978', 'ร้านสุวรรณี บ้านโคกใหญ่ (3)', 5, 3, 0, 0, 1, '2026-08-02 08:00:00', 'SOJ-26070067', 'in_progress', '18:57:00', NULL, NULL, 'medium', NULL),
+(609, 'OR-6684', 19, 38, 1, '17.09958, 103.2035', 'ร้านค้าชุมชนบ้านดูนเลา', 2, 4, 0, 0, 1, '2026-08-02 08:00:00', 'POSW-26071561', 'in_progress', '18:44:00', NULL, NULL, 'medium', NULL),
+(610, 'JK-00113', 19, 33, 2, '17.105279, 103.077912', 'ร้าน. P.top หินฮาว', 4, 2, 0, 0, 1, '2026-08-02 08:00:00', 'SOW-26070547', 'in_progress', '17:40:00', NULL, NULL, 'medium', NULL),
+(611, 'OR-01080', 19, 1, 3, '17.110873, 103.014948', 'เจ้แดง ติดร้านตุ๊กตาตลาดสด กว.', 5, 1, 0, 1, 1, '2026-08-02 08:00:00', 'POSW-26071536', 'completed', '10:54:00', '2026-08-02 09:10:53', '2026-08-02 09:11:28', 'medium', NULL),
+(612, 'OR-00521', 19, 4, 4, '17.106882, 103.020000', 'ขนมไข่หงส์ พันล้าน ดงเมือง', 7, 2, 0, 1, 1, '2026-08-02 08:00:00', 'SOW-26070536', 'completed', '11:20:00', '2026-08-02 18:12:16', '2026-08-02 18:18:57', 'medium', NULL),
+(613, 'OR-00341', 19, 26, 6, '16.943200, 103.187000', 'แม่สิน บ.กุดขอนแก่น(4)', 1, 2, 0, 0, 1, '2026-08-02 08:00:00', 'SOWL-26070252', 'in_progress', '16:24:00', NULL, NULL, 'medium', NULL),
+(614, 'OR-01223', 19, 23, 3, '16.863135, 103.267396', 'ร้าน พีรวัส หมูสด', 6, 3, 0, 0, 1, '2026-08-02 08:00:00', 'POSW-26071507', 'in_progress', '15:36:00', NULL, NULL, 'medium', NULL),
+(615, 'OR-01759', 19, 21, 2, '16.911120, 103.175262', 'ชมพู่ มินิมาร์ท', 2, 7, 0, 0, 1, '2026-08-02 08:00:00', 'SOWL-26070250', 'in_progress', '15:09:00', NULL, NULL, 'medium', NULL),
+(616, 'OR-01759', 19, 22, 6, '16.911120, 103.175262', 'ชมพู่ มินิมาร์ท', 4, 3, 0, 0, 1, '2026-08-02 08:00:00', 'SOWL-26070247', 'in_progress', '15:14:00', NULL, NULL, 'medium', NULL),
+(617, 'OR-6413', 19, 17, 6, '16.845144, 103.046294', 'ดีดีทวีทรัพย์ บ้านหัวนาคำ(กระนวน)', 5, 4, 0, 0, 1, '2026-08-02 08:00:00', 'POSW-26071542', 'in_progress', '14:10:00', NULL, NULL, 'medium', NULL),
+(618, 'OR-6413', 19, 18, 4, '16.845144, 103.046294', 'ดีดีทวีทรัพย์ บ้านหัวนาคำ(กระนวน)', 7, 2, 0, 0, 1, '2026-08-02 08:00:00', 'SOJ-26070068', 'in_progress', '14:15:00', NULL, NULL, 'medium', NULL),
+(619, 'OR-01637', 19, 16, 1, '16.908892, 103.004209', 'ยุรี นกเทศน้อย', 1, 1, 0, 0, 1, '2026-08-02 08:00:00', 'POSW-26071562', 'in_progress', '13:52:00', NULL, NULL, 'medium', NULL),
+(620, 'OR-2657', 19, 11, 2, '16.946936, 103.016023', 'ชนะกิจ บะยาว', 6, 2, 0, 0, 1, '2026-08-02 08:00:00', 'POSW-26071573', 'problem', '12:43:00', '2026-08-02 18:52:35', '2026-08-02 18:52:46', 'medium', NULL),
+(621, 'AR00088', 19, 15, 3, '16.969544, 102.956560', 'สัมฤทธิ์ มิตรภาพ(ยายปราณี) (2)', 2, 2, 0, 0, 1, '2026-08-02 08:00:00', 'SOW-26070544', 'in_progress', '13:34:00', NULL, NULL, 'medium', NULL),
+(622, 'OR-00023', 19, 14, 4, '16.971451, 102.976021', 'นายศักรินทร์ พันธ์รอด (2)', 4, 3, 0, 0, 1, '2026-08-02 08:00:00', 'POSW-26071540', 'in_progress', '13:24:00', NULL, NULL, 'medium', NULL),
+(623, 'OR-01510', 19, 12, 6, '16.984016,103.006787', 'ร้านค้า 5 แยกต้นมะขามใหญ่', 5, 1, 0, 0, 1, '2026-08-02 08:00:00', 'SOWL-26070254', 'in_progress', '12:58:00', NULL, NULL, 'medium', NULL),
+(624, 'OR-00925', 19, 13, 3, '16.996683, 103.012766', 'ครูสุพรรณ (ร้านใจดี 20 บ้านโนนทิง)', 2, 2, 0, 0, 1, '2026-08-02 08:00:00', 'POSW-26071516', 'in_progress', '13:07:00', NULL, NULL, 'medium', NULL),
+(625, 'OR-01469', 17, 26, 2, '17.022554, 102.995573', 'แม่โสภา บ.ห้วยบง', 4, 1, 0, 0, 1, '2026-08-02 08:00:00', 'POSW-26071572', 'in_progress', '15:03:00', NULL, NULL, 'medium', NULL),
+(626, 'OR-01469', 17, 27, 6, '17.022554, 102.995573', 'แม่โสภา บ.ห้วยบง', 5, 5, 0, 0, 1, '2026-08-02 08:00:00', 'POSW-26071510', 'in_progress', '15:08:00', NULL, NULL, 'medium', NULL),
+(627, 'OR-01469', 19, 5, 6, '17.022554, 102.995573', 'แม่โสภา บ.ห้วยบง', 7, 7, 0, 1, 1, '2026-08-02 08:00:00', 'SOW-26070556', 'completed', '11:40:00', '2026-08-02 18:19:55', '2026-08-02 18:23:49', 'medium', NULL),
+(628, 'AR00409', 17, 24, 4, '17.020498, 102.950290', 'แม่ลี หนองเหี้ย (1)', 1, 3, 0, 0, 1, '2026-08-02 08:00:00', 'POSW-26071520', 'in_progress', '14:41:00', NULL, NULL, 'medium', NULL),
+(629, 'AR00409', 17, 25, 1, '17.020498, 102.950290', 'แม่ลี หนองเหี้ย (1)', 6, 4, 0, 0, 1, '2026-08-02 08:00:00', 'SOWL-26070251', 'in_progress', '14:46:00', NULL, NULL, 'medium', NULL),
+(630, 'OR-00271', 17, 23, 2, '17.042482, 102.927000', 'นุ้ย ห้วยเกิ้ง (1)', 2, 2, 0, 0, 1, '2026-08-02 08:00:00', 'SOW-26070552', 'in_progress', '14:28:00', NULL, NULL, 'medium', NULL),
+(631, 'AR00207', 17, 21, 3, '17.048427, 102.926713', 'พี่สำลี (1)', 4, 1, 0, 0, 1, '2026-08-02 08:00:00', 'POSW-26071546', 'in_progress', '14:16:00', NULL, NULL, 'medium', NULL),
+(632, 'AR00329', 17, 2, 4, '17.066792, 102.889403', 'น้าแสง บ้านบุ่งหมากลาน (1)', 5, 2, 0, 0, 1, '2026-08-02 08:00:00', 'SOW-26070550', 'in_progress', '11:10:00', NULL, NULL, 'medium', NULL),
+(633, 'AR00329', 17, 3, 6, '17.066792, 102.889403', 'น้าแสง บ้านบุ่งหมากลาน (1)', 7, 2, 0, 0, 1, '2026-08-02 08:00:00', 'SOW-26070551', 'in_progress', '11:15:00', NULL, NULL, 'medium', NULL),
+(634, 'OR-00933', 17, 1, 3, '17.09572,102.94179', 'นายอัศวิน สิงห์สาย', 1, 3, 0, 0, 1, '2026-08-02 08:00:00', 'POSW-26071592', 'in_progress', '10:55:00', NULL, NULL, 'medium', NULL),
+(635, 'JK-00335', 17, 22, 2, '17.044723, 102.929060', 'ร้าน Double T บิงซู&เบียร์วุ้น', 6, 1, 0, 0, 1, '2026-08-02 08:00:00', 'POSW-26071527', 'in_progress', '14:22:00', NULL, NULL, 'medium', NULL),
+(636, 'AR9900042', 17, 20, 6, '17.028790, 102.906946', 'แม่พลอย เกิ้งน้อย (1)', 2, 2, 0, 0, 1, '2026-08-02 08:00:00', 'SOW-26070546', 'in_progress', '14:04:00', NULL, NULL, 'medium', NULL),
+(637, 'AR00418', 17, 19, 6, '17.033290, 102.873914', 'แม่กอง บ้านหนองหญ้า (1)', 4, 1, 0, 0, 1, '2026-08-02 08:00:00', 'SOW-26070537', 'in_progress', '13:50:00', NULL, NULL, 'medium', NULL),
+(638, 'OR-00281', 17, 16, 4, '17.021431,102.798688', 'กองทุนหมู่บ้านหนองกุงทอง (1)', 5, 5, 0, 0, 1, '2026-08-02 08:00:00', 'POSW-26071591', 'in_progress', '13:12:00', NULL, NULL, 'medium', NULL),
+(639, 'OR-00222', 17, 17, 1, '16.986562, 102.826021', 'ร้านธงชัยการค้า', 2, 7, 0, 0, 1, '2026-08-02 08:00:00', 'POSW-26071583', 'in_progress', '13:29:00', NULL, NULL, 'medium', NULL),
+(640, 'OR-00222', 17, 18, 2, '16.986562, 102.826021', 'ร้านธงชัยการค้า', 4, 3, 0, 0, 1, '2026-08-02 08:00:00', 'POSW-26071564', 'in_progress', '13:34:00', NULL, NULL, 'medium', NULL),
+(641, 'OR-00414', 17, 15, 3, '17.023211, 102.739009', 'โซนัว ครัวคันนา', 5, 4, 0, 0, 1, '2026-08-02 08:00:00', 'POSW-26071582', 'in_progress', '12:57:00', NULL, NULL, 'medium', NULL),
+(642, 'JK-00156', 17, 11, 4, '17.038221, 102.771458', 'ร้าน BM&ใยไหม', 7, 2, 0, 0, 1, '2026-08-02 08:00:00', 'POSW-26071567', 'in_progress', '12:28:00', NULL, NULL, 'medium', NULL),
+(643, 'JK-00156', 17, 12, 6, '17.038221, 102.771458', 'ร้าน BM&ใยไหม', 1, 1, 0, 0, 1, '2026-08-02 08:00:00', 'SOJ-26070069', 'in_progress', '12:33:00', NULL, NULL, 'medium', NULL),
+(644, 'JK-00156', 17, 13, 3, '17.038221, 102.771458', 'ร้าน BM&ใยไหม', 6, 7, 0, 0, 1, '2026-08-02 08:00:00', 'SOW-26070543', 'in_progress', '12:38:00', NULL, NULL, 'medium', NULL),
+(645, 'JK-00156', 17, 14, 2, '17.038221, 102.771458', 'ร้าน BM&ใยไหม', 2, 3, 0, 0, 1, '2026-08-02 08:00:00', 'POSW-26071504', 'in_progress', '12:43:00', NULL, NULL, 'medium', NULL),
+(646, 'OR-01040', 17, 10, 6, '17.058719,102.786587', 'นางผกามาศ จันทร์ดี', 4, 4, 0, 0, 1, '2026-08-02 08:00:00', 'POSW-26071535', 'in_progress', '12:16:00', NULL, NULL, 'medium', NULL),
+(647, 'AR00048', 17, 9, 6, '17.060593,102.787189', 'นายบวร ไชยสิทธิ์ (บวรพานิช) (1)', 5, 2, 0, 0, 1, '2026-08-02 08:00:00', 'POSW-26071534', 'in_progress', '12:10:00', NULL, NULL, 'medium', NULL),
+(648, 'AR00372', 17, 7, 4, '17.061772, 102.787043', 'ประณีพานิชย์ (แม่ตุ๋ย บ้านนาเหล่า) (1)', 7, 1, 0, 0, 1, '2026-08-02 08:00:00', 'POSW-26071586', 'in_progress', '11:58:00', NULL, NULL, 'medium', NULL),
+(649, 'AR00395', 17, 8, 1, '17.061731, 102.786957', 'กุหลาบการค้า (1)', 1, 2, 0, 0, 1, '2026-08-02 08:00:00', 'SOW-26070535', 'in_progress', '12:04:00', NULL, NULL, 'medium', NULL),
+(650, 'JK-00355', 18, 6, 2, '17.107483, 102.772170', 'น.ส. ธวัลรัตน์ บิลจรัญ', 6, 2, 0, 0, 1, '2026-08-02 08:00:00', 'POSW-26071558', 'in_progress', '11:50:00', NULL, NULL, 'medium', NULL),
+(651, 'OR-99992', 18, 5, 3, '17.109072,102.774917', 'น้อง มะปราง', 2, 3, 0, 0, 1, '2026-08-02 08:00:00', 'POSW-26071560', 'in_progress', '11:44:00', NULL, NULL, 'medium', NULL),
+(652, 'AR00332', 18, 8, 4, '17.130661, 102.783032', 'แม่สี ท่าสี (1)', 4, 1, 0, 0, 1, '2026-08-02 08:00:00', 'POSW-26071581', 'in_progress', '12:07:00', NULL, NULL, 'medium', NULL),
+(653, 'AR00419', 18, 11, 6, '17.154667, 102.788989', 'สนธิพันธตระกูลพาณิชย์ (พ่อสน เก่า (1)', 5, 2, 0, 0, 1, '2026-08-02 08:00:00', 'POSW-26071551', 'in_progress', '12:29:00', NULL, NULL, 'medium', NULL),
+(654, 'AR00118', 18, 16, 3, '17.174080, 102.774740', 'พ่อสมจิตร ทับกุง (1)', 2, 1, 0, 0, 1, '2026-08-02 08:00:00', 'POSW-26071569', 'in_progress', '13:05:00', NULL, NULL, 'medium', NULL),
+(655, 'AR00055', 18, 15, 2, '17.176665,102.771809', 'กองทุนหมู่บ้านทับกุง หมู่ที่1 (1)', 4, 5, 0, 0, 1, '2026-08-02 08:00:00', 'POSW-26071571', 'in_progress', '12:59:00', NULL, NULL, 'medium', NULL),
+(656, 'AR00055', 18, 14, 6, '17.176665,102.771809', 'กองทุนหมู่บ้านทับกุง หมู่ที่1 (1)', 5, 7, 0, 0, 1, '2026-08-02 08:00:00', 'POSW-26071529', 'in_progress', '12:54:00', NULL, NULL, 'medium', NULL),
+(657, 'JK-00133', 18, 13, 6, '17.176551,102.771684', 'พาขวัญพาณิชย์ 3', 7, 3, 0, 0, 1, '2026-08-02 08:00:00', 'SOW-26070534', 'in_progress', '12:48:00', NULL, NULL, 'medium', NULL),
+(658, 'AR00139', 18, 12, 4, '17.171558, 102.767979', 'นางสาวพจนา จำปาวัตตะ (สมหมายการค้า) (1)', 1, 4, 0, 0, 1, '2026-08-02 08:00:00', 'POSW-26071525', 'in_progress', '12:41:00', NULL, NULL, 'medium', NULL),
+(659, 'AR00139', 19, 52, 1, '17.171558, 102.767979', 'นางสาวพจนา จำปาวัตตะ (สมหมายการค้า) (1)', 6, 2, 0, 0, 1, '2026-08-02 08:00:00', 'POSW-26071526', 'in_progress', '22:40:00', NULL, NULL, 'medium', NULL),
+(660, 'AR00139', 19, 51, 2, '17.171558, 102.767979', 'นางสาวพจนา จำปาวัตตะ (สมหมายการค้า) (1)', 2, 1, 0, 0, 1, '2026-08-02 08:00:00', 'POSW-26071531', 'in_progress', '22:35:00', NULL, NULL, 'medium', NULL),
+(661, 'AR00128', 19, 54, 3, '17.170800, 102.769989', 'ร้านแสงประเสริฐ/ทับกุง (1)', 4, 2, 0, 0, 1, '2026-08-02 08:00:00', 'POSW-26071575', 'in_progress', '22:51:00', NULL, NULL, 'medium', NULL),
+(662, 'AR00128', 19, 53, 4, '17.170800, 102.769989', 'ร้านแสงประเสริฐ/ทับกุง (1)', 5, 2, 0, 0, 1, '2026-08-02 08:00:00', 'POSW-26071517', 'in_progress', '22:46:00', NULL, NULL, 'medium', NULL),
+(663, 'AR9900137', 19, 55, 6, '17.170220, 102.771925', 'แม่ติ๋ม ทับกุง (1)', 7, 3, 0, 0, 1, '2026-08-02 08:00:00', 'SOW-26070538', 'in_progress', '22:57:00', NULL, NULL, 'medium', NULL),
+(664, 'AR00078', 18, 10, 3, '17.139190, 102.785011', 'ท่ายม (1)', 1, 1, 0, 0, 1, '2026-08-02 08:00:00', 'POSW-26071579', 'in_progress', '12:20:00', NULL, NULL, 'medium', NULL),
+(665, 'AR00005', 18, 3, 2, '17.12069,102.822', 'โอพาณิช(1)', 6, 2, 0, 0, 1, '2026-08-02 08:00:00', 'POSW-26071538', 'in_progress', '11:21:00', NULL, NULL, 'medium', NULL),
+(666, 'JK-00142', 18, 18, 6, '17.138299, 102.847066', 'ร้านโอ๊ตดี้', 2, 1, 0, 0, 1, '2026-08-02 08:00:00', 'POSW-26071505', 'in_progress', '13:29:00', NULL, NULL, 'medium', NULL),
+(667, 'AR00138', 18, 21, 6, '17.146602, 102.850043', 'นางแอ๊ด เตรียมตัว (แม่แอด แสงทอง) (1)', 4, 5, 0, 0, 1, '2026-08-02 08:00:00', 'POSW-26071515', 'in_progress', '13:48:00', NULL, NULL, 'medium', NULL),
+(668, 'JK-00217', 18, 20, 4, '17.143707,102.849633', 'ร้านรจนาซุปเปอร์มาร์ท [นาย ยงยุธ น้อยชนะ]', 5, 7, 0, 0, 1, '2026-08-02 08:00:00', 'POSW-26071514', 'in_progress', '13:42:00', NULL, NULL, 'medium', NULL),
+(669, 'AR00041', 18, 19, 1, '17.1431,102.851', 'ประจวบ (1)', 2, 3, 0, 0, 1, '2026-08-02 08:00:00', 'SOW-26070539', 'in_progress', '13:36:00', NULL, NULL, 'medium', NULL),
+(670, 'OR-00032', 18, 2, 2, '17.130445, 102.889715', 'พรสุดา', 4, 4, 0, 0, 1, '2026-08-02 08:00:00', 'POSW-26071512', 'in_progress', '11:05:00', NULL, NULL, 'medium', NULL),
+(671, 'AR00290', 18, 1, 3, '17.131288, 102.915337', 'มาลัย การค้า', 5, 2, 0, 0, 1, '2026-08-02 08:00:00', 'POSW-26071519', 'in_progress', '10:53:00', NULL, NULL, 'medium', NULL),
+(672, 'AR00071', 19, 3, 4, '17.116098, 103.032021', 'ห่อเงิน (3)', 7, 1, 0, 1, 1, '2026-08-02 08:00:00', 'POSW-26071508', 'completed', '11:11:00', '2026-08-02 09:15:37', '2026-08-02 09:15:48', 'medium', NULL),
+(673, 'JK-00283', 19, 2, 6, '17.122036, 103.032002', 'ปราณีคาร์แคร์', 1, 7, 0, 1, 1, '2026-08-02 08:00:00', 'POSW-26071549', 'completed', '11:04:00', '2026-08-02 09:14:33', '2026-08-02 09:14:46', 'medium', NULL),
+(674, 'AR00076', 19, 34, 3, '17.1748,103.07', 'พี่เดือน (3)', 6, 3, 0, 0, 1, '2026-08-02 08:00:00', 'POSW-26071523', 'in_progress', '17:57:00', NULL, NULL, 'medium', NULL),
+(675, 'AR00076', 19, 35, 2, '17.1748,103.07', 'พี่เดือน (3)', 2, 4, 0, 0, 1, '2026-08-02 08:00:00', 'POSW-26071522', 'in_progress', '18:02:00', NULL, NULL, 'medium', NULL),
+(676, 'AR00076', 19, 36, 6, '17.1748,103.07', 'พี่เดือน (3)', 4, 2, 0, 0, 1, '2026-08-02 08:00:00', 'SOWL-26070249', 'in_progress', '18:07:00', NULL, NULL, 'medium', NULL),
+(677, 'OR-01389', 19, 37, 6, '17.157564, 103.159376', 'บัวสวัสดิ์การค้า', 5, 1, 0, 0, 1, '2026-08-02 08:00:00', 'POSW-26071521', 'in_progress', '18:27:00', NULL, NULL, 'medium', NULL),
+(678, 'OR-00614', 19, 47, 4, '17.209800, 103.144032', 'นางลำไพ ลาไป (ร้านแม่ลำไพ อ.กู่แก้ว)', 7, 2, 0, 0, 1, '2026-08-02 08:00:00', 'POSW-26071577', 'in_progress', '21:02:00', NULL, NULL, 'medium', NULL),
+(679, 'OR-6218', 19, 46, 1, '17.30205,103.195052', 'อินเตอร์ การค้า', 1, 2, 0, 0, 1, '2026-08-02 08:00:00', 'POSW-26071578', 'in_progress', '20:40:00', NULL, NULL, 'medium', NULL),
+(680, 'OR-01840', 19, 48, 2, '17.245609, 103.132717', 'ร้านบุญดี', 6, 3, 0, 0, 1, '2026-08-02 08:00:00', 'POSW-26071585', 'in_progress', '21:17:00', NULL, NULL, 'medium', NULL),
+(681, 'OR-3220', 19, 49, 3, '17.253747, 103.093803', 'แก้มกัน บ้านพังซ่อน', 2, 1, 0, 0, 1, '2026-08-02 08:00:00', 'POSW-26071590', 'in_progress', '21:32:00', NULL, NULL, 'medium', NULL),
+(682, 'AR00150', 19, 50, 4, '17.232851, 103.025043', 'แม่พรไพร สวนม่อน (5)', 4, 2, 0, 0, 1, '2026-08-02 08:00:00', 'SOWL-26070253', 'in_progress', '21:48:00', NULL, NULL, 'medium', NULL),
+(683, 'AR00473', 18, 24, 6, '17.230376, 102.947120', 'ปรารถนา ศรีทอง (โคกสง่ามาร์เก็ต)', 5, 1, 0, 0, 1, '2026-08-02 08:00:00', 'POSW-26071518', 'in_progress', '14:30:00', NULL, NULL, 'medium', NULL),
+(684, 'AR00473', 18, 23, 3, '17.230376, 102.947120', 'ปรารถนา ศรีทอง (โคกสง่ามาร์เก็ต)', 2, 5, 0, 0, 1, '2026-08-02 08:00:00', 'POSW-26071524', 'in_progress', '14:25:00', NULL, NULL, 'medium', NULL),
+(685, 'AR00511', 18, 25, 2, '17.215956, 102.937968', 'ร้านไพบูลย์มินิมาร์ท', 4, 7, 0, 0, 1, '2026-08-02 08:00:00', 'POSW-26071547', 'in_progress', '14:40:00', NULL, NULL, 'medium', NULL),
+(686, 'OR-00592', 18, 27, 6, '17.169241,102.929166', 'ร้านแม่ตุ่น บ้านสี่แจ', 5, 3, 0, 0, 1, '2026-08-02 08:00:00', 'POSW-26071563', 'in_progress', '15:05:00', NULL, NULL, 'medium', NULL),
+(687, 'OR-01794', 18, 26, 6, '17.180443, 102.903388', 'ร้านสุภาพร', 7, 4, 0, 0, 1, '2026-08-02 08:00:00', 'POSW-26071548', 'in_progress', '14:53:00', NULL, NULL, 'medium', NULL),
+(688, 'OR-01810', 18, 22, 4, '17.222607, 102.860861', 'ร้าน เพชรการค้า', 1, 2, 0, 0, 1, '2026-08-02 08:00:00', 'POSW-26071554', 'in_progress', '14:06:00', NULL, NULL, 'medium', NULL),
+(689, 'JK-00332', 18, 17, 1, '17.169864, 102.785220', 'ร้านขวัญใจของชำ', 6, 1, 0, 0, 1, '2026-08-02 08:00:00', 'POSW-26071568', 'in_progress', '13:13:00', NULL, NULL, 'medium', NULL),
+(690, 'OR-01313', 18, 9, 2, '17.138831,102.786287', 'นิตยา ถามีมาก', 2, 2, 0, 0, 1, '2026-08-02 08:00:00', 'POSW-26071584', 'in_progress', '12:14:00', NULL, NULL, 'medium', NULL),
+(691, 'AR9900020', 18, 7, 3, '17.128788, 102.783087', 'ร้านค้าชุมชนบ้านท่าสี (1)', 4, 2, 0, 0, 1, '2026-08-02 08:00:00', 'POSW-26071532', 'in_progress', '12:01:00', NULL, NULL, 'medium', NULL),
+(692, 'OR-01156', 18, 4, 4, '17.119059,102.820003', 'ร้าน อ.เจริญพานิชย์', 5, 3, 0, 0, 1, '2026-08-02 08:00:00', 'POSW-26071565', 'in_progress', '11:27:00', NULL, NULL, 'medium', NULL),
+(693, 'OR-00288', 17, 6, 6, '17.086867, 102.853010', 'บีมบีม', 7, 1, 0, 0, 1, '2026-08-02 08:00:00', 'POSW-26071550', 'in_progress', '11:42:00', NULL, NULL, 'medium', NULL),
+(694, 'OR-00296', 17, 5, 3, '17.087567, 102.855021', 'แม่ประยงค์ (1)', 1, 2, 0, 0, 1, '2026-08-02 08:00:00', 'ฝากส่ง', 'in_progress', '11:36:00', NULL, NULL, 'medium', NULL);
+INSERT INTO `list_store` (`list_id`, `store_id`, `group_store_id`, `row_order`, `sum_quantity`, `lat_long`, `store_name_result`, `position_product_id`, `position_production_order`, `bypass`, `off_site`, `created_by`, `created_at`, `data_store_no`, `status`, `scheduled_time`, `start_service_time`, `end_service_time`, `priority`, `pod_image`) VALUES
+(695, 'AR00440', 17, 4, 2, '17.068855,102.886939', 'แม่ไล บุ่งหมากลาน ม.4 (1)', 6, 1, 0, 0, 1, '2026-08-02 08:00:00', 'POSW-26071588', 'in_progress', '11:21:00', NULL, NULL, 'medium', NULL);
 
 -- --------------------------------------------------------
 
 --
--- Table structure for table `gps_distance`
+-- Table structure for table `list_store_load`
 --
 
-CREATE TABLE `gps_distance` (
-  `gps_distance_id` int(11) NOT NULL AUTO_INCREMENT,
-  `distance_code` varchar(50) NOT NULL,
-  `distance_name` varchar(100) NOT NULL,
-  `distance_meters` int(11) NOT NULL DEFAULT 300,
-  `unit_name` varchar(20) DEFAULT 'เมตร',
-  `description` varchar(255) DEFAULT NULL,
-  `is_active` tinyint(1) NOT NULL DEFAULT 1,
-  `created_at` datetime DEFAULT current_timestamp(),
-  `updated_at` datetime DEFAULT current_timestamp() ON UPDATE current_timestamp(),
-  PRIMARY KEY (`gps_distance_id`),
-  UNIQUE KEY `distance_code` (`distance_code`)
+CREATE TABLE `list_store_load` (
+  `id` int(11) NOT NULL,
+  `list_id` int(11) UNSIGNED NOT NULL,
+  `loading_type_id` int(11) NOT NULL,
+  `quantity` int(11) NOT NULL DEFAULT 0,
+  `created_at` datetime DEFAULT current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 --
--- Dumping data for table `gps_distance`
+-- Dumping data for table `list_store_load`
 --
 
-INSERT INTO `gps_distance` (`gps_distance_id`, `distance_code`, `distance_name`, `distance_meters`, `unit_name`, `description`, `is_active`, `created_at`, `updated_at`) VALUES
-(1, 'CHECKOUT_MAX', 'ระยะห่างเช็คเอาท์นอกสถานที่ (Off-site Checkout)', 300, 'เมตร', 'ระยะทางสูงสุดระหว่างตำแหน่งเช็คเอาท์กับพิกัดร้านค้า หากเกินถือว่านอกสถานที่', 1, '2026-08-02 11:50:00', '2026-08-02 11:50:00'),
-(2, 'CHECKIN_RADIUS', 'รัศมีเช็คอินร้านค้า (Store Check-in Radius)', 100, 'เมตร', 'ระยะห่างที่ยอมรับได้สำหรับแจ้งเตือนเข้าถึงบริเวณร้านค้า', 1, '2026-08-02 11:50:00', '2026-08-02 11:50:00'),
-(3, 'ALERT_RADIUS', 'รัศมีแจ้งเตือนใกล้ถึงจุดหมาย (Destination Alert)', 500, 'เมตร', 'รัศมีตรวจจับตำแหน่ง GPS ก่อนเข้าถึงจุดส่งสินค้า', 1, '2026-08-02 11:50:00', '2026-08-02 11:50:00');
+INSERT INTO `list_store_load` (`id`, `list_id`, `loading_type_id`, `quantity`, `created_at`) VALUES
+(1036, 433, 1, 1, '2026-07-31 17:25:45'),
+(1037, 433, 2, 2, '2026-07-31 17:25:45'),
+(1038, 434, 2, 2, '2026-07-31 17:25:45'),
+(1039, 434, 3, 1, '2026-07-31 17:25:45'),
+(1040, 435, 2, 2, '2026-07-31 17:25:45'),
+(1041, 435, 3, 2, '2026-07-31 17:25:45'),
+(1042, 436, 2, 2, '2026-07-31 17:25:45'),
+(1043, 436, 3, 3, '2026-07-31 17:25:45'),
+(1044, 437, 3, 3, '2026-07-31 17:25:45'),
+(1045, 438, 1, 1, '2026-07-31 17:25:45'),
+(1046, 438, 2, 2, '2026-07-31 17:25:45'),
+(1047, 439, 2, 2, '2026-07-31 17:25:45'),
+(1048, 439, 3, 1, '2026-07-31 17:25:45'),
+(1049, 440, 2, 2, '2026-07-31 17:25:45'),
+(1050, 440, 3, 2, '2026-07-31 17:25:45'),
+(1051, 441, 2, 2, '2026-07-31 17:25:45'),
+(1052, 441, 3, 3, '2026-07-31 17:25:45'),
+(1053, 442, 3, 3, '2026-07-31 17:25:45'),
+(1054, 443, 1, 1, '2026-07-31 17:25:45'),
+(1055, 443, 2, 2, '2026-07-31 17:25:45'),
+(1056, 444, 2, 2, '2026-07-31 17:25:45'),
+(1057, 444, 3, 1, '2026-07-31 17:25:45'),
+(1058, 445, 2, 2, '2026-07-31 17:25:45'),
+(1059, 445, 3, 2, '2026-07-31 17:25:45'),
+(1060, 446, 2, 2, '2026-07-31 17:25:45'),
+(1061, 446, 3, 3, '2026-07-31 17:25:45'),
+(1062, 447, 3, 3, '2026-07-31 17:25:45'),
+(1063, 448, 1, 1, '2026-07-31 17:25:45'),
+(1064, 448, 2, 2, '2026-07-31 17:25:45'),
+(1065, 449, 2, 2, '2026-07-31 17:25:45'),
+(1066, 449, 3, 1, '2026-07-31 17:25:45'),
+(1067, 450, 2, 2, '2026-07-31 17:25:45'),
+(1068, 450, 3, 2, '2026-07-31 17:25:45'),
+(1069, 451, 2, 2, '2026-07-31 17:25:45'),
+(1070, 451, 3, 3, '2026-07-31 17:25:45'),
+(1071, 452, 3, 3, '2026-07-31 17:25:45'),
+(1072, 453, 1, 1, '2026-07-31 17:25:45'),
+(1073, 453, 2, 2, '2026-07-31 17:25:45'),
+(1074, 454, 2, 2, '2026-07-31 17:25:45'),
+(1075, 454, 3, 1, '2026-07-31 17:25:45'),
+(1076, 455, 2, 2, '2026-07-31 17:25:45'),
+(1077, 455, 3, 2, '2026-07-31 17:25:45'),
+(1078, 456, 2, 2, '2026-07-31 17:25:45'),
+(1079, 456, 3, 3, '2026-07-31 17:25:45'),
+(1080, 457, 3, 3, '2026-07-31 17:25:45'),
+(1081, 458, 1, 1, '2026-07-31 17:25:45'),
+(1082, 458, 2, 2, '2026-07-31 17:25:45'),
+(1083, 459, 2, 2, '2026-07-31 17:25:45'),
+(1084, 459, 3, 1, '2026-07-31 17:25:45'),
+(1085, 460, 2, 2, '2026-07-31 17:25:45'),
+(1086, 460, 3, 2, '2026-07-31 17:25:45'),
+(1087, 461, 2, 2, '2026-07-31 17:25:45'),
+(1088, 461, 3, 3, '2026-07-31 17:25:45'),
+(1089, 462, 3, 3, '2026-07-31 17:25:45'),
+(1090, 463, 1, 1, '2026-07-31 17:25:45'),
+(1091, 463, 2, 2, '2026-07-31 17:25:45'),
+(1092, 464, 2, 2, '2026-07-31 17:25:45'),
+(1093, 464, 3, 1, '2026-07-31 17:25:45'),
+(1094, 465, 2, 2, '2026-07-31 17:25:45'),
+(1095, 465, 3, 2, '2026-07-31 17:25:45'),
+(1096, 466, 2, 2, '2026-07-31 17:25:45'),
+(1097, 466, 3, 3, '2026-07-31 17:25:45'),
+(1098, 467, 3, 3, '2026-07-31 17:25:45'),
+(1099, 468, 1, 1, '2026-07-31 17:25:45'),
+(1100, 468, 2, 2, '2026-07-31 17:25:45'),
+(1101, 469, 2, 2, '2026-07-31 17:25:45'),
+(1102, 469, 3, 1, '2026-07-31 17:25:45'),
+(1103, 470, 2, 2, '2026-07-31 17:25:45'),
+(1104, 470, 3, 2, '2026-07-31 17:25:45'),
+(1105, 471, 2, 2, '2026-07-31 17:25:45'),
+(1106, 471, 3, 3, '2026-07-31 17:25:45'),
+(1107, 472, 3, 3, '2026-07-31 17:25:45'),
+(1108, 473, 1, 1, '2026-07-31 17:25:45'),
+(1109, 473, 2, 2, '2026-07-31 17:25:45'),
+(1110, 474, 2, 2, '2026-07-31 17:25:45'),
+(1111, 474, 3, 1, '2026-07-31 17:25:45'),
+(1112, 475, 2, 2, '2026-07-31 17:25:45'),
+(1113, 475, 3, 2, '2026-07-31 17:25:45'),
+(1114, 476, 2, 2, '2026-07-31 17:25:45'),
+(1115, 476, 3, 3, '2026-07-31 17:25:45'),
+(1116, 477, 3, 3, '2026-07-31 17:25:45'),
+(1117, 478, 1, 1, '2026-07-31 17:25:45'),
+(1118, 478, 2, 2, '2026-07-31 17:25:45'),
+(1119, 479, 2, 2, '2026-07-31 17:25:45'),
+(1120, 479, 3, 1, '2026-07-31 17:25:45'),
+(1121, 480, 2, 2, '2026-07-31 17:25:45'),
+(1122, 480, 3, 2, '2026-07-31 17:25:45'),
+(1123, 481, 1, 1, '2026-07-31 17:25:45'),
+(1124, 481, 2, 2, '2026-07-31 17:25:45'),
+(1125, 482, 2, 2, '2026-07-31 17:25:45'),
+(1126, 482, 3, 1, '2026-07-31 17:25:45'),
+(1127, 483, 2, 2, '2026-07-31 17:25:45'),
+(1128, 483, 3, 2, '2026-07-31 17:25:45'),
+(1129, 484, 2, 2, '2026-07-31 17:25:45'),
+(1130, 484, 3, 3, '2026-07-31 17:25:45'),
+(1131, 485, 3, 3, '2026-07-31 17:25:45'),
+(1132, 486, 1, 1, '2026-07-31 17:25:45'),
+(1133, 486, 2, 2, '2026-07-31 17:25:45'),
+(1134, 487, 2, 2, '2026-07-31 17:25:45'),
+(1135, 487, 3, 1, '2026-07-31 17:25:45'),
+(1136, 488, 2, 2, '2026-07-31 17:25:45'),
+(1137, 488, 3, 2, '2026-07-31 17:25:45'),
+(1138, 489, 2, 2, '2026-07-31 17:25:45'),
+(1139, 489, 3, 3, '2026-07-31 17:25:45'),
+(1140, 490, 3, 3, '2026-07-31 17:25:45'),
+(1141, 491, 1, 1, '2026-07-31 17:25:45'),
+(1142, 491, 2, 2, '2026-07-31 17:25:45'),
+(1143, 492, 2, 2, '2026-07-31 17:25:45'),
+(1144, 492, 3, 1, '2026-07-31 17:25:45'),
+(1145, 493, 2, 2, '2026-07-31 17:25:45'),
+(1146, 493, 3, 2, '2026-07-31 17:25:45'),
+(1147, 494, 2, 2, '2026-07-31 17:25:45'),
+(1148, 494, 3, 3, '2026-07-31 17:25:45'),
+(1149, 495, 3, 3, '2026-07-31 17:25:46'),
+(1150, 496, 1, 1, '2026-07-31 17:25:46'),
+(1151, 496, 2, 2, '2026-07-31 17:25:46'),
+(1152, 497, 2, 2, '2026-07-31 17:25:46'),
+(1153, 497, 3, 1, '2026-07-31 17:25:46'),
+(1154, 498, 2, 2, '2026-07-31 17:25:46'),
+(1155, 498, 3, 2, '2026-07-31 17:25:46'),
+(1156, 499, 2, 2, '2026-07-31 17:25:46'),
+(1157, 499, 3, 3, '2026-07-31 17:25:46'),
+(1158, 500, 3, 3, '2026-07-31 17:25:46'),
+(1159, 501, 1, 1, '2026-07-31 17:25:46'),
+(1160, 501, 2, 2, '2026-07-31 17:25:46'),
+(1161, 502, 2, 2, '2026-07-31 17:25:46'),
+(1162, 502, 3, 1, '2026-07-31 17:25:46'),
+(1163, 503, 2, 2, '2026-07-31 17:25:46'),
+(1164, 503, 3, 2, '2026-07-31 17:25:46'),
+(1165, 504, 1, 1, '2026-07-31 17:25:46'),
+(1166, 504, 2, 2, '2026-07-31 17:25:46'),
+(1167, 505, 2, 2, '2026-07-31 17:25:46'),
+(1168, 505, 3, 1, '2026-07-31 17:25:46'),
+(1169, 506, 2, 2, '2026-07-31 17:25:46'),
+(1170, 506, 3, 2, '2026-07-31 17:25:46'),
+(1171, 507, 2, 2, '2026-07-31 17:25:46'),
+(1172, 507, 3, 3, '2026-07-31 17:25:46'),
+(1173, 508, 3, 3, '2026-07-31 17:25:46'),
+(1174, 509, 1, 1, '2026-07-31 17:25:46'),
+(1175, 509, 2, 2, '2026-07-31 17:25:46'),
+(1176, 510, 2, 2, '2026-07-31 17:25:46'),
+(1177, 510, 3, 1, '2026-07-31 17:25:46'),
+(1178, 511, 2, 2, '2026-07-31 17:25:46'),
+(1179, 511, 3, 2, '2026-07-31 17:25:46'),
+(1180, 512, 2, 2, '2026-07-31 17:25:46'),
+(1181, 512, 3, 3, '2026-07-31 17:25:46'),
+(1182, 513, 3, 3, '2026-07-31 17:25:46'),
+(1183, 514, 1, 1, '2026-07-31 17:25:46'),
+(1184, 514, 2, 2, '2026-07-31 17:25:46'),
+(1185, 515, 2, 2, '2026-07-31 17:25:46'),
+(1186, 515, 3, 1, '2026-07-31 17:25:46'),
+(1187, 516, 2, 2, '2026-07-31 17:25:46'),
+(1188, 516, 3, 2, '2026-07-31 17:25:46'),
+(1189, 517, 2, 2, '2026-07-31 17:25:46'),
+(1190, 517, 3, 3, '2026-07-31 17:25:46'),
+(1191, 518, 3, 3, '2026-07-31 17:25:46'),
+(1192, 519, 1, 1, '2026-07-31 17:25:46'),
+(1193, 519, 2, 2, '2026-07-31 17:25:46'),
+(1194, 520, 2, 2, '2026-07-31 17:25:46'),
+(1195, 520, 3, 1, '2026-07-31 17:25:46'),
+(1196, 521, 2, 2, '2026-07-31 17:25:46'),
+(1197, 521, 3, 2, '2026-07-31 17:25:46'),
+(1198, 522, 2, 2, '2026-07-31 17:25:46'),
+(1199, 522, 3, 3, '2026-07-31 17:25:46'),
+(1200, 523, 3, 3, '2026-07-31 17:25:46'),
+(1201, 524, 1, 1, '2026-07-31 17:25:46'),
+(1202, 524, 2, 2, '2026-07-31 17:25:46'),
+(1203, 525, 2, 2, '2026-07-31 17:25:46'),
+(1204, 525, 3, 1, '2026-07-31 17:25:46'),
+(1205, 526, 2, 2, '2026-07-31 17:25:46'),
+(1206, 526, 3, 2, '2026-07-31 17:25:46'),
+(1207, 527, 1, 1, '2026-07-31 17:25:46'),
+(1208, 527, 2, 2, '2026-07-31 17:25:46'),
+(1209, 528, 2, 2, '2026-07-31 17:25:46'),
+(1210, 528, 3, 1, '2026-07-31 17:25:46'),
+(1211, 529, 2, 2, '2026-07-31 17:25:46'),
+(1212, 529, 3, 2, '2026-07-31 17:25:46'),
+(1213, 530, 2, 2, '2026-07-31 17:25:46'),
+(1214, 530, 3, 3, '2026-07-31 17:25:46'),
+(1215, 531, 3, 3, '2026-07-31 17:25:46'),
+(1216, 532, 1, 1, '2026-07-31 17:25:46'),
+(1217, 532, 2, 2, '2026-07-31 17:25:46'),
+(1218, 533, 2, 2, '2026-07-31 17:25:46'),
+(1219, 533, 3, 1, '2026-07-31 17:25:46'),
+(1220, 534, 2, 2, '2026-07-31 17:25:46'),
+(1221, 534, 3, 2, '2026-07-31 17:25:46'),
+(1222, 535, 2, 2, '2026-07-31 17:25:46'),
+(1223, 535, 3, 3, '2026-07-31 17:25:46'),
+(1224, 536, 3, 3, '2026-07-31 17:25:46'),
+(1225, 537, 1, 1, '2026-07-31 17:25:46'),
+(1226, 537, 2, 2, '2026-07-31 17:25:46'),
+(1227, 538, 2, 2, '2026-07-31 17:25:46'),
+(1228, 538, 3, 1, '2026-07-31 17:25:46'),
+(1229, 539, 2, 2, '2026-07-31 17:25:46'),
+(1230, 539, 3, 2, '2026-07-31 17:25:46'),
+(1231, 540, 2, 2, '2026-07-31 17:25:46'),
+(1232, 540, 3, 3, '2026-07-31 17:25:46'),
+(1233, 541, 3, 3, '2026-07-31 17:25:46'),
+(1234, 542, 1, 1, '2026-07-31 17:25:46'),
+(1235, 542, 2, 2, '2026-07-31 17:25:46'),
+(1236, 543, 2, 2, '2026-07-31 17:25:46'),
+(1237, 543, 3, 1, '2026-07-31 17:25:46'),
+(1238, 544, 2, 2, '2026-07-31 17:25:46'),
+(1239, 544, 3, 2, '2026-07-31 17:25:46'),
+(1240, 545, 2, 2, '2026-07-31 17:25:46'),
+(1241, 545, 3, 3, '2026-07-31 17:25:46'),
+(1242, 546, 3, 3, '2026-07-31 17:25:46'),
+(1243, 547, 1, 1, '2026-07-31 17:25:46'),
+(1244, 547, 2, 2, '2026-07-31 17:25:46'),
+(1245, 548, 2, 2, '2026-07-31 17:25:46'),
+(1246, 548, 3, 1, '2026-07-31 17:25:46'),
+(1247, 549, 2, 2, '2026-07-31 17:25:46'),
+(1248, 549, 3, 2, '2026-07-31 17:25:46'),
+(1249, 550, 1, 1, '2026-07-31 17:25:46'),
+(1250, 550, 2, 2, '2026-07-31 17:25:46'),
+(1251, 551, 2, 2, '2026-07-31 17:25:46'),
+(1252, 551, 3, 1, '2026-07-31 17:25:46'),
+(1253, 552, 2, 2, '2026-07-31 17:25:46'),
+(1254, 552, 3, 2, '2026-07-31 17:25:46'),
+(1255, 553, 2, 2, '2026-07-31 17:25:46'),
+(1256, 553, 3, 3, '2026-07-31 17:25:46'),
+(1257, 554, 3, 3, '2026-07-31 17:25:46'),
+(1258, 555, 1, 1, '2026-07-31 17:25:46'),
+(1259, 555, 2, 2, '2026-07-31 17:25:46'),
+(1260, 556, 2, 2, '2026-07-31 17:25:46'),
+(1261, 556, 3, 1, '2026-07-31 17:25:46'),
+(1262, 557, 2, 2, '2026-07-31 17:25:46'),
+(1263, 557, 3, 2, '2026-07-31 17:25:46'),
+(1264, 558, 2, 2, '2026-07-31 17:25:46'),
+(1265, 558, 3, 3, '2026-07-31 17:25:46'),
+(1266, 559, 3, 3, '2026-07-31 17:25:46'),
+(1267, 560, 1, 1, '2026-07-31 17:25:46'),
+(1268, 560, 2, 2, '2026-07-31 17:25:46'),
+(1269, 561, 2, 2, '2026-07-31 17:25:46'),
+(1270, 561, 3, 1, '2026-07-31 17:25:46'),
+(1271, 562, 2, 2, '2026-07-31 17:25:46'),
+(1272, 562, 3, 2, '2026-07-31 17:25:46'),
+(1273, 563, 2, 2, '2026-07-31 17:25:46'),
+(1274, 563, 3, 3, '2026-07-31 17:25:46'),
+(1275, 564, 3, 3, '2026-07-31 17:25:46'),
+(1276, 565, 1, 1, '2026-07-31 17:25:46'),
+(1277, 565, 2, 2, '2026-07-31 17:25:46'),
+(1278, 566, 2, 2, '2026-07-31 17:25:46'),
+(1279, 566, 3, 1, '2026-07-31 17:25:46'),
+(1280, 567, 2, 2, '2026-07-31 17:25:46'),
+(1281, 567, 3, 2, '2026-07-31 17:25:46'),
+(1282, 568, 2, 2, '2026-07-31 17:25:46'),
+(1283, 568, 3, 3, '2026-07-31 17:25:46'),
+(1284, 569, 3, 3, '2026-07-31 17:25:46'),
+(1285, 570, 1, 1, '2026-07-31 17:25:46'),
+(1286, 570, 2, 2, '2026-07-31 17:25:46'),
+(1287, 571, 2, 2, '2026-07-31 17:25:46'),
+(1288, 571, 3, 1, '2026-07-31 17:25:46'),
+(1289, 572, 2, 2, '2026-07-31 17:25:46'),
+(1290, 572, 3, 2, '2026-07-31 17:25:46'),
+(1291, 573, 3, 3, '2026-07-31 17:25:46'),
+(1292, 574, 1, 1, '2026-07-31 17:25:46'),
+(1293, 574, 2, 2, '2026-07-31 17:25:46'),
+(1294, 575, 2, 2, '2026-07-31 17:25:46'),
+(1295, 575, 3, 1, '2026-07-31 17:25:46'),
+(1296, 576, 2, 2, '2026-07-31 17:25:46'),
+(1297, 576, 3, 2, '2026-07-31 17:25:46'),
+(1298, 578, 1, 1, '2026-08-02 15:22:27'),
+(1299, 578, 2, 1, '2026-08-02 15:22:27'),
+(1300, 578, 3, 1, '2026-08-02 15:22:27'),
+(1301, 578, 4, 1, '2026-08-02 15:22:27'),
+(1302, 578, 5, 1, '2026-08-02 15:22:27'),
+(1303, 578, 6, 1, '2026-08-02 15:22:27'),
+(1304, 579, 1, 1, '2026-08-02 15:36:15'),
+(1305, 580, 2, 2, '2026-08-02 15:36:15'),
+(1306, 581, 1, 2, '2026-08-02 15:36:15'),
+(1307, 581, 2, 1, '2026-08-02 15:36:15'),
+(1308, 582, 1, 1, '2026-08-02 15:36:15'),
+(1309, 582, 2, 2, '2026-08-02 15:36:15'),
+(1310, 582, 4, 1, '2026-08-02 15:36:15'),
+(1311, 583, 1, 1, '2026-08-02 15:36:15'),
+(1312, 583, 2, 2, '2026-08-02 15:36:15'),
+(1313, 583, 5, 2, '2026-08-02 15:36:15'),
+(1314, 583, 6, 1, '2026-08-02 15:36:15'),
+(1315, 584, 1, 2, '2026-08-02 15:36:15'),
+(1316, 584, 6, 1, '2026-08-02 15:36:15'),
+(1317, 585, 4, 1, '2026-08-02 15:36:15'),
+(1318, 585, 5, 1, '2026-08-02 15:36:15'),
+(1319, 586, 1, 5, '2026-08-02 15:36:15'),
+(1320, 586, 3, 1, '2026-08-02 15:36:15'),
+(1321, 587, 1, 3, '2026-08-02 15:36:15'),
+(1322, 587, 2, 1, '2026-08-02 15:36:15'),
+(1323, 587, 3, 2, '2026-08-02 15:36:15'),
+(1324, 588, 3, 3, '2026-08-02 15:36:15'),
+(1325, 588, 5, 1, '2026-08-02 15:36:15'),
+(1326, 589, 1, 1, '2026-08-02 15:36:15'),
+(1327, 590, 2, 2, '2026-08-02 15:36:15'),
+(1328, 591, 1, 2, '2026-08-02 15:36:15'),
+(1329, 591, 2, 1, '2026-08-02 15:36:15'),
+(1330, 592, 1, 1, '2026-08-02 15:36:15'),
+(1331, 592, 2, 2, '2026-08-02 15:36:15'),
+(1332, 592, 4, 1, '2026-08-02 15:36:15'),
+(1333, 593, 1, 1, '2026-08-02 15:36:15'),
+(1334, 593, 2, 2, '2026-08-02 15:36:15'),
+(1335, 593, 5, 2, '2026-08-02 15:36:15'),
+(1336, 593, 6, 1, '2026-08-02 15:36:15'),
+(1337, 594, 1, 2, '2026-08-02 15:36:15'),
+(1338, 594, 6, 1, '2026-08-02 15:36:15'),
+(1339, 595, 4, 1, '2026-08-02 15:36:15'),
+(1340, 595, 5, 1, '2026-08-02 15:36:15'),
+(1341, 596, 1, 5, '2026-08-02 15:36:15'),
+(1342, 596, 3, 1, '2026-08-02 15:36:15'),
+(1343, 597, 1, 3, '2026-08-02 15:36:15'),
+(1344, 597, 2, 1, '2026-08-02 15:36:15'),
+(1345, 597, 3, 2, '2026-08-02 15:36:15'),
+(1346, 598, 3, 3, '2026-08-02 15:36:15'),
+(1347, 598, 5, 1, '2026-08-02 15:36:15'),
+(1348, 599, 1, 1, '2026-08-02 15:36:15'),
+(1349, 600, 2, 2, '2026-08-02 15:36:15'),
+(1350, 601, 1, 2, '2026-08-02 15:36:15'),
+(1351, 601, 2, 1, '2026-08-02 15:36:15'),
+(1352, 602, 1, 1, '2026-08-02 15:36:15'),
+(1353, 602, 2, 2, '2026-08-02 15:36:15'),
+(1354, 602, 4, 1, '2026-08-02 15:36:15'),
+(1355, 603, 1, 1, '2026-08-02 15:36:15'),
+(1356, 603, 2, 2, '2026-08-02 15:36:15'),
+(1357, 603, 5, 2, '2026-08-02 15:36:15'),
+(1358, 603, 6, 1, '2026-08-02 15:36:15'),
+(1359, 604, 1, 2, '2026-08-02 15:36:15'),
+(1360, 604, 6, 1, '2026-08-02 15:36:15'),
+(1361, 605, 4, 1, '2026-08-02 15:36:15'),
+(1362, 605, 5, 1, '2026-08-02 15:36:15'),
+(1363, 606, 1, 5, '2026-08-02 15:36:15'),
+(1364, 606, 3, 1, '2026-08-02 15:36:15'),
+(1365, 607, 1, 3, '2026-08-02 15:36:15'),
+(1366, 607, 2, 1, '2026-08-02 15:36:15'),
+(1367, 607, 3, 2, '2026-08-02 15:36:15'),
+(1368, 608, 3, 3, '2026-08-02 15:36:15'),
+(1369, 608, 5, 1, '2026-08-02 15:36:15'),
+(1370, 609, 1, 1, '2026-08-02 15:36:15'),
+(1371, 610, 2, 2, '2026-08-02 15:36:15'),
+(1372, 611, 1, 2, '2026-08-02 15:36:15'),
+(1373, 611, 2, 1, '2026-08-02 15:36:15'),
+(1374, 612, 1, 1, '2026-08-02 15:36:15'),
+(1375, 612, 2, 2, '2026-08-02 15:36:15'),
+(1376, 612, 4, 1, '2026-08-02 15:36:15'),
+(1377, 613, 1, 1, '2026-08-02 15:36:15'),
+(1378, 613, 2, 2, '2026-08-02 15:36:15'),
+(1379, 613, 5, 2, '2026-08-02 15:36:15'),
+(1380, 613, 6, 1, '2026-08-02 15:36:15'),
+(1381, 614, 1, 2, '2026-08-02 15:36:15'),
+(1382, 614, 6, 1, '2026-08-02 15:36:15'),
+(1383, 615, 4, 1, '2026-08-02 15:36:15'),
+(1384, 615, 5, 1, '2026-08-02 15:36:15'),
+(1385, 616, 1, 5, '2026-08-02 15:36:15'),
+(1386, 616, 3, 1, '2026-08-02 15:36:15'),
+(1387, 617, 1, 3, '2026-08-02 15:36:15'),
+(1388, 617, 2, 1, '2026-08-02 15:36:15'),
+(1389, 617, 3, 2, '2026-08-02 15:36:15'),
+(1390, 618, 3, 3, '2026-08-02 15:36:15'),
+(1391, 618, 5, 1, '2026-08-02 15:36:15'),
+(1392, 619, 1, 1, '2026-08-02 15:36:15'),
+(1393, 620, 2, 2, '2026-08-02 15:36:15'),
+(1394, 621, 1, 2, '2026-08-02 15:36:15'),
+(1395, 621, 2, 1, '2026-08-02 15:36:15'),
+(1396, 622, 1, 1, '2026-08-02 15:36:15'),
+(1397, 622, 2, 2, '2026-08-02 15:36:15'),
+(1398, 622, 4, 1, '2026-08-02 15:36:15'),
+(1399, 623, 1, 1, '2026-08-02 15:36:15'),
+(1400, 623, 2, 2, '2026-08-02 15:36:15'),
+(1401, 623, 5, 2, '2026-08-02 15:36:15'),
+(1402, 623, 6, 1, '2026-08-02 15:36:15'),
+(1403, 624, 1, 2, '2026-08-02 15:36:15'),
+(1404, 624, 6, 1, '2026-08-02 15:36:15'),
+(1405, 625, 4, 1, '2026-08-02 15:36:15'),
+(1406, 625, 5, 1, '2026-08-02 15:36:15'),
+(1407, 626, 1, 5, '2026-08-02 15:36:15'),
+(1408, 626, 3, 1, '2026-08-02 15:36:15'),
+(1409, 627, 1, 3, '2026-08-02 15:36:15'),
+(1410, 627, 2, 1, '2026-08-02 15:36:15'),
+(1411, 627, 3, 2, '2026-08-02 15:36:15'),
+(1412, 628, 3, 3, '2026-08-02 15:36:15'),
+(1413, 628, 5, 1, '2026-08-02 15:36:15'),
+(1414, 629, 1, 1, '2026-08-02 15:36:15'),
+(1415, 630, 2, 2, '2026-08-02 15:36:15'),
+(1416, 631, 1, 2, '2026-08-02 15:36:15'),
+(1417, 631, 2, 1, '2026-08-02 15:36:15'),
+(1418, 632, 1, 1, '2026-08-02 15:36:15'),
+(1419, 632, 2, 2, '2026-08-02 15:36:15'),
+(1420, 632, 4, 1, '2026-08-02 15:36:15'),
+(1421, 633, 1, 1, '2026-08-02 15:36:15'),
+(1422, 633, 2, 2, '2026-08-02 15:36:15'),
+(1423, 633, 5, 2, '2026-08-02 15:36:15'),
+(1424, 633, 6, 1, '2026-08-02 15:36:15'),
+(1425, 634, 1, 2, '2026-08-02 15:36:15'),
+(1426, 634, 6, 1, '2026-08-02 15:36:15'),
+(1427, 635, 4, 1, '2026-08-02 15:36:15'),
+(1428, 635, 5, 1, '2026-08-02 15:36:15'),
+(1429, 636, 1, 5, '2026-08-02 15:36:15'),
+(1430, 636, 3, 1, '2026-08-02 15:36:15'),
+(1431, 637, 1, 3, '2026-08-02 15:36:15'),
+(1432, 637, 2, 1, '2026-08-02 15:36:15'),
+(1433, 637, 3, 2, '2026-08-02 15:36:15'),
+(1434, 638, 3, 3, '2026-08-02 15:36:15'),
+(1435, 638, 5, 1, '2026-08-02 15:36:15'),
+(1436, 639, 1, 1, '2026-08-02 15:36:15'),
+(1437, 640, 2, 2, '2026-08-02 15:36:15'),
+(1438, 641, 1, 2, '2026-08-02 15:36:15'),
+(1439, 641, 2, 1, '2026-08-02 15:36:15'),
+(1440, 642, 1, 1, '2026-08-02 15:36:15'),
+(1441, 642, 2, 2, '2026-08-02 15:36:15'),
+(1442, 642, 4, 1, '2026-08-02 15:36:15'),
+(1443, 643, 1, 1, '2026-08-02 15:36:15'),
+(1444, 643, 2, 2, '2026-08-02 15:36:15'),
+(1445, 643, 5, 2, '2026-08-02 15:36:15'),
+(1446, 643, 6, 1, '2026-08-02 15:36:15'),
+(1447, 644, 1, 2, '2026-08-02 15:36:15'),
+(1448, 644, 6, 1, '2026-08-02 15:36:15'),
+(1449, 645, 4, 1, '2026-08-02 15:36:15'),
+(1450, 645, 5, 1, '2026-08-02 15:36:15'),
+(1451, 646, 1, 5, '2026-08-02 15:36:15'),
+(1452, 646, 3, 1, '2026-08-02 15:36:15'),
+(1453, 647, 1, 3, '2026-08-02 15:36:15'),
+(1454, 647, 2, 1, '2026-08-02 15:36:15'),
+(1455, 647, 3, 2, '2026-08-02 15:36:15'),
+(1456, 648, 3, 3, '2026-08-02 15:36:15'),
+(1457, 648, 5, 1, '2026-08-02 15:36:15'),
+(1458, 649, 1, 1, '2026-08-02 15:36:15'),
+(1459, 650, 2, 2, '2026-08-02 15:36:15'),
+(1460, 651, 1, 2, '2026-08-02 15:36:15'),
+(1461, 651, 2, 1, '2026-08-02 15:36:15'),
+(1462, 652, 1, 1, '2026-08-02 15:36:15'),
+(1463, 652, 2, 2, '2026-08-02 15:36:15'),
+(1464, 652, 4, 1, '2026-08-02 15:36:15'),
+(1465, 653, 1, 1, '2026-08-02 15:36:15'),
+(1466, 653, 2, 2, '2026-08-02 15:36:15'),
+(1467, 653, 5, 2, '2026-08-02 15:36:15'),
+(1468, 653, 6, 1, '2026-08-02 15:36:15'),
+(1469, 654, 1, 2, '2026-08-02 15:36:15'),
+(1470, 654, 6, 1, '2026-08-02 15:36:15'),
+(1471, 655, 4, 1, '2026-08-02 15:36:15'),
+(1472, 655, 5, 1, '2026-08-02 15:36:15'),
+(1473, 656, 1, 5, '2026-08-02 15:36:15'),
+(1474, 656, 3, 1, '2026-08-02 15:36:15'),
+(1475, 657, 1, 3, '2026-08-02 15:36:15'),
+(1476, 657, 2, 1, '2026-08-02 15:36:15'),
+(1477, 657, 3, 2, '2026-08-02 15:36:15'),
+(1478, 658, 3, 3, '2026-08-02 15:36:16'),
+(1479, 658, 5, 1, '2026-08-02 15:36:16'),
+(1480, 659, 1, 1, '2026-08-02 15:36:16'),
+(1481, 660, 2, 2, '2026-08-02 15:36:16'),
+(1482, 661, 1, 2, '2026-08-02 15:36:16'),
+(1483, 661, 2, 1, '2026-08-02 15:36:16'),
+(1484, 662, 1, 1, '2026-08-02 15:36:16'),
+(1485, 662, 2, 2, '2026-08-02 15:36:16'),
+(1486, 662, 4, 1, '2026-08-02 15:36:16'),
+(1487, 663, 1, 1, '2026-08-02 15:36:16'),
+(1488, 663, 2, 2, '2026-08-02 15:36:16'),
+(1489, 663, 5, 2, '2026-08-02 15:36:16'),
+(1490, 663, 6, 1, '2026-08-02 15:36:16'),
+(1491, 664, 1, 2, '2026-08-02 15:36:16'),
+(1492, 664, 6, 1, '2026-08-02 15:36:16'),
+(1493, 665, 4, 1, '2026-08-02 15:36:16'),
+(1494, 665, 5, 1, '2026-08-02 15:36:16'),
+(1495, 666, 1, 5, '2026-08-02 15:36:16'),
+(1496, 666, 3, 1, '2026-08-02 15:36:16'),
+(1497, 667, 1, 3, '2026-08-02 15:36:16'),
+(1498, 667, 2, 1, '2026-08-02 15:36:16'),
+(1499, 667, 3, 2, '2026-08-02 15:36:16'),
+(1500, 668, 3, 3, '2026-08-02 15:36:16'),
+(1501, 668, 5, 1, '2026-08-02 15:36:16'),
+(1502, 669, 1, 1, '2026-08-02 15:36:16'),
+(1503, 670, 2, 2, '2026-08-02 15:36:16'),
+(1504, 671, 1, 2, '2026-08-02 15:36:16'),
+(1505, 671, 2, 1, '2026-08-02 15:36:16'),
+(1506, 672, 1, 1, '2026-08-02 15:36:16'),
+(1507, 672, 2, 2, '2026-08-02 15:36:16'),
+(1508, 672, 4, 1, '2026-08-02 15:36:16'),
+(1509, 673, 1, 1, '2026-08-02 15:36:16'),
+(1510, 673, 2, 2, '2026-08-02 15:36:16'),
+(1511, 673, 5, 2, '2026-08-02 15:36:16'),
+(1512, 673, 6, 1, '2026-08-02 15:36:16'),
+(1513, 674, 1, 2, '2026-08-02 15:36:16'),
+(1514, 674, 6, 1, '2026-08-02 15:36:16'),
+(1515, 675, 4, 1, '2026-08-02 15:36:16'),
+(1516, 675, 5, 1, '2026-08-02 15:36:16'),
+(1517, 676, 1, 5, '2026-08-02 15:36:16'),
+(1518, 676, 3, 1, '2026-08-02 15:36:16'),
+(1519, 677, 1, 3, '2026-08-02 15:36:16'),
+(1520, 677, 2, 1, '2026-08-02 15:36:16'),
+(1521, 677, 3, 2, '2026-08-02 15:36:16'),
+(1522, 678, 3, 3, '2026-08-02 15:36:16'),
+(1523, 678, 5, 1, '2026-08-02 15:36:16'),
+(1524, 679, 1, 1, '2026-08-02 15:36:16'),
+(1525, 680, 2, 2, '2026-08-02 15:36:16'),
+(1526, 681, 1, 2, '2026-08-02 15:36:16'),
+(1527, 681, 2, 1, '2026-08-02 15:36:16'),
+(1528, 682, 1, 1, '2026-08-02 15:36:16'),
+(1529, 682, 2, 2, '2026-08-02 15:36:16'),
+(1530, 682, 4, 1, '2026-08-02 15:36:16'),
+(1531, 683, 1, 1, '2026-08-02 15:36:16'),
+(1532, 683, 2, 2, '2026-08-02 15:36:16'),
+(1533, 683, 5, 2, '2026-08-02 15:36:16'),
+(1534, 683, 6, 1, '2026-08-02 15:36:16'),
+(1535, 684, 1, 2, '2026-08-02 15:36:16'),
+(1536, 684, 6, 1, '2026-08-02 15:36:16'),
+(1537, 685, 4, 1, '2026-08-02 15:36:16'),
+(1538, 685, 5, 1, '2026-08-02 15:36:16'),
+(1539, 686, 1, 5, '2026-08-02 15:36:16'),
+(1540, 686, 3, 1, '2026-08-02 15:36:16'),
+(1541, 687, 1, 3, '2026-08-02 15:36:16'),
+(1542, 687, 2, 1, '2026-08-02 15:36:16'),
+(1543, 687, 3, 2, '2026-08-02 15:36:16'),
+(1544, 688, 3, 3, '2026-08-02 15:36:16'),
+(1545, 688, 5, 1, '2026-08-02 15:36:16'),
+(1546, 689, 1, 1, '2026-08-02 15:36:16'),
+(1547, 690, 2, 2, '2026-08-02 15:36:16'),
+(1548, 691, 1, 2, '2026-08-02 15:36:16'),
+(1549, 691, 2, 1, '2026-08-02 15:36:16'),
+(1550, 692, 1, 1, '2026-08-02 15:36:16'),
+(1551, 692, 2, 2, '2026-08-02 15:36:16'),
+(1552, 692, 4, 1, '2026-08-02 15:36:16'),
+(1553, 693, 1, 1, '2026-08-02 15:36:16'),
+(1554, 693, 2, 2, '2026-08-02 15:36:16'),
+(1555, 693, 5, 2, '2026-08-02 15:36:16'),
+(1556, 693, 6, 1, '2026-08-02 15:36:16'),
+(1557, 694, 1, 2, '2026-08-02 15:36:16'),
+(1558, 694, 6, 1, '2026-08-02 15:36:16'),
+(1559, 695, 4, 1, '2026-08-02 15:36:16'),
+(1560, 695, 5, 1, '2026-08-02 15:36:16');
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `loading_type`
+--
+
+CREATE TABLE `loading_type` (
+  `loading_type_id` int(11) NOT NULL,
+  `type_code` varchar(50) NOT NULL,
+  `type_name` varchar(100) NOT NULL,
+  `unit_name` varchar(50) DEFAULT 'ชิ้น',
+  `description` varchar(255) DEFAULT NULL,
+  `is_active` tinyint(1) NOT NULL DEFAULT 1,
+  `created_at` datetime DEFAULT current_timestamp(),
+  `updated_at` datetime DEFAULT current_timestamp() ON UPDATE current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+--
+-- Dumping data for table `loading_type`
+--
+
+INSERT INTO `loading_type` (`loading_type_id`, `type_code`, `type_name`, `unit_name`, `description`, `is_active`, `created_at`, `updated_at`) VALUES
+(1, 'CRATE', 'ลัง', 'ลัง', 'ลังสินค้ามาตรฐานสำหรับจัดส่ง', 1, '2026-07-31 12:28:05', '2026-07-31 12:28:05'),
+(2, 'BASKET', 'กระบะ', 'ใบ', 'กระบะพลาสติกสำหรับสินค้าสด/แช่เย็น', 1, '2026-07-31 12:28:05', '2026-07-31 12:28:05'),
+(3, 'PALLET', 'พาเลท', 'พาเลท', 'แท่นวางสินค้าขนาดใหญ่/สินค้าหนัก', 1, '2026-07-31 12:28:05', '2026-07-31 12:28:05'),
+(4, 'BOX', 'กล่อง', 'กล่อง', 'กล่องพัสดุกระดาษลูกฟูกทั่วไป', 1, '2026-07-31 12:28:05', '2026-07-31 17:36:54'),
+(5, 'STEEL_CAGE', 'กรงเหล็ก', 'กรง', 'กรงเหล็ก', 1, '2026-07-31 12:31:17', '2026-07-31 17:36:54'),
+(6, 'LOAD-3052', 'รถเข็น', 'รถ', NULL, 1, '2026-08-02 12:57:41', '2026-08-02 12:57:41');
 
 -- --------------------------------------------------------
 
@@ -555,16 +1461,14 @@ INSERT INTO `gps_distance` (`gps_distance_id`, `distance_code`, `distance_name`,
 --
 
 CREATE TABLE `menu_car_release` (
-  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `id` int(11) NOT NULL,
   `menu_name` varchar(255) NOT NULL,
   `action_key` varchar(100) NOT NULL,
   `icon` varchar(100) DEFAULT 'FileText',
   `access` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL CHECK (json_valid(`access`)),
   `status` varchar(20) DEFAULT 'active',
   `created_at` datetime DEFAULT current_timestamp(),
-  `updated_at` datetime DEFAULT current_timestamp() ON UPDATE current_timestamp(),
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `action_key` (`action_key`)
+  `updated_at` datetime DEFAULT current_timestamp() ON UPDATE current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 --
@@ -572,16 +1476,16 @@ CREATE TABLE `menu_car_release` (
 --
 
 INSERT INTO `menu_car_release` (`id`, `menu_name`, `action_key`, `icon`, `access`, `status`, `created_at`, `updated_at`) VALUES
-(1, 'รีเซ็ตกุญแจ', 'reset_key', 'Key', '{\"1\":true,\"2\":true,\"3\":true,\"4\":true}', 'active', '2026-08-02 14:40:00', '2026-08-02 14:40:00'),
-(2, 'รูปให้ของ', 'cargo_photo', 'Camera', '{\"1\":true,\"2\":true,\"3\":true,\"4\":true}', 'active', '2026-08-02 14:40:00', '2026-08-02 14:40:00'),
-(3, 'สถานะบัญชี', 'accounting', 'ShieldCheck', '{\"1\":true,\"2\":true,\"3\":true,\"4\":true}', 'active', '2026-08-02 14:40:00', '2026-08-02 14:40:00'),
-(4, 'เพิ่มร้านค้า', 'add_store', 'Plus', '{\"1\":true,\"2\":true,\"3\":true,\"4\":true}', 'active', '2026-08-02 14:40:00', '2026-08-02 14:40:00'),
-(5, 'ติดตาม', 'followup', 'Truck', '{\"1\":true,\"2\":true,\"3\":true,\"4\":true}', 'active', '2026-08-02 14:40:00', '2026-08-02 14:40:00'),
-(6, 'ฝากเงิน', 'deposit', 'Wallet', '{\"1\":true,\"2\":true,\"3\":true,\"4\":true}', 'active', '2026-08-02 14:40:00', '2026-08-02 14:40:00'),
-(7, 'เอกสารคืนของ', 'return_docs', 'FileText', '{\"1\":true,\"2\":true,\"3\":true,\"4\":true}', 'active', '2026-08-02 14:40:00', '2026-08-02 14:40:00'),
-(8, 'สินค้าควบคุม', 'controlled_items', 'PackageCheck', '{\"1\":true,\"2\":true,\"3\":true,\"4\":true}', 'active', '2026-08-02 14:40:00', '2026-08-02 14:40:00'),
-(9, 'คืนรถ', 'car_return', 'RotateCcw', '{\"1\":true,\"2\":true,\"3\":true,\"4\":true}', 'active', '2026-08-02 14:40:00', '2026-08-02 14:40:00'),
-(10, 'เบี้ยเลี้ยง', 'allowance', 'Coins', '{\"1\":true,\"2\":true,\"3\":true,\"4\":true}', 'active', '2026-08-02 14:40:00', '2026-08-02 14:40:00');
+(1, 'รีเซ็ตกุญแจ', 'reset_key', 'Key', '{\"1\":true,\"2\":true,\"3\":true,\"4\":false}', 'inactive', '2026-08-02 14:51:42', '2026-08-02 22:29:54'),
+(2, 'รูปให้ของ', 'cargo_photo', 'Camera', '{\"1\":true,\"2\":true,\"3\":true,\"4\":false}', 'inactive', '2026-08-02 14:51:42', '2026-08-02 22:30:00'),
+(3, 'สถานะบัญชี', 'accounting', 'ShieldCheck', '{\"1\":true,\"2\":true,\"3\":true,\"4\":false}', 'active', '2026-08-02 14:51:42', '2026-08-02 22:30:04'),
+(4, 'เพิ่มร้านค้า', 'add_store', 'Plus', '{\"1\":true,\"2\":true,\"3\":true,\"4\":false}', 'inactive', '2026-08-02 14:51:42', '2026-08-02 22:30:07'),
+(5, 'ติดตาม', 'followup', 'Truck', '{\"1\":true,\"2\":true,\"3\":true,\"4\":false}', 'inactive', '2026-08-02 14:51:42', '2026-08-02 22:30:10'),
+(6, 'ฝากเงิน', 'deposit', 'Wallet', '{\"1\":true,\"2\":true,\"3\":true,\"4\":false}', 'inactive', '2026-08-02 14:51:42', '2026-08-02 22:30:12'),
+(7, 'เอกสารคืนของ', 'return_docs', 'FileText', '{\"1\":true,\"2\":true,\"3\":true,\"4\":false}', 'inactive', '2026-08-02 14:51:42', '2026-08-02 22:30:15'),
+(8, 'สินค้าควบคุม', 'controlled_items', 'PackageCheck', '{\"1\":true,\"2\":true,\"3\":true,\"4\":false}', 'inactive', '2026-08-02 14:51:42', '2026-08-02 22:30:17'),
+(9, 'คืนรถ', 'car_return', 'RotateCcw', '{\"1\":true,\"2\":true,\"3\":true,\"4\":false}', 'active', '2026-08-02 14:51:42', '2026-08-02 22:30:20'),
+(10, 'เบี้ยเลี้ยง', 'allowance', 'Coins', '{\"1\":true,\"2\":true,\"3\":true,\"4\":false}', 'inactive', '2026-08-02 14:51:42', '2026-08-02 22:30:22');
 
 -- --------------------------------------------------------
 
@@ -623,9 +1527,10 @@ CREATE TABLE `payment` (
 --
 
 INSERT INTO `payment` (`payment_id`, `payment_name`, `created_at`) VALUES
-(1, 'เงินสด (Cash)', '2026-07-20 15:12:14'),
-(2, 'เงินโอน (Bank Transfer)', '2026-07-20 15:12:14'),
-(3, 'ค้างชำระ (Credit)', '2026-07-20 15:12:14');
+(1, 'เงินสด', '2026-07-20 15:12:14'),
+(2, 'เงินโอน', '2026-07-20 15:12:14'),
+(3, 'ค้างชำระ', '2026-07-20 15:12:14'),
+(4, 'แบ่งจ่าย', '2026-07-31 23:50:47');
 
 -- --------------------------------------------------------
 
@@ -634,7 +1539,7 @@ INSERT INTO `payment` (`payment_id`, `payment_name`, `created_at`) VALUES
 --
 
 CREATE TABLE `pda_device` (
-  `pda_id` int(10) UNSIGNED NOT NULL,
+  `pda_id` int(11) UNSIGNED NOT NULL,
   `device_code` varchar(50) NOT NULL,
   `device_name` varchar(255) NOT NULL,
   `serial_number` varchar(100) DEFAULT NULL,
@@ -648,16 +1553,16 @@ CREATE TABLE `pda_device` (
 --
 
 INSERT INTO `pda_device` (`pda_id`, `device_code`, `device_name`, `serial_number`, `assigned_user`, `status`, `created_at`) VALUES
-(2, 'PDA-781', 'PDA-1', NULL, 'ผู้ดูแลระบบ (Admin)', 'active', '2026-07-23 10:19:28'),
-(3, 'PDA-932', 'PDA-2', NULL, 'ผู้ดูแลระบบ (Admin)', 'active', '2026-07-23 10:20:12'),
-(4, 'PDA-668', 'PAD-3', NULL, 'ผู้ดูแลระบบ (Admin)', 'active', '2026-07-23 10:20:41'),
-(5, 'PDA-366', 'PDA-4', NULL, 'ผู้ดูแลระบบ (Admin)', 'active', '2026-07-23 10:21:11'),
-(6, 'PDA-076', 'PDA-5', NULL, 'ผู้ดูแลระบบ (Admin)', 'active', '2026-07-23 10:21:18'),
-(7, 'PDA-853', 'PDA-6', NULL, 'ผู้ดูแลระบบ (Admin)', 'active', '2026-07-23 10:21:27'),
-(8, 'PDA-332', 'PDA-7', NULL, 'ผู้ดูแลระบบ (Admin)', 'active', '2026-07-23 10:21:36'),
-(9, 'PDA-348', 'PDA-8', NULL, 'ผู้ดูแลระบบ (Admin)', 'active', '2026-07-23 10:21:43'),
-(10, 'PDA-252', 'PDA-9', NULL, 'ผู้ดูแลระบบ (Admin)', 'active', '2026-07-23 10:21:49'),
-(11, 'PDA-885', 'PDA-10', NULL, 'ผู้ดูแลระบบ (Admin)', 'active', '2026-07-23 10:21:57');
+(1, 'PDA-781', 'PDA-1', NULL, 'ผู้ดูแลระบบ (Admin)', 'active', '2026-07-23 10:19:28'),
+(2, 'PDA-932', 'PDA-2', NULL, 'ผู้ดูแลระบบ (Admin)', 'active', '2026-07-23 10:20:12'),
+(3, 'PDA-668', 'PAD-3', NULL, 'ผู้ดูแลระบบ (Admin)', 'active', '2026-07-23 10:20:41'),
+(4, 'PDA-366', 'PDA-4', NULL, 'ผู้ดูแลระบบ (Admin)', 'active', '2026-07-23 10:21:11'),
+(5, 'PDA-076', 'PDA-5', NULL, 'ผู้ดูแลระบบ (Admin)', 'active', '2026-07-23 10:21:18'),
+(6, 'PDA-853', 'PDA-6', NULL, 'ผู้ดูแลระบบ (Admin)', 'active', '2026-07-23 10:21:27'),
+(7, 'PDA-332', 'PDA-7', NULL, 'ผู้ดูแลระบบ (Admin)', 'active', '2026-07-23 10:21:36'),
+(8, 'PDA-348', 'PDA-8', NULL, 'ผู้ดูแลระบบ (Admin)', 'active', '2026-07-23 10:21:43'),
+(9, 'PDA-252', 'PDA-9', NULL, 'ผู้ดูแลระบบ (Admin)', 'active', '2026-07-23 10:21:49'),
+(10, 'PDA-885', 'PDA-10', NULL, 'ผู้ดูแลระบบ (Admin)', 'active', '2026-07-23 10:21:57');
 
 -- --------------------------------------------------------
 
@@ -680,26 +1585,29 @@ CREATE TABLE `permission` (
 --
 
 INSERT INTO `permission` (`permission_id`, `permission_key`, `permission_name`, `menu_group`, `action_type`, `description`, `created_at`) VALUES
-(1, 'dashboard.view', 'ดูภาพรวมระบบ', 'dashboard', 'view', 'เข้าถึงหน้า Dashboard', '2026-07-23 09:11:17'),
-(2, 'car_release.view', 'ดูรายการใบปล่อยรถ', 'car_release', 'view', 'ดูรายการและรายละเอียดใบปล่อยรถ', '2026-07-23 09:11:17'),
-(3, 'car_release.add', 'สร้างใบปล่อยรถ', 'car_release', 'add', 'สร้างใบปล่อยรถใหม่', '2026-07-23 09:11:17'),
-(4, 'car_release.edit', 'แก้ไขใบปล่อยรถ', 'car_release', 'edit', 'แก้ไขข้อมูลใบปล่อยรถ', '2026-07-23 09:11:17'),
-(5, 'car_release.delete', 'ลบใบปล่อยรถ', 'car_release', 'delete', 'ลบใบปล่อยรถออกจากระบบ', '2026-07-23 09:11:17'),
-(6, 'driver.view', 'เช็คอิน/เช็คเอาท์', 'driver', 'view', 'บันทึกเช็คอิน/เช็คเอาท์ที่ร้านค้า', '2026-07-23 09:11:17'),
-(7, 'driver.add', 'เพิ่มรายการเช็คอิน', 'driver', 'add', 'เพิ่มรายการเช็คอินใหม่', '2026-07-23 09:11:17'),
-(8, 'driver.edit', 'แก้ไขรายการเช็คอิน', 'driver', 'edit', 'แก้ไขข้อมูลเช็คอิน', '2026-07-23 09:11:17'),
-(9, 'return.view', 'บันทึกคืนกุญแจ', 'return', 'view', 'เข้าถึงหน้าบันทึกคืนกุญแจ', '2026-07-23 09:11:17'),
-(10, 'return.add', 'เพิ่มรายการคืนกุญแจ', 'return', 'add', 'บันทึกการคืนกุญแจใหม่', '2026-07-23 09:11:17'),
-(11, 'stores.view', 'ดูข้อมูลร้านค้า', 'stores', 'view', 'ดูรายชื่อร้านค้าทั้งหมด', '2026-07-23 09:11:17'),
-(12, 'stores.add', 'เพิ่มร้านค้า', 'stores', 'add', 'เพิ่มร้านค้าใหม่', '2026-07-23 09:11:17'),
-(13, 'stores.edit', 'แก้ไขร้านค้า', 'stores', 'edit', 'แก้ไขข้อมูลร้านค้า', '2026-07-23 09:11:17'),
-(14, 'stores.delete', 'ลบร้านค้า', 'stores', 'delete', 'ลบร้านค้าออกจากระบบ', '2026-07-23 09:11:17'),
-(15, 'reports.view', 'ดูรายงาน', 'reports', 'view', 'เข้าถึงหน้ารายงานและบัญชี', '2026-07-23 09:11:17'),
-(16, 'users.view', 'ดูรายชื่อผู้ใช้งาน', 'users', 'view', 'ดูรายชื่อผู้ใช้งานทั้งหมด', '2026-07-23 09:11:17'),
-(17, 'users.add', 'เพิ่มผู้ใช้งาน', 'users', 'add', 'สร้างบัญชีผู้ใช้งานใหม่', '2026-07-23 09:11:17'),
-(18, 'users.edit', 'แก้ไขผู้ใช้งาน', 'users', 'edit', 'แก้ไขข้อมูลผู้ใช้งาน', '2026-07-23 09:11:17'),
-(19, 'users.delete', 'ลบผู้ใช้งาน', 'users', 'delete', 'ลบบัญชีผู้ใช้งาน', '2026-07-23 09:11:17'),
-(20, 'route.add', 'เพิ่มเส้นทางปล่อยรถ', 'route', 'add', 'เพิ่มเส้นทางปล่อยรถ', '2026-07-23 09:30:01');
+(21, 'dashboard', 'หน้าแดชบอร์ด', 'เมนูหลัก', 'view', 'การเข้าถึงหน้าแดชบอร์ดสรุปผล', '2026-07-30 09:57:19'),
+(22, 'releases', 'รายการใบปล่อยรถ', 'เมนูหลัก', 'view', 'การเข้าถึงหน้ารายการใบปล่อยรถ', '2026-07-30 09:57:19'),
+(23, 'route', 'จัดรถ & เส้นทาง', 'เมนูหลัก', 'view', 'การเข้าถึงหน้าแผนที่จัดรถและเส้นทาง', '2026-07-30 09:57:19'),
+(24, 'import_optimo', 'นำเข้า OptimoRoute', 'เมนูหลัก', 'view', 'การเข้าถึงหน้านำเข้าข้อมูลเส้นทาง', '2026-07-30 09:57:19'),
+(25, 'reports', 'รายงานระบบ & Audit Log', 'ตั้งค่า', 'view', 'การเข้าถึงหน้ารายงานระบบและประวัติกิจกรรม', '2026-07-30 09:57:19'),
+(26, 'users', 'จัดการผู้ใช้งาน', 'จัดการผู้ใช้งาน', 'view', 'การเข้าถึงหน้าบริหารจัดการผู้ใช้งาน', '2026-07-30 09:57:19'),
+(27, 'user_levels', 'จัดการระดับผู้ใช้งาน', 'จัดการผู้ใช้งาน', 'view', 'การเข้าถึงหน้าบริหารจัดการบทบาท/ระดับผู้ใช้', '2026-07-30 09:57:19'),
+(28, 'permissions', 'จัดการสิทธิ์ระบบ (Matrix)', 'จัดการผู้ใช้งาน', 'view', 'การเข้าถึงหน้ากำหนดสิทธิ์ระบบรายเมนู', '2026-07-30 09:57:19'),
+(29, 'user_access', 'จัดการกลุ่มการเข้าถึง', 'จัดการผู้ใช้งาน', 'view', 'การเข้าถึงหน้าจัดการกลุ่มสิทธิ์ Access', '2026-07-30 09:57:19'),
+(30, 'stores', 'ข้อมูลร้านค้า', 'ข้อมูลมาสเตอร์', 'view', 'การเข้าถึงหน้าข้อมูลร้านค้า', '2026-07-30 09:57:19'),
+(31, 'keys', 'ข้อมูลที่ฝากกุญแจ', 'ข้อมูลมาสเตอร์', 'view', 'การเข้าถึงหน้าข้อมูลที่ฝากกุญแจ', '2026-07-30 09:57:19'),
+(32, 'pda', 'ข้อมูลเครื่อง PDA', 'ข้อมูลมาสเตอร์', 'view', 'การเข้าถึงหน้าข้อมูลเครื่อง PDA', '2026-07-30 09:57:19'),
+(33, 'payments', 'ข้อมูลช่องทางชำระเงิน', 'ข้อมูลมาสเตอร์', 'view', 'การเข้าถึงหน้าประเภทการชำระเงิน', '2026-07-30 09:57:19'),
+(34, 'vehicles', 'ข้อมูลรถ', 'ข้อมูลมาสเตอร์', 'view', 'การเข้าถึงหน้าข้อมูลรถ', '2026-07-30 09:57:19'),
+(35, 'parking', 'ข้อมูลที่จอดรถ', 'ข้อมูลมาสเตอร์', 'view', 'การเข้าถึงหน้าข้อมูลที่จอดรถ', '2026-07-30 09:57:19'),
+(36, 'accounting_status', 'สถานะทางบัญชี', 'ข้อมูลมาสเตอร์', 'view', 'การเข้าถึงหน้าสถานะตรวจสอบทางบัญชี', '2026-07-30 09:57:19'),
+(37, 'position_product', 'ตำแหน่งวางสินค้า', 'ข้อมูลมาสเตอร์', 'view', 'การเข้าถึงหน้าตำแหน่งวางสินค้า', '2026-07-30 09:57:19'),
+(38, 'release_types', 'ประเภทการปล่อยรถ', 'ข้อมูลมาสเตอร์', 'view', 'การเข้าถึงหน้าจัดการประเภทการปล่อยรถ', '2026-07-30 09:57:19'),
+(39, 'loading_types', 'ประเภทการโหลด', 'ข้อมูลมาสเตอร์', 'view', 'การเข้าถึงหน้าจัดการประเภทการโหลด', '2026-08-02 11:50:00'),
+(40, 'gps_distance', 'ระยะห่าง GPS', 'ข้อมูลมาสเตอร์', 'view', 'การเข้าถึงหน้าจัดการระยะห่าง GPS', '2026-08-02 11:50:00'),
+(41, 'operation_menus', 'เมนูการดำเนินงาน', 'ข้อมูลมาสเตอร์', 'view', 'การเข้าถึงหน้าจัดการเมนูการดำเนินงาน', '2026-08-02 14:51:52'),
+(42, 'problem_types', 'ประเภทปัญหา', 'ข้อมูลมาสเตอร์', 'view', 'การเข้าถึงหน้าจัดการประเภทปัญหา', '2026-08-02 22:19:04'),
+(43, 'api-key', 'จัดการ API Key', 'ตั้งค่า', 'read', 'หน้าการจัดการ API คีย์', '2026-08-03 01:58:29');
 
 -- --------------------------------------------------------
 
@@ -722,7 +1630,9 @@ INSERT INTO `position_product` (`position_product_id`, `position_product_name`, 
 (2, 'A', '2026-07-27 03:02:08'),
 (3, 'R', '2026-07-27 03:02:08'),
 (4, 'B', '2026-07-27 03:02:08'),
-(5, 'C', '2026-07-27 03:02:08');
+(5, 'C', '2026-07-27 03:02:08'),
+(6, 'G', '2026-08-02 15:34:51'),
+(7, 'D', '2026-08-02 15:35:41');
 
 -- --------------------------------------------------------
 
@@ -747,6 +1657,14 @@ CREATE TABLE `problem` (
   `created_at` datetime DEFAULT current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
+--
+-- Dumping data for table `problem`
+--
+
+INSERT INTO `problem` (`problem_id`, `list_id`, `problem_name`, `normal_bill`, `normal_bill_note`, `edit_bill`, `edit_bill_note`, `product_swap`, `product_swap_note`, `out_of_stock`, `out_of_stock_note`, `overstock`, `overstock_note`, `created_at`) VALUES
+(1, 588, 'ร้านปิด', 0, 'ร้านไม่เปิดครับ', 0, '', 0, '', 0, '', 0, '', '2026-08-03 01:28:59'),
+(2, 620, 'ร้านปิด', 0, '56565', 0, '', 0, '', 0, '', 0, '', '2026-08-03 01:52:46');
+
 -- --------------------------------------------------------
 
 --
@@ -759,6 +1677,40 @@ CREATE TABLE `problem_image` (
   `problem_image` varchar(500) NOT NULL,
   `created_at` datetime DEFAULT current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- Dumping data for table `problem_image`
+--
+
+INSERT INTO `problem_image` (`image_problem_id`, `problem_id`, `problem_image`, `created_at`) VALUES
+(1, 2, '/uploads/img-1785696766540-862584629.jpg', '2026-08-03 01:52:46');
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `problem_type`
+--
+
+CREATE TABLE `problem_type` (
+  `problem_type_id` int(11) NOT NULL,
+  `problem_type_name` varchar(255) NOT NULL,
+  `description` text DEFAULT NULL,
+  `status` enum('active','inactive') DEFAULT 'active',
+  `created_at` datetime DEFAULT current_timestamp(),
+  `updated_at` datetime DEFAULT current_timestamp() ON UPDATE current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- Dumping data for table `problem_type`
+--
+
+INSERT INTO `problem_type` (`problem_type_id`, `problem_type_name`, `description`, `status`, `created_at`, `updated_at`) VALUES
+(1, 'ร้านปิด', 'ร้านค้าปิดทำการในเวลาที่ไปส่ง', 'active', '2026-08-02 22:18:56', '2026-08-02 22:18:56'),
+(2, 'บิลผิด', 'เอกสารใบกำกับสินค้า/บิลไม่ถูกต้อง', 'active', '2026-08-02 22:18:56', '2026-08-02 22:18:56'),
+(3, 'ของไม่ครบ / สินค้าเสียหาย', 'จำนวนสินค้าขาด หรือสินค้าชำรุดระหว่างขนส่ง', 'active', '2026-08-02 22:18:56', '2026-08-02 22:18:56'),
+(4, 'ลูกค้าปฏิเสธการรับสินค้า', 'ลูกค้าไม่ยินยอมรับสินค้าตามออเดอร์', 'active', '2026-08-02 22:18:56', '2026-08-02 22:18:56'),
+(5, 'ติดต่อลูกค้าไม่ได้', 'ไม่สามารถโทรติดต่อผู้รับสินค้าได้', 'active', '2026-08-02 22:18:56', '2026-08-02 22:29:34'),
+(6, '+ ระบุปัญหาอื่นๆ (พิมพ์เอง)', 'ปัญหานอกเหนือจากหมวดหมู่มาตรฐาน', 'active', '2026-08-02 22:18:56', '2026-08-02 22:29:33');
 
 -- --------------------------------------------------------
 
@@ -778,34 +1730,50 @@ CREATE TABLE `role_permission` (
 --
 
 INSERT INTO `role_permission` (`role_permission_id`, `level_user_id`, `permission_id`, `created_at`) VALUES
-(6, 1, 3, '2026-07-23 09:15:41'),
-(7, 1, 5, '2026-07-23 09:15:41'),
-(8, 1, 4, '2026-07-23 09:15:41'),
-(9, 1, 2, '2026-07-23 09:15:42'),
-(10, 1, 7, '2026-07-23 09:15:43'),
-(11, 1, 8, '2026-07-23 09:15:43'),
-(12, 1, 6, '2026-07-23 09:15:44'),
-(13, 1, 1, '2026-07-23 09:15:45'),
-(14, 1, 15, '2026-07-23 09:15:46'),
-(15, 1, 10, '2026-07-23 09:15:47'),
-(16, 1, 9, '2026-07-23 09:15:47'),
-(17, 1, 12, '2026-07-23 09:15:48'),
-(18, 1, 14, '2026-07-23 09:15:48'),
-(19, 1, 13, '2026-07-23 09:15:49'),
-(20, 1, 11, '2026-07-23 09:15:49'),
-(21, 1, 17, '2026-07-23 09:15:50'),
-(22, 1, 19, '2026-07-23 09:15:50'),
-(23, 1, 18, '2026-07-23 09:15:51'),
-(24, 1, 16, '2026-07-23 09:15:51'),
-(30, 1, 20, '2026-07-23 11:40:53'),
-(31, 2, 5, '2026-07-23 11:40:55'),
-(32, 2, 4, '2026-07-23 11:40:55'),
-(33, 2, 2, '2026-07-23 11:40:56'),
-(34, 2, 1, '2026-07-23 11:40:56'),
-(35, 2, 7, '2026-07-23 11:40:56'),
-(36, 2, 8, '2026-07-23 11:40:57'),
-(37, 2, 6, '2026-07-23 11:40:57'),
-(38, 2, 3, '2026-07-23 15:39:49');
+(39, 1, 36, '2026-07-30 09:57:19'),
+(44, 1, 21, '2026-07-30 09:57:19'),
+(49, 1, 24, '2026-07-30 09:57:19'),
+(50, 1, 31, '2026-07-30 09:57:19'),
+(51, 1, 35, '2026-07-30 09:57:19'),
+(52, 1, 33, '2026-07-30 09:57:19'),
+(53, 1, 32, '2026-07-30 09:57:19'),
+(54, 1, 28, '2026-07-30 09:57:19'),
+(55, 1, 37, '2026-07-30 09:57:19'),
+(56, 1, 22, '2026-07-30 09:57:19'),
+(57, 1, 38, '2026-07-30 09:57:19'),
+(58, 1, 25, '2026-07-30 09:57:19'),
+(62, 1, 23, '2026-07-30 09:57:19'),
+(64, 1, 30, '2026-07-30 09:57:19'),
+(69, 1, 26, '2026-07-30 09:57:19'),
+(74, 1, 29, '2026-07-30 09:57:19'),
+(75, 1, 27, '2026-07-30 09:57:19'),
+(76, 1, 34, '2026-07-30 09:57:19'),
+(77, 2, 36, '2026-07-30 09:57:19'),
+(78, 2, 21, '2026-07-30 09:57:19'),
+(79, 2, 24, '2026-07-30 09:57:19'),
+(80, 2, 31, '2026-07-30 09:57:19'),
+(81, 2, 35, '2026-07-30 09:57:19'),
+(82, 2, 33, '2026-07-30 09:57:19'),
+(83, 2, 32, '2026-07-30 09:57:19'),
+(84, 2, 37, '2026-07-30 09:57:19'),
+(85, 2, 22, '2026-07-30 09:57:19'),
+(86, 2, 38, '2026-07-30 09:57:19'),
+(88, 2, 23, '2026-07-30 09:57:19'),
+(89, 2, 30, '2026-07-30 09:57:19'),
+(90, 2, 34, '2026-07-30 09:57:19'),
+(91, 3, 21, '2026-07-30 09:57:19'),
+(92, 3, 22, '2026-07-30 09:57:19'),
+(3271, 1, 40, '2026-08-02 11:50:00'),
+(3274, 1, 39, '2026-08-02 11:50:00'),
+(3291, 2, 40, '2026-08-02 11:50:00'),
+(3294, 2, 39, '2026-08-02 11:50:00'),
+(3704, 1, 41, '2026-08-02 14:51:52'),
+(3725, 2, 41, '2026-08-02 14:51:52'),
+(3874, 1, 42, '2026-08-02 22:19:04'),
+(3895, 2, 42, '2026-08-02 22:19:04'),
+(4121, 1, 43, '2026-08-03 01:58:38'),
+(4159, 2, 25, '2026-08-03 02:25:46'),
+(4165, 3, 23, '2026-08-03 02:25:46');
 
 -- --------------------------------------------------------
 
@@ -953,12 +1921,12 @@ INSERT INTO `store` (`store_id`, `store_name`, `store_address`, `telephone_numbe
 ('AR00122', 'ร้านณิชมน ใจสามารถ [แม่หวาน หนองแสง]', '135 ม.1 ต.หนองแสง อ.หนองแสง จ.อุดรธานี 41340', '885161788', NULL, NULL, 'https://goo.gl/maps/qYwpUj7Agp9rVtoj8', NULL, '17.146111, 102.851936', '2026-07-23 11:48:47', '08:00', '17:00'),
 ('AR00123', 'โรงสีม้าขาว', 'เลขที่ 133 หมู่ 17 ต.เวียงคำ อ.กุมภวาปี อุดรธานี 41110', '981024378', NULL, NULL, 'https://maps.app.goo.gl/EoprfpSgPHtFbCWi8', NULL, '17.117908, 103.046048', '2026-07-23 11:48:47', '08:00', '17:00'),
 ('AR00124', 'แม่อ๋อย โคกสว่าง (1)', '147 หมู่ 5 บ้านโคกสว่าง ต.หนองแสง อ.หนองแสง 41340', '635904497', 'ไม่เกิน19.00น.', NULL, 'https://goo.gl/maps/jRP93myrUbBHxsc96', NULL, '17.188957, 102.843198', '2026-07-23 11:48:47', '08:00', '17:00'),
-('AR00125', 'พี่หน่อย บ้านดง (1)', '', '953503057', 'ไม่เกิน 19.00น.', NULL, 'https://maps.app.goo.gl/8HoXboU7XGQpbCz69', NULL, '17.157551,102.831002', '2026-07-23 11:48:47', '08:00', '17:00'),
+('AR00125', 'พี่หน่อย บ้านดง (1)', NULL, '953503057', 'ไม่เกิน 19.00น.', NULL, 'https://maps.app.goo.gl/8HoXboU7XGQpbCz69', NULL, '17.157551,102.831002', '2026-07-23 11:48:47', '08:00', '17:00'),
 ('AR00126', 'พี่ตุ๋ย บ้านดง (1)', NULL, '0621547925/ไลน์', 'ไม่เกิน 19.00น.', NULL, 'https://goo.gl/maps/dC7juZ9oTz7V3eT2A', NULL, '17.160851, 102.827043', '2026-07-23 11:48:47', '08:00', '17:00'),
 ('AR00128', 'ร้านแสงประเสริฐ/ทับกุง (1)', '88 ต.ทับกุง อ.หนองแสง จ.อุดรธานี', '0655818892/081391042', 'ไม่เกิน18.00น.', NULL, 'https://goo.gl/maps/dkg4rYxsoySTGv3y5', NULL, '17.170800, 102.769989', '2026-07-23 11:48:47', '08:00', '17:00'),
 ('AR00130', 'แม่เครือ ทับกุง หมู่ 1 (1)', NULL, '934157533', 'ไม่เกิน 15.00น', NULL, 'https://goo.gl/maps/y8H1Xws5QA3hDKdc9', NULL, '17.174851, 102.770000', '2026-07-23 11:48:47', '08:00', '17:00'),
 ('AR00131', 'บุญยง ทับกุง สายวิ่ง พุธ-อาทิตย์ ปิดกิจการ', NULL, '880642835', NULL, NULL, NULL, NULL, NULL, '2026-07-23 11:48:47', '08:00', '17:00'),
-('AR00132', 'แม่สมร คำหว้าทอง (1)', '', '652572514', 'ไม่เกิน 19.00น.', NULL, 'https://goo.gl/maps/h23GrjcmDHwuXJ5n7', NULL, '17.15622,102.787925', '2026-07-23 11:48:47', '08:00', '17:00'),
+('AR00132', 'แม่สมร คำหว้าทอง (1)', NULL, '652572514', 'ไม่เกิน 19.00น.', NULL, 'https://goo.gl/maps/h23GrjcmDHwuXJ5n7', NULL, '17.15622,102.787925', '2026-07-23 11:48:47', '08:00', '17:00'),
 ('AR00133', 'แม่เที่ยง ท่ายม [เปลี่ยนเจ้าใหม่]', NULL, '861709323', NULL, NULL, 'https://goo.gl/maps/PJJzePwzJAP6oGJd9', NULL, '17.139946, 102.786990', '2026-07-23 11:48:47', '08:00', '17:00'),
 ('AR00136', 'พี่ละมัย ท่าสี (1)', NULL, '833528563', 'ไม่เกิน 18.00 น', NULL, 'https://goo.gl/maps/VKWcY4USpqfnzraG6', NULL, '17.128610, 102.781989', '2026-07-23 11:48:47', '08:00', '17:00'),
 ('AR00137', 'พ่อใส ดงน้อย (1)', NULL, '0628900588/หน้าร้าน', NULL, NULL, NULL, NULL, NULL, '2026-07-23 11:48:47', '08:00', '17:00'),
@@ -1021,7 +1989,7 @@ INSERT INTO `store` (`store_id`, `store_name`, `store_address`, `telephone_numbe
 ('AR00207', 'พี่สำลี (1)', NULL, '0892737247/062278321', 'ไม่เกิน 18.00น.', NULL, 'https://maps.app.goo.gl/RBhaAX1863nxRpJM9', NULL, '17.048427, 102.926713', '2026-07-23 11:48:48', '08:00', '17:00'),
 ('AR00208', 'MILY', NULL, NULL, NULL, NULL, NULL, NULL, NULL, '2026-07-23 11:48:48', '08:00', '17:00'),
 ('AR00209', 'กิมเฮง', NULL, NULL, NULL, NULL, NULL, NULL, NULL, '2026-07-23 11:48:48', '08:00', '17:00'),
-('AR00210', 'โฟนแอนเฟรม (1)', '', '940251826', 'ไม่เกิน 18.00น.', NULL, 'https://goo.gl/maps/D3geGWn1bqTtRcuy7', NULL, '17.057607,102.923154', '2026-07-23 11:48:48', '08:00', '17:00'),
+('AR00210', 'โฟนแอนเฟรม (1)', NULL, '940251826', 'ไม่เกิน 18.00น.', NULL, 'https://goo.gl/maps/D3geGWn1bqTtRcuy7', NULL, '17.057607,102.923154', '2026-07-23 11:48:48', '08:00', '17:00'),
 ('AR00211', 'ร้านคมสัน โนนสะอาด [คมสันค้าส่ง]', '417 หมู่1 ต.ทมนางาม อ.โนนสะอาด จ.อุดรธานี', '959327475', NULL, NULL, 'https://goo.gl/maps/W8pRBX8A8mg2zW3cA', NULL, '16.890854, 102.929117', '2026-07-23 11:48:48', '08:00', '17:00'),
 ('AR00212', 'รุ่งนิรันด์', NULL, NULL, NULL, NULL, 'https://goo.gl/maps/UvaFK1CHPp5u7NaJ6', NULL, '17.135467, 102.963003', '2026-07-23 11:48:48', '08:00', '17:00'),
 ('AR00214', 'ประชารัฐหมู่10 อุ่มจาน', NULL, NULL, NULL, NULL, NULL, NULL, NULL, '2026-07-23 11:48:48', '08:00', '17:00'),
@@ -1924,7 +2892,7 @@ INSERT INTO `store` (`store_id`, `store_name`, `store_address`, `telephone_numbe
 ('OR-00105', 'ครูประคอง ท่าคันโท (4)', NULL, '0817298117/065312083', 'ไม่เกิน 18.00น.', NULL, NULL, NULL, NULL, '2026-07-23 11:48:48', '08:00', '17:00'),
 ('OR-00107', 'กิตติศักดิ์', NULL, NULL, NULL, NULL, NULL, NULL, NULL, '2026-07-23 11:48:48', '08:00', '17:00'),
 ('OR-00108', 'พ่อเปี๊ยก บ้านปะโค', NULL, '981157572', NULL, NULL, NULL, NULL, NULL, '2026-07-23 11:48:48', '08:00', '17:00'),
-('OR-00109', 'น้อง บี', '', '930932629', NULL, NULL, 'https://maps.app.goo.gl/8DiXcGQDFRKWimaMA', NULL, '17.190549,102.93514', '2026-07-23 11:48:48', '08:00', '17:00'),
+('OR-00109', 'น้อง บี', NULL, '930932629', NULL, NULL, 'https://maps.app.goo.gl/8DiXcGQDFRKWimaMA', NULL, '17.190549,102.93514', '2026-07-23 11:48:48', '08:00', '17:00'),
 ('OR-00110', 'แม่ลี นาฝาย (1)', NULL, '612085183', 'ไม่เกิน 19.00น.', NULL, 'https://goo.gl/maps/9xbbjGt1FDeiTcPg8', NULL, '17.084010, 102.858032', '2026-07-23 11:48:48', '08:00', '17:00'),
 ('OR-00111', 'เปรี้ยว หน้าวัดบ้านสีออ (2)', 'หน้าวัดบ้านสีออ', '808268561', NULL, NULL, 'https://goo.gl/maps/uN23ThN321mA76jt6', NULL, '16.999720, 103.054428', '2026-07-23 11:48:48', '08:00', '17:00'),
 ('OR-00112', 'ร้านปทิตตา ซุปเปอร์', '245ม.4 บ้านสร้างบง ต.ผาสุก อ.กุมภวาปี จ.อุดรธานี 41370', '934342375', NULL, NULL, NULL, NULL, NULL, '2026-07-23 11:48:48', '08:00', '17:00'),
@@ -2312,7 +3280,7 @@ INSERT INTO `store` (`store_id`, `store_name`, `store_address`, `telephone_numbe
 ('OR-00522', 'ออ.ติ้น(ร้านเที่ยง สาขา 2 เก่า)', '50 หมู่ 14 ต.ปะโค อ.กุมภวาปี จ.อุดรธานี', '935488094', NULL, NULL, NULL, NULL, NULL, '2026-07-23 11:48:48', '08:00', '17:00'),
 ('OR-00523', 'ศิริกาญจน์ ชินวงศ์', 'ทะเลบัวแดง', '615566561', NULL, NULL, NULL, NULL, NULL, '2026-07-23 11:48:48', '08:00', '17:00'),
 ('OR-00524', 'แม่อุไรวรรณ', '88/9 บ.บุ่งแก้ว ต.บุ่งแก้ว อ.โนนสะอาด จ.อุดรธานี 41240', '821139458', NULL, NULL, NULL, NULL, NULL, '2026-07-23 11:48:48', '08:00', '17:00'),
-('OR-00525', 'แม่สมหมาย โนนสิมมา', '', '962023541', NULL, NULL, NULL, NULL, '17.070612,102.953703', '2026-07-23 11:48:48', '08:00', '17:00'),
+('OR-00525', 'แม่สมหมาย โนนสิมมา', NULL, '962023541', NULL, NULL, NULL, NULL, '17.070612,102.953703', '2026-07-23 11:48:48', '08:00', '17:00'),
 ('OR-00526', 'ร้านน้องเปรี้ยว', 'โรงอาหารลานอ้อย โรงงานน้ำตาลเกษตร', '855908138', NULL, NULL, NULL, NULL, NULL, '2026-07-23 11:48:48', '08:00', '17:00'),
 ('OR-00527', 'บริษัท ธนัทกร อินเตอร์เนชั่นแนล จำกัด', '294/8 ถ.เลียบมอเตอร์เวย์-ร่มเกล้า แขวงคลองสามประเวศ เขตลาดกระบัง กรุงเทพมหานคร 10520', '922735956', NULL, NULL, NULL, NULL, NULL, '2026-07-23 11:48:48', '08:00', '17:00'),
 ('OR-00528', 'ร้านไอเดีย 88 บ้านเมืองงาม แสนสิริ', 'เลขที่ 252/89 บ้านเมืองงาม แสนสิริ (ตรงข้ามปั๊ม PT ใกล้โลตัสใหญ่)', '0639302491/095670108', NULL, NULL, NULL, NULL, NULL, '2026-07-23 11:48:48', '08:00', '17:00'),
@@ -3506,6 +4474,7 @@ INSERT INTO `store` (`store_id`, `store_name`, `store_address`, `telephone_numbe
 ('OR-3286', 'สหกรบ้านม่วง', NULL, '807379095', NULL, NULL, 'https://maps.app.goo.gl/LNjxwkG6FdZM5QEAA', NULL, '17.266644, 103.147964', '2026-07-23 11:48:49', '08:00', '17:00'),
 ('OR-3454', 'คุณเก๋ มินิมาร์ทบ.โนนสมบูรณ์(กระนวน)', '1หมู่6บ.โนนสมบูรณ์ ต.ห้วยยาง อ.กระนวน', '810561239', NULL, NULL, 'https://maps.app.goo.gl/VzYupXiVc76MRJAK9?g_st=ic', NULL, '16.866791, 103.108149', '2026-07-23 11:48:50', '08:00', '17:00'),
 ('OR-3456', 'แม่บรรเลง บ้านนามูล7(กระนวน)', '199หมู่7บ.นามูล ต.ดูนสาด อ.กระนวน', '633078668', NULL, NULL, NULL, NULL, '16.791659, 103.175841', '2026-07-23 11:48:50', '08:00', '17:00'),
+('OR-3496', 'ร้านค้า OR-3496', NULL, NULL, NULL, NULL, NULL, NULL, NULL, '2026-07-31 15:11:57', '08:00', '17:00'),
 ('OR-3508', 'บีพี ไทยนิยม บ้านพังงู', '107หมู่11 ต.พังงู อ.หนองหาน', '823930421', NULL, NULL, 'https://maps.app.goo.gl/jegrBMioTWibhnd79', NULL, '17.238323, 103.121116', '2026-07-23 11:48:49', '08:00', '17:00'),
 ('OR-3549', 'สหการชุมชนบ้านขาวัว', NULL, '963756093', NULL, NULL, '(17.2541173, 103.1086421)', NULL, '17.254034, 103.108763', '2026-07-23 11:48:49', '08:00', '17:00'),
 ('OR-3566', 'บุญหลาย', '70หมู่10 บ้านหนองแวง', '92903832', NULL, NULL, 'https://maps.app.goo.gl/y1WadWGVrpwoX6mt9', NULL, '17.302332, 103.199823', '2026-07-23 11:48:50', '08:00', '17:00'),
@@ -3539,8 +4508,8 @@ INSERT INTO `store` (`store_id`, `store_name`, `store_address`, `telephone_numbe
 ('OR-4919', 'น้องไอติม เกิ้งท่าคันโท', NULL, '910070557', NULL, NULL, 'https://maps.app.goo.gl/UBNNiQWodcAAUAza8', NULL, '16.905321, 103.240305', '2026-07-23 11:48:49', '08:00', '17:00'),
 ('OR-4998', 'ออดี้ บ้านคำเจริญ(กระนวน)', '95หมู่10 บ.คำเจริญต.หัวนาคำอ.ระนวน', '954911711', NULL, NULL, 'https://maps.app.goo.gl/fe9Mq5F5tn1ycXFv8', NULL, '16.800273, 103.093475', '2026-07-23 11:48:50', '08:00', '17:00'),
 ('OR-5073', 'แม่อังคณา ตะวันบ้านสี่แจ', NULL, '986185415', NULL, NULL, 'https://maps.app.goo.gl/LyVuAKRNwjLmvWYZ6', NULL, '17.164659, 102.934522', '2026-07-23 11:48:49', '08:00', '17:00'),
-('OR-5155', 'นอ มินิมาร์ท', NULL, '935179553', NULL, NULL, '(17.2845023, 103.0532518)', NULL, '17.284498, 103.053284', '2026-07-23 11:48:50', '08:00', '17:00'),
-('OR-5166', 'จ.เจริญการค้า', '', NULL, NULL, NULL, NULL, NULL, '16.923544,103.040333', '2026-07-24 10:53:16', '08:00', '17:00'),
+('OR-5155', 'นอ มินิมาร์ท', '-', '0935179553', NULL, NULL, '(17.2845023, 103.0532518)', NULL, '17.284498, 103.053284', '2026-07-23 11:48:50', '08:00', '17:00'),
+('OR-5166', 'จ.เจริญการค้า', NULL, NULL, NULL, NULL, NULL, NULL, '16.923544,103.040333', '2026-07-24 10:53:16', '08:00', '17:00'),
 ('OR-5185', 'แม่ก้าน เกิ้งท่าคันโท', NULL, '927940097', NULL, NULL, 'https://maps.app.goo.gl/odbuZrYiNzGiJ3C39', NULL, '16.908351, 103.233904', '2026-07-23 11:48:49', '08:00', '17:00'),
 ('OR-5216', 'แม่ละมุน บ้านม่วงศรีสมพร', 'ตำบล โพธิ์ศรีสำราญ อำเภอโนนสะอาด อุดรธานี 41240', '828452884', NULL, NULL, 'https://maps.app.goo.gl/zLJkHeACdZzPe6xDA', NULL, '16.982424, 102.851909', '2026-07-23 11:48:49', '08:00', '17:00'),
 ('OR-5262', 'สุรสิทธิ์ บ้านคำเจริญ(กระนวน)', '279หมู่10บ.คำเจริญต.หัวนาคำอ.กระนวน', '985470770', NULL, NULL, 'https://maps.app.goo.gl/eYy6T8UNwBuyQ1VV6?g_st=ic', NULL, '16.797474, 103.092150', '2026-07-23 11:48:50', '08:00', '17:00'),
@@ -3549,9 +4518,9 @@ INSERT INTO `store` (`store_id`, `store_name`, `store_address`, `telephone_numbe
 ('OR-5349', 'น้องออร่า บ้านหนองเม็กน้อย', '49หมู่4 บ.หนองเม็กน้อย', '985867560', NULL, NULL, 'https://maps.app.goo.gl/Gnhh8JaKhGfTZb1NA', NULL, '17.264930, 103.047812', '2026-07-23 11:48:49', '08:00', '17:00'),
 ('OR-5406', 'แม่น้อย บ้านโนนมะค่า', NULL, '935487720', NULL, NULL, 'https://maps.app.goo.gl/PV9uUEznVpyn1H4j8', NULL, '16.945652, 103.196756', '2026-07-23 11:48:49', '08:00', '17:00'),
 ('OR-5409', 'แม่ติ๋ว บ้านนามูล(กระนวน)', '434หมู่7บ.นามูล ต.ดูนสาด อ.กระนวน', '948564749', NULL, NULL, 'https://maps.app.goo.gl/A8Jf2Ez1XwZayEyBA?g_st=ic', NULL, '16.792818, 103.172557', '2026-07-23 11:48:50', '08:00', '17:00'),
-('OR-5444', 'จิระ มินิมาร์ท บ้านคำเมย', NULL, '812961090', NULL, NULL, 'https://maps.app.goo.gl/adjdxRBsZBhV3fVA8', NULL, '17.082802, 103.288593', '2026-07-23 11:48:50', '08:00', '17:00'),
-('OR-5474', 'แบมการค้า บ้านหนองนกเขียน', NULL, '623093263', NULL, NULL, 'https://maps.app.goo.gl/8Y1NqPGWn1dApU3b6', NULL, '17.007553, 103.289373', '2026-07-23 11:48:49', '08:00', '17:00');
+('OR-5444', 'จิระ มินิมาร์ท บ้านคำเมย', NULL, '812961090', NULL, NULL, 'https://maps.app.goo.gl/adjdxRBsZBhV3fVA8', NULL, '17.082802, 103.288593', '2026-07-23 11:48:50', '08:00', '17:00');
 INSERT INTO `store` (`store_id`, `store_name`, `store_address`, `telephone_number`, `fax_number`, `email`, `url`, `customer_delivery_time`, `store_location`, `created_at`, `open_time`, `close_time`) VALUES
+('OR-5474', 'แบมการค้า บ้านหนองนกเขียน', NULL, '623093263', NULL, NULL, 'https://maps.app.goo.gl/8Y1NqPGWn1dApU3b6', NULL, '17.007553, 103.289373', '2026-07-23 11:48:49', '08:00', '17:00'),
 ('OR-5512', 'อรลดาพาณิชย์ บ้านโคกถาวร(น้าปาน)', NULL, '879448499', NULL, NULL, 'https://maps.app.goo.gl/msLUVJaLrRvkMoka7', NULL, '17.288458, 103.124557', '2026-07-23 11:48:49', '08:00', '17:00'),
 ('OR-5573', '545เฮงเฮงการค้า โนนจำปา', NULL, '832526246', NULL, NULL, 'https://maps.app.goo.gl/Y7BVdUrLuSGGQqA38', NULL, '17.211302, 103.150735', '2026-07-23 11:48:49', '08:00', '17:00'),
 ('OR-5611', 'จันทิมา บ้านนาโป่ง(กระนวน)', '79หมู่7บ.นาโป่งอ.กระนวน(ติดศาลากลางหมู่บ้าน)', '943717149', NULL, NULL, 'https://maps.app.goo.gl/1d28wN2rJEVFRWjm7?g_st=ic', NULL, '16.827185, 103.061606', '2026-07-23 11:48:50', '08:00', '17:00'),
@@ -3597,6 +4566,7 @@ INSERT INTO `store` (`store_id`, `store_name`, `store_address`, `telephone_numbe
 ('OR-8257', 'น้องแก้ม บ้านนามูล(กระนวน)', '471หมู่7 บ.นามูล ต.ดูนสาด อ.กระนวน', '922921573', NULL, NULL, 'https://maps.app.goo.gl/bgcDS1Q9oE6yw67Z9?g_st=ic', NULL, '16.791709,103.175101', '2026-07-23 11:48:50', '08:00', '17:00'),
 ('OR-8297', 'ศิริกัญญา บ้านกุดขอนแก่น', NULL, '986022296', NULL, NULL, 'https://maps.app.goo.gl/6cVqUsQ46Cg8oUQq7', NULL, '16.945396, 103.178294', '2026-07-23 11:48:49', '08:00', '17:00'),
 ('OR-8392', 'ร้านลักขณา บ.โคกสี', NULL, '638549403', NULL, NULL, 'https://maps.app.goo.gl/Tusw7aGDihvpTh2j6', NULL, '17.046983, 102.830398', '2026-07-23 11:48:49', '08:00', '17:00'),
+('OR-8404', 'ร้านค้า OR-8404', NULL, NULL, NULL, NULL, NULL, NULL, NULL, '2026-07-31 15:11:57', '08:00', '17:00'),
 ('OR-8745', 'แม่จ่อย บ้านคำม่วง', NULL, '935657203', NULL, NULL, 'https://maps.app.goo.gl/pCQwGfBBTTnxKUHJ7', NULL, '17.188931, 103.258984', '2026-07-23 11:48:49', '08:00', '17:00'),
 ('OR-8777', 'ร้านพงษ์เจริญ บ้านเรืองชัย', NULL, '986158825', NULL, NULL, 'https://maps.app.goo.gl/yi8wi9qfvxEkdPWTA', NULL, '17.283615, 103.090785', '2026-07-23 11:48:49', '08:00', '17:00'),
 ('OR-8804', 'ธีระพงษ์พาณิชย์ บ.เพ็กคำบากหายโศก', NULL, '935070110', NULL, NULL, 'https://g.co/kgs/rE1wACS', NULL, '17.297851, 103.044191', '2026-07-23 11:48:49', '08:00', '17:00'),
@@ -3658,9 +4628,14 @@ CREATE TABLE `user` (
 
 INSERT INTO `user` (`user_id`, `username`, `password`, `name`, `level_user_id`, `user_image`, `phone_number_1`, `phone_number_2`, `phone_number_3`, `user_status`, `location_now`, `created_at`) VALUES
 (1, 'admin', '$2a$10$GPXTTPRuOfRzmG7mIYQOfufXpc4ejRyX1QRnq80GFOLBHvatXqJ8G', 'ผู้ดูแลระบบ (Admin)', 1, '/uploads/user/img-1785090320152-206089984.jpg', '0812345678', NULL, NULL, 'active', '13.7563,100.5018', '2026-07-20 15:12:14'),
-(6, 'kensaohin@gmail.com', '$2a$10$163p2o/TDAvsaEKI19JN/uoPohcWoyKtpIno3fwp7B77QDy18tgj2', 'พงษ์พัฒน์ เสาหิน', 3, '/uploads/img-1784790862734-848311292.jpg', '0949282179', NULL, NULL, 'inactive', NULL, '2026-07-20 16:14:54'),
-(11, 'kenzanaqq', '$2a$10$E7m/ISpyntBHIgMPrikGl.j21oSrltk/NJzgVX1JA1uqC9EYwpFom', 'สมชาย ใจดี', 3, '/uploads/img-1784790302629-47380343.jpg', '0949282179', NULL, NULL, 'inactive', NULL, '2026-07-20 17:18:25'),
-(12, 'somying', '$2a$10$1w5xWpbR.goh8CjJ3EfyuuUNMY8s4tkPkPoawfmo/9Y/UDS76ld/6', 'สมหญิง นาใจ', 3, '/uploads/img-1784789873123-814149146.jpg', '0949282179', NULL, NULL, 'active', NULL, '2026-07-23 09:39:39');
+(13, '016', '$2a$10$PIdc1SGDmuk/OYDwz7cKdeFmRnKJM3vaQthnz5XC5pPuc0RYhIQN6', 'ไผ่', 2, '/uploads/user/img-1785506450068-793948135.jpg', '083-270-0252', NULL, NULL, 'active', NULL, '2026-07-31 17:29:15'),
+(14, '135', '$2a$10$09qBX6MfilNMWhFxl.I6XOjGPj1v/RrVDzrvxphWN6fQFk0jq1Yge', 'ดรีม', 2, '/uploads/user/img-1785506440081-646582563.jpg', '063-297-0506', NULL, NULL, 'active', NULL, '2026-07-31 17:30:12'),
+(15, '516', '$2a$10$8ZDCf7INDwE3KI89nYeWu..ciUjvJ14oB6o3UT58Ut/CmGADVudHO', 'โม', 2, '/uploads/user/img-1785506430486-759454504.jpg', '092-762-9177', NULL, NULL, 'active', NULL, '2026-07-31 17:33:19'),
+(16, '007', '$2a$10$NmXHt.WN9iU7RIg8eSJdzuPUQEdjPQwtDCsQ4dLHrPufZIt.jMLCW', 'เอ็ม', 3, '/uploads/user/img-1785508077498-725108962.jpg', '094-915-5863', NULL, NULL, 'active', NULL, '2026-07-31 17:34:30'),
+(17, '416', '$2a$10$NxNlIzrqoSm6EK4fePTU/Olae/NiXlnSS0xd9wg8LkjX6nIlqdpzG', 'เก๋ง', 3, '/uploads/user/img-1785508287991-452954293.jpg', '080-254-3917', NULL, NULL, 'active', NULL, '2026-07-31 17:49:44'),
+(18, '449', '$2a$10$BZ6gaK6cpJFCIyxEUVtIb.0sVW3481UhCP1Nd7109KxBi5m0B751m', 'เน็ต', 3, '/uploads/user/img-1785508087710-973715966.jpg', '080-008-1664', NULL, NULL, 'active', NULL, '2026-07-31 17:50:09'),
+(19, '453', '$2a$10$4CKSTgaYSVJ4wDfjqXUYCuLKpnv315Hk7C3EsTHgSE4r0d9cAi5zm', 'บอย', 3, '/uploads/user/img-1785508299049-999835972.jpg', '064-997-5407', NULL, NULL, 'active', NULL, '2026-07-31 17:50:32'),
+(20, '457', '$2a$10$A/F6n5b13MInNQDtsfWF9OhjChKoRv2KvGVjKIvnSn.iC8Xj1ARAy', 'แม็ก', 3, '/uploads/user/img-1785508282041-545119261.jpg', '092-345-7170', NULL, NULL, 'active', NULL, '2026-07-31 17:50:57');
 
 -- --------------------------------------------------------
 
@@ -3712,6 +4687,19 @@ ALTER TABLE `accounting_status`
   ADD PRIMARY KEY (`status_id`);
 
 --
+-- Indexes for table `api_keys`
+--
+ALTER TABLE `api_keys`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `key_name` (`key_name`);
+
+--
+-- Indexes for table `audit_log`
+--
+ALTER TABLE `audit_log`
+  ADD PRIMARY KEY (`log_id`);
+
+--
 -- Indexes for table `car`
 --
 ALTER TABLE `car`
@@ -3726,7 +4714,15 @@ ALTER TABLE `car_release`
   ADD KEY `car_release_ibfk_3` (`user_id`),
   ADD KEY `car_release_ibfk_2` (`car_release_type_id`),
   ADD KEY `car_release_ibfk_4` (`group_store_id`),
-  ADD KEY `car_release_ibfk_6` (`accounting_status`);
+  ADD KEY `car_release_ibfk_6` (`accounting_status`),
+  ADD KEY `car_release_ibfk_7` (`pda_device`);
+
+--
+-- Indexes for table `car_release_chat`
+--
+ALTER TABLE `car_release_chat`
+  ADD PRIMARY KEY (`chat_id`),
+  ADD KEY `car_release_id` (`car_release_id`);
 
 --
 -- Indexes for table `car_release_follower`
@@ -3780,6 +4776,13 @@ ALTER TABLE `delivery_settings`
   ADD PRIMARY KEY (`id`);
 
 --
+-- Indexes for table `gps_distance`
+--
+ALTER TABLE `gps_distance`
+  ADD PRIMARY KEY (`gps_distance_id`),
+  ADD UNIQUE KEY `distance_code` (`distance_code`);
+
+--
 -- Indexes for table `group_store`
 --
 ALTER TABLE `group_store`
@@ -3807,7 +4810,29 @@ ALTER TABLE `list_store`
   ADD KEY `list_store_ibfk_3` (`group_store_id`),
   ADD KEY `list_store_ibfk_4` (`created_by`),
   ADD KEY `list_store_ibfk_5` (`store_id`),
-  ADD KEY `list_store_ibfk_6` (`position_product_id`);
+  ADD KEY `list_store_ibfk_6` (`position_product_id`),
+  ADD KEY `idx_created_at` (`created_at`);
+
+--
+-- Indexes for table `list_store_load`
+--
+ALTER TABLE `list_store_load`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `fk_list_store` (`list_id`);
+
+--
+-- Indexes for table `loading_type`
+--
+ALTER TABLE `loading_type`
+  ADD PRIMARY KEY (`loading_type_id`),
+  ADD UNIQUE KEY `type_code` (`type_code`);
+
+--
+-- Indexes for table `menu_car_release`
+--
+ALTER TABLE `menu_car_release`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `action_key` (`action_key`);
 
 --
 -- Indexes for table `parking`
@@ -3855,6 +4880,12 @@ ALTER TABLE `problem_image`
   ADD KEY `problem_id` (`problem_id`);
 
 --
+-- Indexes for table `problem_type`
+--
+ALTER TABLE `problem_type`
+  ADD PRIMARY KEY (`problem_type_id`);
+
+--
 -- Indexes for table `role_permission`
 --
 ALTER TABLE `role_permission`
@@ -3866,7 +4897,8 @@ ALTER TABLE `role_permission`
 -- Indexes for table `store`
 --
 ALTER TABLE `store`
-  ADD PRIMARY KEY (`store_id`);
+  ADD PRIMARY KEY (`store_id`),
+  ADD KEY `idx_store_id` (`store_id`);
 
 --
 -- Indexes for table `user`
@@ -3899,46 +4931,64 @@ ALTER TABLE `accounting_status`
   MODIFY `status_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=7;
 
 --
+-- AUTO_INCREMENT for table `api_keys`
+--
+ALTER TABLE `api_keys`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=5;
+
+--
+-- AUTO_INCREMENT for table `audit_log`
+--
+ALTER TABLE `audit_log`
+  MODIFY `log_id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=37;
+
+--
 -- AUTO_INCREMENT for table `car_release`
 --
 ALTER TABLE `car_release`
-  MODIFY `car_release_id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=15;
+  MODIFY `car_release_id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=9;
+
+--
+-- AUTO_INCREMENT for table `car_release_chat`
+--
+ALTER TABLE `car_release_chat`
+  MODIFY `chat_id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=7;
 
 --
 -- AUTO_INCREMENT for table `car_release_follower`
 --
 ALTER TABLE `car_release_follower`
-  MODIFY `follower_id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=9;
+  MODIFY `follower_id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=32;
 
 --
 -- AUTO_INCREMENT for table `car_release_type`
 --
 ALTER TABLE `car_release_type`
-  MODIFY `car_release_type_id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=4;
+  MODIFY `car_release_type_id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=6;
 
 --
 -- AUTO_INCREMENT for table `car_return`
 --
 ALTER TABLE `car_return`
-  MODIFY `car_return_id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT;
+  MODIFY `car_return_id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=3;
 
 --
 -- AUTO_INCREMENT for table `check_in`
 --
 ALTER TABLE `check_in`
-  MODIFY `check_in_id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT;
+  MODIFY `check_in_id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=19;
 
 --
 -- AUTO_INCREMENT for table `check_out`
 --
 ALTER TABLE `check_out`
-  MODIFY `check_out_id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT;
+  MODIFY `check_out_id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=16;
 
 --
 -- AUTO_INCREMENT for table `check_out_image`
 --
 ALTER TABLE `check_out_image`
-  MODIFY `image_check_out_id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT;
+  MODIFY `image_check_out_id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=5;
 
 --
 -- AUTO_INCREMENT for table `delivery_settings`
@@ -3947,10 +4997,16 @@ ALTER TABLE `delivery_settings`
   MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
 
 --
+-- AUTO_INCREMENT for table `gps_distance`
+--
+ALTER TABLE `gps_distance`
+  MODIFY `gps_distance_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=4;
+
+--
 -- AUTO_INCREMENT for table `group_store`
 --
 ALTER TABLE `group_store`
-  MODIFY `group_store_id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=32;
+  MODIFY `group_store_id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=20;
 
 --
 -- AUTO_INCREMENT for table `key_holder`
@@ -3968,7 +5024,25 @@ ALTER TABLE `level_user`
 -- AUTO_INCREMENT for table `list_store`
 --
 ALTER TABLE `list_store`
-  MODIFY `list_id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=358;
+  MODIFY `list_id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=696;
+
+--
+-- AUTO_INCREMENT for table `list_store_load`
+--
+ALTER TABLE `list_store_load`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=1561;
+
+--
+-- AUTO_INCREMENT for table `loading_type`
+--
+ALTER TABLE `loading_type`
+  MODIFY `loading_type_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=7;
+
+--
+-- AUTO_INCREMENT for table `menu_car_release`
+--
+ALTER TABLE `menu_car_release`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=11;
 
 --
 -- AUTO_INCREMENT for table `parking`
@@ -3980,49 +5054,55 @@ ALTER TABLE `parking`
 -- AUTO_INCREMENT for table `payment`
 --
 ALTER TABLE `payment`
-  MODIFY `payment_id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=4;
+  MODIFY `payment_id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=5;
 
 --
 -- AUTO_INCREMENT for table `pda_device`
 --
 ALTER TABLE `pda_device`
-  MODIFY `pda_id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=12;
+  MODIFY `pda_id` int(11) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=12;
 
 --
 -- AUTO_INCREMENT for table `permission`
 --
 ALTER TABLE `permission`
-  MODIFY `permission_id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=21;
+  MODIFY `permission_id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=44;
 
 --
 -- AUTO_INCREMENT for table `position_product`
 --
 ALTER TABLE `position_product`
-  MODIFY `position_product_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=6;
+  MODIFY `position_product_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=8;
 
 --
 -- AUTO_INCREMENT for table `problem`
 --
 ALTER TABLE `problem`
-  MODIFY `problem_id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT;
+  MODIFY `problem_id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=3;
 
 --
 -- AUTO_INCREMENT for table `problem_image`
 --
 ALTER TABLE `problem_image`
-  MODIFY `image_problem_id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT;
+  MODIFY `image_problem_id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
+
+--
+-- AUTO_INCREMENT for table `problem_type`
+--
+ALTER TABLE `problem_type`
+  MODIFY `problem_type_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=7;
 
 --
 -- AUTO_INCREMENT for table `role_permission`
 --
 ALTER TABLE `role_permission`
-  MODIFY `role_permission_id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=39;
+  MODIFY `role_permission_id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=4210;
 
 --
 -- AUTO_INCREMENT for table `user`
 --
 ALTER TABLE `user`
-  MODIFY `user_id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=13;
+  MODIFY `user_id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=21;
 
 --
 -- AUTO_INCREMENT for table `visit_type`
@@ -4041,7 +5121,8 @@ ALTER TABLE `car_release`
   ADD CONSTRAINT `car_release_ibfk_2` FOREIGN KEY (`car_release_type_id`) REFERENCES `car_release_type` (`car_release_type_id`) ON DELETE NO ACTION,
   ADD CONSTRAINT `car_release_ibfk_4` FOREIGN KEY (`group_store_id`) REFERENCES `group_store` (`group_store_id`) ON DELETE CASCADE,
   ADD CONSTRAINT `car_release_ibfk_5` FOREIGN KEY (`user_id`) REFERENCES `user` (`user_id`) ON DELETE NO ACTION,
-  ADD CONSTRAINT `car_release_ibfk_6` FOREIGN KEY (`accounting_status`) REFERENCES `accounting_status` (`status_id`) ON DELETE NO ACTION;
+  ADD CONSTRAINT `car_release_ibfk_6` FOREIGN KEY (`accounting_status`) REFERENCES `accounting_status` (`status_id`) ON DELETE NO ACTION,
+  ADD CONSTRAINT `car_release_ibfk_7` FOREIGN KEY (`pda_device`) REFERENCES `pda_device` (`pda_id`) ON DELETE NO ACTION;
 
 --
 -- Constraints for table `car_release_follower`
@@ -4093,10 +5174,16 @@ ALTER TABLE `level_user`
 -- Constraints for table `list_store`
 --
 ALTER TABLE `list_store`
-  ADD CONSTRAINT `list_store_ibfk_3` FOREIGN KEY (`group_store_id`) REFERENCES `group_store` (`group_store_id`) ON DELETE SET NULL,
+  ADD CONSTRAINT `list_store_ibfk_3` FOREIGN KEY (`group_store_id`) REFERENCES `group_store` (`group_store_id`) ON DELETE CASCADE,
   ADD CONSTRAINT `list_store_ibfk_4` FOREIGN KEY (`created_by`) REFERENCES `user` (`user_id`) ON DELETE NO ACTION,
   ADD CONSTRAINT `list_store_ibfk_5` FOREIGN KEY (`store_id`) REFERENCES `store` (`store_id`) ON DELETE NO ACTION,
   ADD CONSTRAINT `list_store_ibfk_6` FOREIGN KEY (`position_product_id`) REFERENCES `position_product` (`position_product_id`) ON DELETE NO ACTION;
+
+--
+-- Constraints for table `list_store_load`
+--
+ALTER TABLE `list_store_load`
+  ADD CONSTRAINT `fk_list_store` FOREIGN KEY (`list_id`) REFERENCES `list_store` (`list_id`) ON DELETE CASCADE;
 
 --
 -- Constraints for table `problem`
@@ -4122,79 +5209,6 @@ ALTER TABLE `role_permission`
 --
 ALTER TABLE `user`
   ADD CONSTRAINT `user_ibfk_1` FOREIGN KEY (`level_user_id`) REFERENCES `level_user` (`level_user_id`);
-
--- --------------------------------------------------------
-
---
--- Table structure for table `api_keys`
---
-
-CREATE TABLE IF NOT EXISTS `api_keys` (
-  `id` int(11) NOT NULL AUTO_INCREMENT,
-  `key_name` varchar(100) NOT NULL UNIQUE,
-  `key_service` varchar(100) NOT NULL,
-  `key_value` text NOT NULL,
-  `description` varchar(255) DEFAULT NULL,
-  `is_active` tinyint(1) NOT NULL DEFAULT 1,
-  `created_at` datetime DEFAULT current_timestamp(),
-  `updated_at` datetime DEFAULT current_timestamp() ON UPDATE current_timestamp(),
-  PRIMARY KEY (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
---
--- Dumping data for table `api_keys`
---
-
-INSERT IGNORE INTO `api_keys` (`id`, `key_name`, `key_service`, `key_value`, `description`, `is_active`) VALUES
-(1, 'OPTIMOROUTE_API_KEY', 'OptimoRoute', '430a4eb0ac4140d1a1498ddfbd7197fcPP64S5MVDFM', 'API Key สำหรับเชื่อมต่อกับ OptimoRoute API ในการจัดวางเส้นทางเดินรถและนำเข้าข้อมูล', 1),
-(2, 'GPS_API_TOKEN', 'GPS IAM', '13dade62-5bd6-4082-b0ce-36757dec0d47', 'Bearer Token สำหรับเรียกใช้ GPS IAM API ติดตามพิกัดตำแหน่งรถจัดส่งสินค้า', 1),
-(3, 'GPS_API_URL', 'GPS IAM', 'https://api.gpsiam.app/devices', 'Endpoint URL หลักสำหรับเรียกดูอุปกรณ์ GPS รถยนต์ทั้งหมดในระบบ', 1);
-
--- --------------------------------------------------------
-
---
--- Table structure for table `loading_type`
---
-
-CREATE TABLE IF NOT EXISTS `loading_type` (
-  `loading_type_id` int(11) NOT NULL AUTO_INCREMENT,
-  `type_code` varchar(50) NOT NULL UNIQUE,
-  `type_name` varchar(100) NOT NULL,
-  `unit_name` varchar(50) DEFAULT 'ชิ้น',
-  `description` varchar(255) DEFAULT NULL,
-  `is_active` tinyint(1) NOT NULL DEFAULT 1,
-  `created_at` datetime DEFAULT current_timestamp(),
-  `updated_at` datetime DEFAULT current_timestamp() ON UPDATE current_timestamp(),
-  PRIMARY KEY (`loading_type_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
---
--- Dumping data for table `loading_type`
---
-
-INSERT IGNORE INTO `loading_type` (`loading_type_id`, `type_code`, `type_name`, `unit_name`, `description`, `is_active`) VALUES
-(1, 'CRATE', 'ลัง', 'ลัง', 'ลังสินค้ามาตรฐานสำหรับจัดส่ง', 1),
-(2, 'BASKET', 'กระบะ', 'ใบ', 'กระบะพลาสติกสำหรับสินค้าสด/แช่เย็น', 1),
-(3, 'PALLET', 'พาเลท', 'พาเลท', 'แท่นวางสินค้าขนาดใหญ่/สินค้าหนัก', 1),
-(4, 'BOX', 'กล่อง', 'กล่อง', 'กล่องพัสดุกระดาษลูกฟูกทั่วไป', 1);
-
--- --------------------------------------------------------
-
---
--- Table structure for table `list_store_load`
---
-
-CREATE TABLE IF NOT EXISTS `list_store_load` (
-  `id` int(11) NOT NULL AUTO_INCREMENT,
-  `list_id` int(11) NOT NULL,
-  `loading_type_id` int(11) NOT NULL,
-  `quantity` int(11) NOT NULL DEFAULT 0,
-  `created_at` datetime DEFAULT current_timestamp(),
-  PRIMARY KEY (`id`),
-  KEY `list_id` (`list_id`),
-  KEY `loading_type_id` (`loading_type_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
 COMMIT;
 
 /*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;
