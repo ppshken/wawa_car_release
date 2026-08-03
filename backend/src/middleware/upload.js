@@ -49,7 +49,7 @@ const upload = multer({
   fileFilter: fileFilter
 });
 
-// Helper function to save base64 data to file
+// Helper function to save base64 image data to local disk
 function saveBase64Image(base64Str, subDir = '') {
   if (!base64Str) return null;
   if (!base64Str.startsWith('data:image')) {
@@ -69,6 +69,7 @@ function saveBase64Image(base64Str, subDir = '') {
 
   const filePath = path.join(targetDir, filename);
   fs.writeFileSync(filePath, data);
+
   return subDir ? `/uploads/${subDir}/${filename}` : `/uploads/${filename}`;
 }
 

@@ -5,6 +5,65 @@ const { authenticateToken } = require('../middleware/auth');
 const { saveBase64Image } = require('../middleware/upload');
 const { logAudit } = require('../utils/auditLogger');
 
+// Helper to determine user role permissions
+async function getUserRoleInfo(reqUser) {
+  if (!reqUser || !reqUser.user_id) {
+    return { isDriver: false, isAdmin: false };
+  }
+
+  let level_user_id = reqUser.level_user_id;
+  let access_id = reqUser.access_id;
+  let level_user_name = reqUser.level_user_name || '';
+  let access_name = reqUser.access_name || '';
+
+  // Fetch missing role/access details from DB if needed
+  if (access_id === undefined || !level_user_name) {
+    try {
+      const rows = await query(
+        `SELECT u.level_user_id, l.level_user_name, l.access_id, a.access_name
+         FROM user u
+         LEFT JOIN level_user l ON u.level_user_id = l.level_user_id
+         LEFT JOIN access a ON l.access_id = a.access_id
+         WHERE u.user_id = ?`,
+        [reqUser.user_id]
+      );
+      if (rows && rows.length > 0) {
+        level_user_id = rows[0].level_user_id;
+        access_id = rows[0].access_id;
+        level_user_name = rows[0].level_user_name || '';
+        access_name = rows[0].access_name || '';
+      }
+    } catch (err) {
+      console.error('Error fetching user role info:', err);
+    }
+  }
+
+  // System Administrator level 1 or Admin/Supervisor:
+  // level_user_id = 1 (แอดมินระบบ / System Administrator level 1)
+  // level_user_id = 2 (หัวหน้างานปล่อยรถ / Admin / Supervisor)
+  // access_id = 1 (System Administrator), access_id = 2 (Supervisor / Manager)
+  const isAdmin = (
+    Number(level_user_id) === 1 ||
+    Number(level_user_id) === 2 ||
+    Number(access_id) === 1 ||
+    Number(access_id) === 2 ||
+    /admin|administrator|แอดมิน|supervisor|manager|หัวหน้า/i.test(level_user_name) ||
+    /admin|administrator|แอดมิน|supervisor|manager|หัวหน้า/i.test(access_name)
+  );
+
+  // Driver:
+  // level_user_id = 3 (พนักงานขับรถ / เซลส์)
+  // access_id = 3 (Driver / Staff)
+  const isDriver = !isAdmin && (
+    Number(level_user_id) === 3 ||
+    Number(access_id) === 3 ||
+    /driver|พนักงานขับรถ|คนขับ|staff|เซลส์/i.test(level_user_name) ||
+    /driver|พนักงานขับรถ|คนขับ|staff|เซลส์/i.test(access_name)
+  );
+
+  return { isDriver, isAdmin, level_user_id, access_id, level_user_name, access_name };
+}
+
 // POST /api/car-release (สร้างใบปล่อยรถ)
 router.post('/car-release', authenticateToken, async (req, res) => {
   try {
@@ -34,6 +93,20 @@ router.post('/car-release', authenticateToken, async (req, res) => {
       return res.status(400).json({ success: false, message: 'car_id and user_id (driver) are required' });
     }
 
+    // Check duplicate group_store_id on the same day
+    if (group_store_id) {
+      const existingGroup = await query(
+        `SELECT car_release_id, car_release_no FROM car_release WHERE group_store_id = ? AND DATE(created_at) = CURDATE()`,
+        [group_store_id]
+      );
+      if (existingGroup && existingGroup.length > 0) {
+        return res.status(400).json({
+          success: false,
+          message: `กรุ๊ปรถนี้ได้ถูกสร้างใบปล่อยรถไปแล้วในวันนี้ (${existingGroup[0].car_release_no}) ไม่สามารถเลือกซ้ำวันเดียวกันได้`
+        });
+      }
+    }
+
     // Generate unique release number in format TMS-2026726-0004
     const now = new Date();
     const year = now.getFullYear();
@@ -44,16 +117,16 @@ router.post('/car-release', authenticateToken, async (req, res) => {
     const countRows = await query(`SELECT COUNT(*) AS count FROM car_release WHERE DATE(created_at) = CURDATE()`);
     const seqNum = String((countRows[0]?.count || 0) + 1).padStart(4, '0');
     const releaseNo = `TMS-${dateStr}-${seqNum}`;
-    const imgPath = `car_release/${releaseNo}`;
+    const imgPath = `car_release/${releaseNo}/release`;
 
-    const imgMileageUrl = saveBase64Image(image_mileage, imgPath);
-    const imgFrontUrl = saveBase64Image(image_front, imgPath);
-    const imgAround1Url = saveBase64Image(image_around_1, imgPath);
-    const imgAround2Url = saveBase64Image(image_around_2, imgPath);
-    const imgAround3Url = saveBase64Image(image_around_3, imgPath);
-    const imgAround4Url = saveBase64Image(image_around_4, imgPath);
-    const imgAround5Url = saveBase64Image(image_around_5, imgPath);
-    const imgPdaUrl = saveBase64Image(image_pda, imgPath);
+    const imgMileageUrl = await saveBase64Image(image_mileage, imgPath);
+    const imgFrontUrl = await saveBase64Image(image_front, imgPath);
+    const imgAround1Url = await saveBase64Image(image_around_1, imgPath);
+    const imgAround2Url = await saveBase64Image(image_around_2, imgPath);
+    const imgAround3Url = await saveBase64Image(image_around_3, imgPath);
+    const imgAround4Url = await saveBase64Image(image_around_4, imgPath);
+    const imgAround5Url = await saveBase64Image(image_around_5, imgPath);
+    const imgPdaUrl = await saveBase64Image(image_pda, imgPath);
 
     const createdByVal = req.user ? (req.user.user_id || req.user.id || req.user.name || req.user.username || 1) : 1;
 
@@ -82,7 +155,7 @@ router.post('/car-release', authenticateToken, async (req, res) => {
           imgPdaUrl,
           pda_device ? parseInt(pda_device, 10) : null,
           description || '',
-          accounting_status,
+          accounting_status || null,
           createdByVal
         ]
       );
@@ -110,7 +183,7 @@ router.post('/car-release', authenticateToken, async (req, res) => {
           imgPdaUrl,
           pda_device ? parseInt(pda_device, 10) : null,
           description || '',
-          accounting_status
+          accounting_status || null
         ]
       );
     }
@@ -154,12 +227,22 @@ router.post('/car-release', authenticateToken, async (req, res) => {
 // GET /api/car-release/active-dates (ดึงวันที่ทั้งหมดที่มีการปล่อยรถ)
 router.get('/car-release/active-dates', authenticateToken, async (req, res) => {
   try {
+    const roleInfo = await getUserRoleInfo(req.user);
+    let whereClause = `WHERE created_at IS NOT NULL AND created_at != '0000-00-00 00:00:00'`;
+    const params = [];
+
+    // Driver: เห็นเฉพาะวันที่ ปล่อยรถ คนขับ = ตัวเอง
+    if (roleInfo.isDriver) {
+      whereClause += ` AND user_id = ?`;
+      params.push(req.user.user_id);
+    }
+
     const rows = await query(`
       SELECT DISTINCT DATE_FORMAT(created_at, '%Y-%m-%d') AS d 
       FROM car_release 
-      WHERE created_at IS NOT NULL AND created_at != '0000-00-00 00:00:00'
+      ${whereClause}
       ORDER BY d ASC
-    `);
+    `, params);
     const activeDates = rows.map(r => r.d).filter(Boolean);
     return res.json({ success: true, activeDates });
   } catch (err) {
@@ -172,13 +255,21 @@ router.get('/car-release/active-dates', authenticateToken, async (req, res) => {
 router.get('/car-release', authenticateToken, async (req, res) => {
   try {
     const { status, driver_id, date, page, limit, search } = req.query;
+    const roleInfo = await getUserRoleInfo(req.user);
+
     let whereClause = ' WHERE 1=1';
     const params = [];
 
-    if (driver_id) {
+    // System Administrator / Admin: เห็นข้อมูลปล่อยรถทั้งหมด
+    // Driver: เห็นเฉพาะ ปล่อยรถ คนขับ = ตัวเอง
+    if (roleInfo.isDriver) {
+      whereClause += ` AND cr.user_id = ?`;
+      params.push(req.user.user_id);
+    } else if (driver_id) {
       whereClause += ` AND cr.user_id = ?`;
       params.push(driver_id);
     }
+
     if (date && date.trim()) {
       whereClause += ` AND DATE(cr.created_at) = ?`;
       params.push(date.trim());
@@ -271,6 +362,7 @@ router.get('/car-release', authenticateToken, async (req, res) => {
 router.get('/car-release/:id', authenticateToken, async (req, res) => {
   try {
     const car_release_id = req.params.id;
+    const roleInfo = await getUserRoleInfo(req.user);
 
     const releases = await query(
       `SELECT cr.*, 
@@ -294,6 +386,11 @@ router.get('/car-release/:id', authenticateToken, async (req, res) => {
     }
 
     const release = releases[0];
+
+    // Driver: เห็นเฉพาะ ปล่อยรถ คนขับ = ตัวเอง
+    if (roleInfo.isDriver && String(release.user_id) !== String(req.user.user_id)) {
+      return res.status(403).json({ success: false, message: 'ไม่มีสิทธิ์เข้าถึงข้อมูลใบปล่อยรถนี้' });
+    }
 
     // Fetch Followers
     try {
@@ -431,14 +528,14 @@ router.post('/car-release/:id/return', authenticateToken, async (req, res) => {
       image_pda
     } = req.body;
 
-    const imgMileageUrl = saveBase64Image(image_mileage);
-    const imgFrontUrl = saveBase64Image(image_front);
-    const imgAround1Url = saveBase64Image(image_around_1);
-    const imgAround2Url = saveBase64Image(image_around_2);
-    const imgAround3Url = saveBase64Image(image_around_3);
-    const imgAround4Url = saveBase64Image(image_around_4);
-    const imgReturnUrl = saveBase64Image(image_return);
-    const imgPdaUrl = saveBase64Image(image_pda);
+    const imgMileageUrl = await saveBase64Image(image_mileage);
+    const imgFrontUrl = await saveBase64Image(image_front);
+    const imgAround1Url = await saveBase64Image(image_around_1);
+    const imgAround2Url = await saveBase64Image(image_around_2);
+    const imgAround3Url = await saveBase64Image(image_around_3);
+    const imgAround4Url = await saveBase64Image(image_around_4);
+    const imgReturnUrl = await saveBase64Image(image_return);
+    const imgPdaUrl = await saveBase64Image(image_pda);
 
     // Check if return record already exists
     const existing = await query(
@@ -571,14 +668,30 @@ router.put('/car-release/:id', authenticateToken, async (req, res) => {
       image_pda
     } = req.body;
 
-    const imgMileageUrl = image_mileage ? saveBase64Image(image_mileage) : undefined;
-    const imgFrontUrl = image_front ? saveBase64Image(image_front) : undefined;
-    const imgAround1Url = image_around_1 ? saveBase64Image(image_around_1) : undefined;
-    const imgAround2Url = image_around_2 ? saveBase64Image(image_around_2) : undefined;
-    const imgAround3Url = image_around_3 ? saveBase64Image(image_around_3) : undefined;
-    const imgAround4Url = image_around_4 ? saveBase64Image(image_around_4) : undefined;
-    const imgAround5Url = image_around_5 ? saveBase64Image(image_around_5) : undefined;
-    const imgPdaUrl = image_pda ? saveBase64Image(image_pda) : undefined;
+    const imgMileageUrl = image_mileage ? await saveBase64Image(image_mileage) : undefined;
+    const imgFrontUrl = image_front ? await saveBase64Image(image_front) : undefined;
+    const imgAround1Url = image_around_1 ? await saveBase64Image(image_around_1) : undefined;
+    const imgAround2Url = image_around_2 ? await saveBase64Image(image_around_2) : undefined;
+    const imgAround3Url = image_around_3 ? await saveBase64Image(image_around_3) : undefined;
+    const imgAround4Url = image_around_4 ? await saveBase64Image(image_around_4) : undefined;
+    const imgAround5Url = image_around_5 ? await saveBase64Image(image_around_5) : undefined;
+    const imgPdaUrl = image_pda ? await saveBase64Image(image_pda) : undefined;
+
+    if (group_store_id) {
+      const existingGroup = await query(
+        `SELECT car_release_id, car_release_no FROM car_release 
+         WHERE group_store_id = ? 
+           AND car_release_id != ? 
+           AND DATE(created_at) = (SELECT DATE(created_at) FROM car_release WHERE car_release_id = ?)`,
+        [group_store_id, car_release_id, car_release_id]
+      );
+      if (existingGroup && existingGroup.length > 0) {
+        return res.status(400).json({
+          success: false,
+          message: `กรุ๊ปรถนี้ได้ถูกสร้างใบปล่อยรถไปแล้วในวันนี้ (${existingGroup[0].car_release_no}) ไม่สามารถเลือกซ้ำวันเดียวกันได้`
+        });
+      }
+    }
 
     await query(
       `UPDATE car_release 
@@ -589,7 +702,7 @@ router.put('/car-release/:id', authenticateToken, async (req, res) => {
            mileage = COALESCE(?, mileage),
            pda_device = COALESCE(?, pda_device),
            description = COALESCE(?, description),
-           accounting_status = COALESCE(?, accounting_status),
+           accounting_status = ?,
            image_mileage = COALESCE(?, image_mileage),
            image_front = COALESCE(?, image_front),
            image_around_1 = COALESCE(?, image_around_1),
@@ -607,7 +720,7 @@ router.put('/car-release/:id', authenticateToken, async (req, res) => {
         mileage || 0,
         pda_device || '',
         description || '',
-        accounting_status || 'รอการตรวจสอบ',
+        accounting_status || null,
         imgMileageUrl || null,
         imgFrontUrl || null,
         imgAround1Url || null,
@@ -651,6 +764,19 @@ router.put('/car-release/:id', authenticateToken, async (req, res) => {
 router.delete('/car-release/:id', authenticateToken, async (req, res) => {
   try {
     const car_release_id = req.params.id;
+    const roleInfo = await getUserRoleInfo(req.user);
+
+    // Fetch target car_release record
+    const target = await query(`SELECT group_store_id, user_id FROM car_release WHERE car_release_id = ?`, [car_release_id]);
+    if (target.length === 0) {
+      return res.status(404).json({ success: false, message: 'ไม่พบข้อมูลใบปล่อยรถที่ต้องการลบ' });
+    }
+
+    if (roleInfo.isDriver && String(target[0].user_id) !== String(req.user.user_id)) {
+      return res.status(403).json({ success: false, message: 'ไม่มีสิทธิ์ลบข้อมูลใบปล่อยรถนี้' });
+    }
+
+    const group_store_id = target[0].group_store_id;
 
     // Delete related records in car_release_follower, car_return
     await query(`DELETE FROM car_release_follower WHERE car_release_id = ?`, [car_release_id]);
@@ -659,14 +785,19 @@ router.delete('/car-release/:id', authenticateToken, async (req, res) => {
     // Delete main car_release record
     await query(`DELETE FROM car_release WHERE car_release_id = ?`, [car_release_id]);
 
+    // Update group_store status to 0 (คืนสถานะเป็นยังไม่ปล่อยรถ)
+    if (group_store_id) {
+      await query(`UPDATE group_store SET status = 0 WHERE group_store_id = ?`, [group_store_id]);
+    }
+
     await logAudit(req, {
       action: 'DELETE_CAR_RELEASE',
       targetType: 'car_release',
       targetId: car_release_id,
-      details: { car_release_id }
+      details: { car_release_id, group_store_id }
     });
 
-    res.json({ success: true, message: 'ลบข้อมูลใบปล่อยรถเรียบร้อยแล้ว' });
+    res.json({ success: true, message: 'ลบข้อมูลใบปล่อยรถและอัปเดตสถานะกรุ๊ปรถเรียบร้อยแล้ว' });
   } catch (err) {
     console.error('Error deleting car release:', err);
     res.status(500).json({ success: false, message: err.message });
@@ -727,7 +858,7 @@ router.post('/car-release/:id/chat', authenticateToken, async (req, res) => {
 
     let imgUrl = null;
     if (image) {
-      imgUrl = saveBase64Image(image, `chat/${car_release_id}`);
+      imgUrl = await saveBase64Image(image, `chat/${car_release_id}`);
     }
 
     const result = await query(

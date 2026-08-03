@@ -48,9 +48,7 @@ export const Navbar: React.FC = () => {
 
         {/* Brand Logo */}
         <div className="flex items-center gap-3 cursor-pointer" onClick={() => navigate('/')}>
-          <div className="w-8 h-8 rounded-md bg-slate-900 text-white flex items-center justify-center font-bold text-sm">
-            <Truck className="w-4 h-4" />
-          </div>
+          <img src="assets/car_release_logo.jpg" alt="Wawa Icon" className="w-8 h-8" />
           <div className="flex flex-col">
             <span className="font-semibold text-sm text-slate-900 tracking-tight leading-tight">
               Car Release

@@ -24,7 +24,6 @@ import {
   ColumnToggleDropdown,
   ColumnItem,
 } from "../components/ColumnToggleDropdown";
-import { DeliveryCheckInOutModal } from "../components/DeliveryCheckInOutModal";
 import { ExportDrawer } from "../components/ExportDrawer";
 import * as XLSX from "xlsx";
 import {
@@ -7170,14 +7169,6 @@ export const RoutePage: React.FC = () => {
         data={routeExportData}
         getValue={getRouteExportValue}
         fileNamePrefix="Route_Stops_Report"
-      />
-
-      {/* ─── CHECK IN / CHECK OUT / PROBLEM MODAL ─── */}
-      <DeliveryCheckInOutModal
-        isOpen={!!checkInOutStore}
-        onClose={() => setCheckInOutStore(null)}
-        storeItem={checkInOutStore}
-        onStatusUpdated={() => fetchRoutes(selectedDate)}
       />
     </div>
   );

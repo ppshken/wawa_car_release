@@ -38,6 +38,7 @@ interface DeliveryCheckInOutModalProps {
   isOpen: boolean;
   onClose: () => void;
   storeItem: any | null;
+  car_release_no: string;
   onStatusUpdated?: () => void;
 }
 
@@ -319,6 +320,7 @@ export const DeliveryCheckInOutDrawer: React.FC<DeliveryCheckInOutModalProps> = 
   isOpen,
   onClose,
   storeItem: propStoreItem,
+  car_release_no,
   onStatusUpdated,
 }) => {
   const { showSuccess, showError } = useToast();
@@ -623,9 +625,12 @@ export const DeliveryCheckInOutDrawer: React.FC<DeliveryCheckInOutModalProps> = 
       const listId = storeItem.list_id || storeItem.id;
       const locStr = userGps ? `${userGps.lat},${userGps.lng}` : "";
       const res = await api.post(`/list-store/${listId}/check-in`, {
+        car_release_no: car_release_no,
         image_check_in: checkInImg,
         signature: signatureImg,
         location: locStr,
+        store_id: storeItem.store_id,
+        group_store_id: storeItem.group_store_id,
       });
 
       if (res.data.success) {
@@ -701,6 +706,7 @@ export const DeliveryCheckInOutDrawer: React.FC<DeliveryCheckInOutModalProps> = 
       const locStr = userGps ? `${userGps.lat},${userGps.lng}` : "";
 
       const res = await api.post(`/list-store/${listId}/check-out`, {
+        car_release_no: car_release_no,
         payment_id: selectedPaymentId,
         image_bill: checkOutImgs[0],
         additional_images: checkOutImgs.slice(1),
@@ -709,6 +715,8 @@ export const DeliveryCheckInOutDrawer: React.FC<DeliveryCheckInOutModalProps> = 
         current_location: locStr,
         visit_type_id: 4,
         visit_note: checkoutNote,
+        store_id: storeItem.store_id,
+        group_store_id: storeItem.group_store_id,
       });
 
       if (res.data.success) {
@@ -745,6 +753,7 @@ export const DeliveryCheckInOutDrawer: React.FC<DeliveryCheckInOutModalProps> = 
     try {
       const listId = storeItem.list_id || storeItem.id;
       const res = await api.post(`/list-store/${listId}/problem`, {
+        car_release_no: car_release_no,
         problem_name: finalProblemName,
         normal_bill_note: problemNote,
         problem_images: problemImgs,

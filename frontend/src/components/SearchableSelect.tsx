@@ -213,13 +213,20 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
               return (
                 <div
                   key={String(opt.value)}
-                  onClick={() => handleSelect(opt)}
-                  className={`p-2.5 cursor-pointer transition-colors text-xs ${
+                  onClick={(e) => {
+                    if (opt.disabled) {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      return;
+                    }
+                    handleSelect(opt);
+                  }}
+                  className={`p-2.5 transition-colors text-xs select-none ${
                     opt.disabled
-                      ? "opacity-40 cursor-not-allowed bg-slate-50"
+                      ? "opacity-40 cursor-not-allowed bg-slate-100 text-slate-400 pointer-events-none"
                       : isSelected
-                      ? "bg-blue-50 text-blue-900 font-bold"
-                      : "hover:bg-slate-50 text-slate-700"
+                      ? "bg-blue-50 text-blue-900 font-bold cursor-pointer"
+                      : "hover:bg-slate-50 text-slate-700 cursor-pointer"
                   }`}
                 >
                   <div className="flex items-center justify-between gap-1.5">

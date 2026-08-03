@@ -3,10 +3,66 @@ const router = express.Router();
 const { query, hasColumn } = require('../config/db');
 const { authenticateToken } = require('../middleware/auth');
 
+// Helper to determine user role permissions
+async function getUserRoleInfo(reqUser) {
+  if (!reqUser || !reqUser.user_id) {
+    return { isDriver: false, isAdmin: false };
+  }
+
+  let level_user_id = reqUser.level_user_id;
+  let access_id = reqUser.access_id;
+  let level_user_name = reqUser.level_user_name || '';
+  let access_name = reqUser.access_name || '';
+
+  if (access_id === undefined || !level_user_name) {
+    try {
+      const rows = await query(
+        `SELECT u.level_user_id, l.level_user_name, l.access_id, a.access_name
+         FROM user u
+         LEFT JOIN level_user l ON u.level_user_id = l.level_user_id
+         LEFT JOIN access a ON l.access_id = a.access_id
+         WHERE u.user_id = ?`,
+        [reqUser.user_id]
+      );
+      if (rows && rows.length > 0) {
+        level_user_id = rows[0].level_user_id;
+        access_id = rows[0].access_id;
+        level_user_name = rows[0].level_user_name || '';
+        access_name = rows[0].access_name || '';
+      }
+    } catch (err) {
+      console.error('Error fetching user role info:', err);
+    }
+  }
+
+  const isAdmin = (
+    Number(level_user_id) === 1 ||
+    Number(level_user_id) === 2 ||
+    Number(access_id) === 1 ||
+    Number(access_id) === 2 ||
+    /admin|administrator|แอดมิน|supervisor|manager|หัวหน้า/i.test(level_user_name) ||
+    /admin|administrator|แอดมิน|supervisor|manager|หัวหน้า/i.test(access_name)
+  );
+
+  const isDriver = !isAdmin && (
+    Number(level_user_id) === 3 ||
+    Number(access_id) === 3 ||
+    /driver|พนักงานขับรถ|คนขับ|staff|เซลส์/i.test(level_user_name) ||
+    /driver|พนักงานขับรถ|คนขับ|staff|เซลส์/i.test(access_name)
+  );
+
+  return { isDriver, isAdmin, level_user_id, access_id, level_user_name, access_name };
+}
+
 // GET /api/reports/dashboard
 router.get('/reports/dashboard', authenticateToken, async (req, res) => {
   try {
     const { range = 'today' } = req.query;
+    const roleInfo = await getUserRoleInfo(req.user);
+
+    // If logged-in user is a Driver, force filter to their own user_id
+    const driverId = roleInfo.isDriver ? req.user.user_id : (req.query.driver_id || null);
+    const driverCond = driverId ? ` AND cr.user_id = ${parseInt(driverId, 10)}` : '';
 
     let dateWhereClause = 'DATE(cr.created_at) = CURDATE()';
     let checkOutWhereClause = 'DATE(co.date_time_check_out) = CURDATE()';
@@ -30,6 +86,11 @@ router.get('/reports/dashboard', authenticateToken, async (req, res) => {
       ? `(SELECT COUNT(*) FROM car_return crt WHERE crt.car_release_id = cr.car_release_id) > 0`
       : `0`;
 
+    const hasCarReleaseId = await hasColumn('list_store', 'car_release_id');
+    const storeReleaseJoinCondition = hasCarReleaseId
+      ? `(ls.car_release_id = cr.car_release_id OR ls.group_store_id = cr.group_store_id)`
+      : `ls.group_store_id = cr.group_store_id`;
+
     // 1. Total releases breakdown
     let totalReleases = 0;
     let runningReleases = 0;
@@ -41,7 +102,7 @@ router.get('/reports/dashboard', authenticateToken, async (req, res) => {
           SUM(CASE WHEN ${isReturnedExpr} THEN 0 ELSE 1 END) as running_releases,
           SUM(CASE WHEN ${isReturnedExpr} THEN 1 ELSE 0 END) as returned_releases
         FROM car_release cr
-        WHERE ${dateWhereClause}
+        WHERE ${dateWhereClause} ${driverCond}
       `);
       totalReleases = Number(releasesStats[0]?.total_releases || 0);
       runningReleases = Number(releasesStats[0]?.running_releases || 0);
@@ -66,7 +127,8 @@ router.get('/reports/dashboard', authenticateToken, async (req, res) => {
           SUM(co.amount) as grand_total_amount
         FROM check_out co
         JOIN list_store ls ON co.list_id = ls.list_id
-        WHERE ls.bypass = 0 AND ${checkOutWhereClause}
+        JOIN car_release cr ON ${storeReleaseJoinCondition}
+        WHERE ls.bypass = 0 AND ${checkOutWhereClause} ${driverCond}
       `);
       totalCash = Number(salesSummary[0]?.total_cash || 0);
       totalTransferReceived = Number(salesSummary[0]?.total_transfer_received || 0);
@@ -81,11 +143,6 @@ router.get('/reports/dashboard', authenticateToken, async (req, res) => {
     let targetStores = 0;
     let completedStores = 0;
     try {
-      const hasCarReleaseId = await hasColumn('list_store', 'car_release_id');
-      const releaseStoreJoin = hasCarReleaseId
-        ? `JOIN list_store ls ON (ls.car_release_id = cr.car_release_id OR ls.group_store_id = cr.group_store_id)`
-        : `JOIN list_store ls ON ls.group_store_id = cr.group_store_id`;
-
       const storeStats = await query(`
         SELECT 
           COUNT(DISTINCT ls.list_id) as stores_target,
@@ -94,10 +151,10 @@ router.get('/reports/dashboard', authenticateToken, async (req, res) => {
             THEN ls.list_id 
           END) as stores_completed
         FROM car_release cr
-        ${releaseStoreJoin}
+        JOIN list_store ls ON ${storeReleaseJoinCondition}
         LEFT JOIN check_out co ON ls.list_id = co.list_id
         LEFT JOIN problem prob ON ls.list_id = prob.list_id
-        WHERE ${dateWhereClause}
+        WHERE ${dateWhereClause} ${driverCond}
       `);
       targetStores = Number(storeStats[0]?.stores_target || 0);
       completedStores = Number(storeStats[0]?.stores_completed || 0);
@@ -111,7 +168,9 @@ router.get('/reports/dashboard', authenticateToken, async (req, res) => {
       const offSiteSummary = await query(`
         SELECT COUNT(*) as off_site_count 
         FROM check_out co
-        WHERE co.off_site = 1 AND ${checkOutWhereClause}
+        JOIN list_store ls ON co.list_id = ls.list_id
+        JOIN car_release cr ON ${storeReleaseJoinCondition}
+        WHERE co.off_site = 1 AND ${checkOutWhereClause} ${driverCond}
       `);
       offSiteCount = Number(offSiteSummary[0]?.off_site_count || 0);
     } catch (e) {
@@ -121,7 +180,13 @@ router.get('/reports/dashboard', authenticateToken, async (req, res) => {
     // 5. Problems count
     let problemCount = 0;
     try {
-      const problemSummary = await query(`SELECT COUNT(*) as problem_count FROM problem`);
+      const problemSummary = await query(`
+        SELECT COUNT(DISTINCT prob.problem_id) as problem_count 
+        FROM problem prob
+        JOIN list_store ls ON prob.list_id = ls.list_id
+        JOIN car_release cr ON ${storeReleaseJoinCondition}
+        WHERE ${dateWhereClause} ${driverCond}
+      `);
       problemCount = Number(problemSummary[0]?.problem_count || 0);
     } catch (e) {
       console.warn('Dashboard problemSummary query warning:', e.message);
@@ -138,7 +203,8 @@ router.get('/reports/dashboard', authenticateToken, async (req, res) => {
           SUM(CASE WHEN co.transfer_according = 1 THEN co.transfer ELSE 0 END) as pending_transfer
         FROM check_out co
         JOIN list_store ls ON co.list_id = ls.list_id
-        WHERE ls.bypass = 0 AND co.date_time_check_out >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)
+        JOIN car_release cr ON ${storeReleaseJoinCondition}
+        WHERE ls.bypass = 0 AND co.date_time_check_out >= DATE_SUB(CURDATE(), INTERVAL 7 DAY) ${driverCond}
         GROUP BY DATE(co.date_time_check_out)
         ORDER BY date ASC
       `);
@@ -156,7 +222,6 @@ router.get('/reports/dashboard', authenticateToken, async (req, res) => {
     // 7. Recent Releases / Operations (Top 10)
     let recentReleases = [];
     try {
-      const hasCarReleaseId = await hasColumn('list_store', 'car_release_id');
       const storeCountSubquery = hasCarReleaseId
         ? `(SELECT COUNT(*) FROM list_store ls WHERE (ls.car_release_id = cr.car_release_id OR ls.group_store_id = cr.group_store_id))`
         : `(SELECT COUNT(*) FROM list_store ls WHERE ls.group_store_id = cr.group_store_id)`;
@@ -195,6 +260,7 @@ router.get('/reports/dashboard', authenticateToken, async (req, res) => {
         LEFT JOIN user u ON cr.user_id = u.user_id
         LEFT JOIN group_store gs ON cr.group_store_id = gs.group_store_id
         LEFT JOIN accounting_status acc ON (cr.accounting_status = acc.status_id OR cr.accounting_status = acc.status_name OR cr.accounting_status = acc.status_code)
+        WHERE 1=1 ${driverCond}
         ORDER BY cr.car_release_id DESC
         LIMIT 10
       `);
@@ -227,11 +293,6 @@ router.get('/reports/dashboard', authenticateToken, async (req, res) => {
     // 8. Driver Leaderboard
     let driverLeaderboard = [];
     try {
-      const hasCarReleaseId = await hasColumn('list_store', 'car_release_id');
-      const driverStoreJoin = hasCarReleaseId
-        ? `JOIN list_store ls ON (ls.car_release_id = cr.car_release_id OR ls.group_store_id = cr.group_store_id)`
-        : `JOIN list_store ls ON ls.group_store_id = cr.group_store_id`;
-
       const driverRows = await query(`
         SELECT 
           u.user_id,
@@ -240,9 +301,9 @@ router.get('/reports/dashboard', authenticateToken, async (req, res) => {
           SUM(co.amount) as revenue
         FROM user u
         JOIN car_release cr ON u.user_id = cr.user_id
-        ${driverStoreJoin}
+        JOIN list_store ls ON ${storeReleaseJoinCondition}
         JOIN check_out co ON ls.list_id = co.list_id
-        WHERE ls.bypass = 0
+        WHERE ls.bypass = 0 ${driverCond}
         GROUP BY u.user_id, u.name
         ORDER BY revenue DESC
         LIMIT 5
@@ -262,6 +323,8 @@ router.get('/reports/dashboard', authenticateToken, async (req, res) => {
 
     res.json({
       success: true,
+      isDriver: roleInfo.isDriver,
+      isAdmin: roleInfo.isAdmin,
       summary: {
         total_releases: totalReleases,
         running_releases: runningReleases,

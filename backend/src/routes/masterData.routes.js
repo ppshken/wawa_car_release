@@ -545,7 +545,7 @@ router.post('/vehicles', authenticateToken, async (req, res) => {
 
     const qtyNum = quantity !== undefined ? parseInt(quantity, 10) : 100;
     const finalCarImage = (car_image && car_image.startsWith('data:image'))
-      ? saveBase64Image(car_image, 'vehicles')
+      ? await saveBase64Image(car_image, 'vehicles')
       : car_image;
 
     try {
@@ -587,7 +587,7 @@ router.put('/vehicles/:id', authenticateToken, async (req, res) => {
 
     const qtyNum = quantity !== undefined ? parseInt(quantity, 10) : 100;
     const finalCarImage = (car_image && car_image.startsWith('data:image'))
-      ? saveBase64Image(car_image, 'vehicles')
+      ? await saveBase64Image(car_image, 'vehicles')
       : car_image;
 
     try {

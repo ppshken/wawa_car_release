@@ -11,7 +11,9 @@ import { ReleaseGpsMapTab } from "../components/ReleaseGpsMapTab";
 import { ReleaseChatTab } from "../components/ReleaseChatTab";
 import { DeliveryCheckInOutModal } from "../components/DeliveryCheckInOutModal";
 import { ExportDrawer } from "../components/ExportDrawer";
-import ImageLightboxModal, { LightboxImage } from "../components/ImageLightboxModal";
+import ImageLightboxModal, {
+  LightboxImage,
+} from "../components/ImageLightboxModal";
 import {
   Plus,
   Filter,
@@ -34,7 +36,6 @@ import {
   Search,
   Eye,
   Calendar,
-  AlertTriangle,
   Clock,
   Plane,
   GraduationCap,
@@ -44,8 +45,8 @@ import {
   PackagePlus,
   Handshake,
   UserPlus,
-  Loader2,
   CheckIcon,
+  ChevronRight,
 } from "lucide-react";
 import {
   ColumnToggleDropdown,
@@ -163,7 +164,11 @@ const formatDateNumeric = (val?: any) => {
     }
   }
   let dateObj = new Date(val);
-  if (Number.isNaN(dateObj.getTime()) && typeof val === "string" && val.includes(" ")) {
+  if (
+    Number.isNaN(dateObj.getTime()) &&
+    typeof val === "string" &&
+    val.includes(" ")
+  ) {
     dateObj = new Date(val.replace(" ", "T"));
   }
   if (Number.isNaN(dateObj.getTime())) {
@@ -301,7 +306,6 @@ const getPriorityBadge = (p?: string) => {
   );
 };
 
-
 export const CarReleaseList: React.FC = () => {
   const { user } = useAuth();
   const { showSuccess, showError } = useToast();
@@ -315,6 +319,8 @@ export const CarReleaseList: React.FC = () => {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [search, setSearch] = useState<string>("");
   const [modalAction, setModalAction] = useState<string | null>(null);
+
+  const [isLoading, setIsLoading] = useState<boolean>(false);
 
   // Helper for today's date (YYYY-MM-DD)
   const getTodayDateString = () => {
@@ -342,21 +348,24 @@ export const CarReleaseList: React.FC = () => {
     return today;
   });
 
-  const updateDateFilter = useCallback((dateVal: string, mode?: "today" | "all" | "custom") => {
-    setSelectedDate(dateVal);
-    setCurrentPage(1);
-    const today = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, "0")}-${String(new Date().getDate()).padStart(2, "0")}`;
-    if (mode === "today" || dateVal === today) {
-      localStorage.setItem("car_release_date_filter_mode", "today");
-      localStorage.setItem("car_release_date_filter_value", today);
-    } else if (mode === "all" || !dateVal) {
-      localStorage.setItem("car_release_date_filter_mode", "all");
-      localStorage.setItem("car_release_date_filter_value", "");
-    } else {
-      localStorage.setItem("car_release_date_filter_mode", "custom");
-      localStorage.setItem("car_release_date_filter_value", dateVal);
-    }
-  }, []);
+  const updateDateFilter = useCallback(
+    (dateVal: string, mode?: "today" | "all" | "custom") => {
+      setSelectedDate(dateVal);
+      setCurrentPage(1);
+      const today = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, "0")}-${String(new Date().getDate()).padStart(2, "0")}`;
+      if (mode === "today" || dateVal === today) {
+        localStorage.setItem("car_release_date_filter_mode", "today");
+        localStorage.setItem("car_release_date_filter_value", today);
+      } else if (mode === "all" || !dateVal) {
+        localStorage.setItem("car_release_date_filter_mode", "all");
+        localStorage.setItem("car_release_date_filter_value", "");
+      } else {
+        localStorage.setItem("car_release_date_filter_mode", "custom");
+        localStorage.setItem("car_release_date_filter_value", dateVal);
+      }
+    },
+    [],
+  );
   const [activeReleaseDates, setActiveReleaseDates] = useState<string[]>([]);
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [itemsPerPage, setItemsPerPage] = useState<number>(10);
@@ -367,12 +376,14 @@ export const CarReleaseList: React.FC = () => {
   const [showFilterPanel, setShowFilterPanel] = useState<boolean>(false);
   const [filterReleaseStatus, setFilterReleaseStatus] = useState<string>("all");
   const [filterReturnStatus, setFilterReturnStatus] = useState<string>("all");
-  const [filterAccountingStatus, setFilterAccountingStatus] = useState<string>("all");
+  const [filterAccountingStatus, setFilterAccountingStatus] =
+    useState<string>("all");
   const [filterDriverId, setFilterDriverId] = useState<string>("all");
   const [filterLicensePlate, setFilterLicensePlate] = useState<string>("all");
 
   // Accounting Status Drawer State
-  const [isAccountingDrawerOpen, setIsAccountingDrawerOpen] = useState<boolean>(false);
+  const [isAccountingDrawerOpen, setIsAccountingDrawerOpen] =
+    useState<boolean>(false);
   const [accFormStatusId, setAccFormStatusId] = useState<string | number>("");
   const [accFormNote, setAccFormNote] = useState<string>("");
   const [isSubmittingAcc, setIsSubmittingAcc] = useState<boolean>(false);
@@ -386,69 +397,91 @@ export const CarReleaseList: React.FC = () => {
         id: c.id,
         label: c.label,
       })),
-    []
+    [],
   );
 
-  const getExportValue = useCallback((item: any, columnId: string): string | number => {
-    switch (columnId) {
-      case "car_release_no":
-        return item.car_release_no || "-";
-      case "car_release_type_name":
-        return item.car_release_type_name || item.car_release_type || "-";
-      case "license_plate":
-        return item.license_plate || "-";
-      case "brand_model":
-        return item.brand_model || item.car_model || "-";
-      case "progress":
-        return `${item.completedStores ?? item.stores_completed_count ?? 0}/${item.totalStores ?? item.total_stores_count ?? 0}`;
-      case "group_store":
-        return item.group_store_name && item.group_store_name !== "-"
-          ? item.group_store_name
-          : (item.brand_model || item.group_store_id || "-");
-      case "release_status": {
-        const isDone =
-          (item.completedStores === item.totalStores && item.totalStores > 0) ||
-          item.is_returned;
-        return isDone ? "เสร็จสิ้น" : "ดำเนินการอยู่";
+  const getExportValue = useCallback(
+    (item: any, columnId: string): string | number => {
+      switch (columnId) {
+        case "car_release_no":
+          return item.car_release_no || "-";
+        case "car_release_type_name":
+          return item.car_release_type_name || item.car_release_type || "-";
+        case "license_plate":
+          return item.license_plate || "-";
+        case "brand_model":
+          return item.brand_model || item.car_model || "-";
+        case "progress":
+          return `${item.completedStores ?? item.stores_completed_count ?? 0}/${item.totalStores ?? item.total_stores_count ?? 0}`;
+        case "group_store":
+          return item.group_store_name && item.group_store_name !== "-"
+            ? item.group_store_name
+            : item.brand_model || item.group_store_id || "-";
+        case "release_status": {
+          const isDone =
+            (item.completedStores === item.totalStores &&
+              item.totalStores > 0) ||
+            item.is_returned;
+          return isDone ? "เสร็จสิ้น" : "ดำเนินการอยู่";
+        }
+        case "return_status":
+          return item.is_returned || item.car_return
+            ? "คืนรถแล้ว"
+            : "ยังไม่คืนรถ";
+        case "allowance":
+          return item.allowance !== undefined &&
+            item.allowance !== null &&
+            item.allowance !== ""
+            ? item.allowance
+            : item.allowance_amount
+              ? `${Number(item.allowance_amount).toLocaleString()} บาท`
+              : "-";
+        case "accounting_status":
+          return item.accounting_status_name || item.accounting_status || "-";
+        case "total_number_of_bills":
+          return item.total_number_of_bills !== undefined &&
+            item.total_number_of_bills !== null &&
+            item.total_number_of_bills !== ""
+            ? item.total_number_of_bills
+            : "-";
+        case "total_amount":
+          return item.total_amount !== undefined &&
+            item.total_amount !== null &&
+            item.total_amount !== ""
+            ? item.total_amount !== "-"
+              ? `฿${item.total_amount}`
+              : "-"
+            : "-";
+        case "mileage":
+          return item.mileage !== undefined &&
+            item.mileage !== null &&
+            item.mileage !== ""
+            ? `${Number(item.mileage).toLocaleString()} กม.`
+            : "-";
+        case "pda_device":
+          return item.pda_device_name || item.pda_device || "-";
+        case "driver_name":
+          return item.driver_name || "-";
+        case "driver_phone":
+          return item.driver_phone || "-";
+        case "follower_name":
+          return Array.isArray(item.followers) && item.followers.length > 0
+            ? item.followers
+                .map((f: any) =>
+                  typeof f === "string" ? f : f.follower_name || f.name,
+                )
+                .join(", ")
+            : item.follower_name || "-";
+        case "created_at":
+          return item.created_at || item.release_date || "-";
+        case "description":
+          return item.description || item.accounting_note || "-";
+        default:
+          return item[columnId] ?? "-";
       }
-      case "return_status":
-        return item.is_returned || item.car_return ? "คืนรถแล้ว" : "ยังไม่คืนรถ";
-      case "allowance":
-        return item.allowance !== undefined && item.allowance !== null && item.allowance !== ""
-          ? item.allowance
-          : (item.allowance_amount ? `${Number(item.allowance_amount).toLocaleString()} บาท` : "-");
-      case "accounting_status":
-        return item.accounting_status_name || item.accounting_status || "-";
-      case "total_number_of_bills":
-        return item.total_number_of_bills !== undefined && item.total_number_of_bills !== null && item.total_number_of_bills !== ""
-          ? item.total_number_of_bills
-          : "-";
-      case "total_amount":
-        return item.total_amount !== undefined && item.total_amount !== null && item.total_amount !== ""
-          ? (item.total_amount !== "-" ? `฿${item.total_amount}` : "-")
-          : "-";
-      case "mileage":
-        return item.mileage !== undefined && item.mileage !== null && item.mileage !== ""
-          ? `${Number(item.mileage).toLocaleString()} กม.`
-          : "-";
-      case "pda_device":
-        return item.pda_device_name || item.pda_device || "-";
-      case "driver_name":
-        return item.driver_name || "-";
-      case "driver_phone":
-        return item.driver_phone || "-";
-      case "follower_name":
-        return Array.isArray(item.followers) && item.followers.length > 0
-          ? item.followers.map((f: any) => (typeof f === "string" ? f : f.follower_name || f.name)).join(", ")
-          : item.follower_name || "-";
-      case "created_at":
-        return item.created_at || item.release_date || "-";
-      case "description":
-        return item.description || item.accounting_note || "-";
-      default:
-        return item[columnId] ?? "-";
-    }
-  }, []);
+    },
+    [],
+  );
 
   // Filter Options for SearchableSelect
   const releaseStatusOptions = useMemo(
@@ -487,7 +520,7 @@ export const CarReleaseList: React.FC = () => {
       if (saved) {
         try {
           return JSON.parse(saved);
-        } catch (e) { }
+        } catch (e) {}
       }
       return {
         car_release_no: true,
@@ -538,9 +571,13 @@ export const CarReleaseList: React.FC = () => {
 
   // Car Return Drawer & Form State
   const [isReturnDrawerOpen, setIsReturnDrawerOpen] = useState(false);
-  const [returnTargetRelease, setReturnTargetRelease] = useState<any | null>(null);
+  const [returnTargetRelease, setReturnTargetRelease] = useState<any | null>(
+    null,
+  );
   const [returnMileage, setReturnMileage] = useState<number>(0);
-  const [returnKeyHolderId, setReturnKeyHolderId] = useState<string | number>("");
+  const [returnKeyHolderId, setReturnKeyHolderId] = useState<string | number>(
+    "",
+  );
   const [returnParkingId, setReturnParkingId] = useState<string | number>("");
   const [returnGasBill, setReturnGasBill] = useState<string | number>("");
   const [returnNote, setReturnNote] = useState<string>("");
@@ -591,7 +628,9 @@ export const CarReleaseList: React.FC = () => {
   const [formMileage, setFormMileage] = useState<number>(0);
   const [formAllowance, setFormAllowance] = useState<string>("");
   const [formPda, setFormPda] = useState<number>(0);
-  const [formAccountingStatus, setFormAccountingStatus] = useState<number>(0);
+  const [formAccountingStatus, setFormAccountingStatus] = useState<
+    string | number
+  >("");
   const [formDescription, setFormDescription] = useState<string>("");
 
   // Photo States (Base64 / Image URLs)
@@ -619,10 +658,24 @@ export const CarReleaseList: React.FC = () => {
   };
 
   const handleGroupChange = (gid: string) => {
-    setFormGroupStoreId(gid);
     const group = groupStores.find(
       (g) => String(g.group_store_id) === String(gid),
     );
+    const isUsed =
+      group &&
+      (usedGroupIds.has(String(group.group_store_id)) ||
+        Boolean(group.is_released) ||
+        Number(group.status) === 1 ||
+        String(group.status) === "1");
+    const isSelectedInForm = String(gid) === String(formGroupStoreId);
+    if (isUsed && !isSelectedInForm && !editingId) {
+      showError(
+        "กรุ๊ปรถนี้ได้ถูกสร้างใบปล่อยรถไปแล้วในวันนี้ ไม่สามารถเลือกซ้ำวันเดียวกันได้",
+      );
+      return;
+    }
+
+    setFormGroupStoreId(gid);
     if (group && group.car_id) {
       const matchedVeh = vehicles.find(
         (v) => String(v.car_id) === String(group.car_id),
@@ -684,7 +737,18 @@ export const CarReleaseList: React.FC = () => {
 
   const fetchMasterData = useCallback(async () => {
     try {
-      const [vRes, uRes, gRes, pRes, aRes, rtRes, khRes, pkRes, ltRes, opMenuRes] = await Promise.allSettled([
+      const [
+        vRes,
+        uRes,
+        gRes,
+        pRes,
+        aRes,
+        rtRes,
+        khRes,
+        pkRes,
+        ltRes,
+        opMenuRes,
+      ] = await Promise.allSettled([
         api.get("/master/vehicles"),
         api.get("/users/driver"),
         api.get("/master/group-stores"),
@@ -720,11 +784,21 @@ export const CarReleaseList: React.FC = () => {
       if (rtRes.status === "fulfilled" && rtRes.value.data.releaseTypes) {
         setReleaseTypes(rtRes.value.data.releaseTypes);
       }
-      if (khRes.status === "fulfilled" && (khRes.value.data.keys || khRes.value.data.keyHolders)) {
-        setKeyHolders(khRes.value.data.keys || khRes.value.data.keyHolders || []);
+      if (
+        khRes.status === "fulfilled" &&
+        (khRes.value.data.keys || khRes.value.data.keyHolders)
+      ) {
+        setKeyHolders(
+          khRes.value.data.keys || khRes.value.data.keyHolders || [],
+        );
       }
-      if (pkRes.status === "fulfilled" && (pkRes.value.data.parking || pkRes.value.data.parkings)) {
-        setParkings(pkRes.value.data.parking || pkRes.value.data.parkings || []);
+      if (
+        pkRes.status === "fulfilled" &&
+        (pkRes.value.data.parking || pkRes.value.data.parkings)
+      ) {
+        setParkings(
+          pkRes.value.data.parking || pkRes.value.data.parkings || [],
+        );
       }
       if (ltRes.status === "fulfilled" && ltRes.value.data) {
         const lTypes =
@@ -735,8 +809,15 @@ export const CarReleaseList: React.FC = () => {
           [];
         setLoadingTypesList(lTypes);
       }
-      if (opMenuRes.status === "fulfilled" && (opMenuRes.value.data.menus || opMenuRes.value.data.operationMenus)) {
-        setOperationMenus(opMenuRes.value.data.menus || opMenuRes.value.data.operationMenus || []);
+      if (
+        opMenuRes.status === "fulfilled" &&
+        (opMenuRes.value.data.menus || opMenuRes.value.data.operationMenus)
+      ) {
+        setOperationMenus(
+          opMenuRes.value.data.menus ||
+            opMenuRes.value.data.operationMenus ||
+            [],
+        );
       }
     } catch (err) {
       console.error("Fetch master options error:", err);
@@ -758,27 +839,75 @@ export const CarReleaseList: React.FC = () => {
   }, [parkings]);
 
   const visibleOperationMenus = useMemo(() => {
-    const userLevelId = String(user?.level_user_id || (user as any)?.level_id || 1);
+    const userLevelId = String(
+      user?.level_user_id || (user as any)?.level_id || 1,
+    );
     if (!operationMenus || operationMenus.length === 0) {
       return [
-        { id: 1, menu_name: "รีเซ็ตกุญแจ", action_key: "reset_key", icon: "Key" },
-        { id: 2, menu_name: "รูปให้ของ", action_key: "cargo_photo", icon: "Camera" },
-        { id: 3, menu_name: "สถานะบัญชี", action_key: "accounting", icon: "ShieldCheck" },
-        { id: 4, menu_name: "เพิ่มร้านค้า", action_key: "add_store", icon: "Plus" },
+        {
+          id: 1,
+          menu_name: "รีเซ็ตกุญแจ",
+          action_key: "reset_key",
+          icon: "Key",
+        },
+        {
+          id: 2,
+          menu_name: "รูปให้ของ",
+          action_key: "cargo_photo",
+          icon: "Camera",
+        },
+        {
+          id: 3,
+          menu_name: "สถานะบัญชี",
+          action_key: "accounting",
+          icon: "ShieldCheck",
+        },
+        {
+          id: 4,
+          menu_name: "เพิ่มร้านค้า",
+          action_key: "add_store",
+          icon: "Plus",
+        },
         { id: 5, menu_name: "ติดตาม", action_key: "followup", icon: "Truck" },
         { id: 6, menu_name: "ฝากเงิน", action_key: "deposit", icon: "Wallet" },
-        { id: 7, menu_name: "เอกสารคืนของ", action_key: "return_docs", icon: "FileText" },
-        { id: 8, menu_name: "สินค้าควบคุม", action_key: "controlled_items", icon: "PackageCheck" },
-        { id: 9, menu_name: "คืนรถ", action_key: "car_return", icon: "RotateCcw" },
-        { id: 10, menu_name: "เบี้ยเลี้ยง", action_key: "allowance", icon: "Coins" },
+        {
+          id: 7,
+          menu_name: "เอกสารคืนของ",
+          action_key: "return_docs",
+          icon: "FileText",
+        },
+        {
+          id: 8,
+          menu_name: "สินค้าควบคุม",
+          action_key: "controlled_items",
+          icon: "PackageCheck",
+        },
+        {
+          id: 9,
+          menu_name: "คืนรถ",
+          action_key: "car_return",
+          icon: "RotateCcw",
+        },
+        {
+          id: 10,
+          menu_name: "เบี้ยเลี้ยง",
+          action_key: "allowance",
+          icon: "Coins",
+        },
       ];
     }
 
     return operationMenus.filter((m: any) => {
-      const isActive = m.status === "active" || m.status === 1 || m.status === "1";
+      const isActive =
+        m.status === "active" || m.status === 1 || m.status === "1";
       if (!isActive) return false;
       if (user?.level_user_id === 1) return true;
-      if (!m.access || typeof m.access !== "object" || Object.keys(m.access).length === 0) return true;
+      if (
+        !m.access ||
+        typeof m.access !== "object" ||
+        Object.keys(m.access).length === 0
+      )
+        return true;
       return Boolean(m.access[userLevelId]);
     });
   }, [operationMenus, user]);
@@ -801,21 +930,58 @@ export const CarReleaseList: React.FC = () => {
   };
 
   // Default Loading Types fallback if master API returns empty
-  const DEFAULT_LOADING_TYPES = useMemo(() => [
-    { loading_type_id: 1, type_code: "CRATE", type_name: "ลัง", unit_name: "ลัง", is_active: 1 },
-    { loading_type_id: 2, type_code: "BASKET", type_name: "กระบะ", unit_name: "ใบ", is_active: 1 },
-    { loading_type_id: 3, type_code: "PALLET", type_name: "พาเลท", unit_name: "พาเลท", is_active: 1 },
-    { loading_type_id: 4, type_code: "BOX", type_name: "กล่อง", unit_name: "กล่อง", is_active: 1 },
-    { loading_type_id: 5, type_code: "STEEL_CAGE", type_name: "กรงเหล็ก", unit_name: "กรง", is_active: 1 },
-  ], []);
+  const DEFAULT_LOADING_TYPES = useMemo(
+    () => [
+      {
+        loading_type_id: 1,
+        type_code: "CRATE",
+        type_name: "ลัง",
+        unit_name: "ลัง",
+        is_active: 1,
+      },
+      {
+        loading_type_id: 2,
+        type_code: "BASKET",
+        type_name: "กระบะ",
+        unit_name: "ใบ",
+        is_active: 1,
+      },
+      {
+        loading_type_id: 3,
+        type_code: "PALLET",
+        type_name: "พาเลท",
+        unit_name: "พาเลท",
+        is_active: 1,
+      },
+      {
+        loading_type_id: 4,
+        type_code: "BOX",
+        type_name: "กล่อง",
+        unit_name: "กล่อง",
+        is_active: 1,
+      },
+      {
+        loading_type_id: 5,
+        type_code: "STEEL_CAGE",
+        type_name: "กรงเหล็ก",
+        unit_name: "กรง",
+        is_active: 1,
+      },
+    ],
+    [],
+  );
 
   // Active Loading Types
   const activeLoadingTypes = useMemo(() => {
-    const list = (Array.isArray(loadingTypesList) && loadingTypesList.length > 0)
-      ? loadingTypesList
-      : DEFAULT_LOADING_TYPES;
+    const list =
+      Array.isArray(loadingTypesList) && loadingTypesList.length > 0
+        ? loadingTypesList
+        : DEFAULT_LOADING_TYPES;
     return list.filter(
-      (lt: any) => lt.is_active === 1 || lt.is_active === true || lt.is_active === undefined
+      (lt: any) =>
+        lt.is_active === 1 ||
+        lt.is_active === true ||
+        lt.is_active === undefined,
     );
   }, [loadingTypesList, DEFAULT_LOADING_TYPES]);
 
@@ -827,45 +993,85 @@ export const CarReleaseList: React.FC = () => {
     // 1. Match from st.loads array
     if (Array.isArray(st.loads) && st.loads.length > 0) {
       const loadObj = st.loads.find((l: any) => {
-        if (l.loading_type_id !== undefined && Number(l.loading_type_id) === Number(lt.loading_type_id)) return true;
-        if (l.type_code && lt.type_code && String(l.type_code).trim().toUpperCase() === String(lt.type_code).trim().toUpperCase()) return true;
-        const lName = String(l.type_name || l.loading_type_name || "").trim().toLowerCase();
-        const ltName = String(lt.type_name || lt.loading_type_name || "").trim().toLowerCase();
-        if (lName && ltName && (lName.includes(ltName) || ltName.includes(lName))) return true;
+        if (
+          l.loading_type_id !== undefined &&
+          Number(l.loading_type_id) === Number(lt.loading_type_id)
+        )
+          return true;
+        if (
+          l.type_code &&
+          lt.type_code &&
+          String(l.type_code).trim().toUpperCase() ===
+            String(lt.type_code).trim().toUpperCase()
+        )
+          return true;
+        const lName = String(l.type_name || l.loading_type_name || "")
+          .trim()
+          .toLowerCase();
+        const ltName = String(lt.type_name || lt.loading_type_name || "")
+          .trim()
+          .toLowerCase();
+        if (
+          lName &&
+          ltName &&
+          (lName.includes(ltName) || ltName.includes(lName))
+        )
+          return true;
         return false;
       });
       if (loadObj) qty = Number(loadObj.quantity || loadObj.qty || 0);
     }
 
     // 2. Match from property key st[`loading_type_${lt.loading_type_id}`]
-    if (!qty && lt.loading_type_id !== undefined && st[`loading_type_${lt.loading_type_id}`] !== undefined) {
+    if (
+      !qty &&
+      lt.loading_type_id !== undefined &&
+      st[`loading_type_${lt.loading_type_id}`] !== undefined
+    ) {
       qty = Number(st[`loading_type_${lt.loading_type_id}`] || 0);
     }
 
     // 3. Match from property key st[`load_${lt.type_code}`] or st[`load_${lt.loading_type_id}`]
-    if (!qty && lt.type_code && st[`load_${String(lt.type_code).toLowerCase()}`] !== undefined) {
+    if (
+      !qty &&
+      lt.type_code &&
+      st[`load_${String(lt.type_code).toLowerCase()}`] !== undefined
+    ) {
       qty = Number(st[`load_${String(lt.type_code).toLowerCase()}`] || 0);
     }
 
     // 4. Match fallback from st.loading_type_name
     if (!qty && st.loading_type_name) {
       const name = String(st.loading_type_name).trim().toLowerCase();
-      const ltName = String(lt.type_name || lt.loading_type_name || "").trim().toLowerCase();
+      const ltName = String(lt.type_name || lt.loading_type_name || "")
+        .trim()
+        .toLowerCase();
       if (name && ltName && (name.includes(ltName) || ltName.includes(name))) {
         qty = Number(st.sum_quantity || st.quantity || 1);
       }
     }
 
     // 5. Fallback for legacy columns load1 (CRATE/ลัง) if type_code is CRATE or type_name contains ลัง
-    if (!qty && (lt.type_code === "CRATE" || String(lt.type_name).includes("ลัง"))) {
+    if (
+      !qty &&
+      (lt.type_code === "CRATE" || String(lt.type_name).includes("ลัง"))
+    ) {
       if (st.load1 !== undefined && st.load1 !== null && Number(st.load1) > 0) {
         qty = Number(st.load1 || 0);
       }
     }
 
     // 6. Generic fallback: if store has sum_quantity and no loads array specified, assign sum_quantity to CRATE / first default
-    if (!qty && Number(st.sum_quantity || st.quantity) > 0 && (!st.loads || st.loads.length === 0)) {
-      if (lt.type_code === "CRATE" || String(lt.type_name).includes("ลัง") || Number(lt.loading_type_id) === 1) {
+    if (
+      !qty &&
+      Number(st.sum_quantity || st.quantity) > 0 &&
+      (!st.loads || st.loads.length === 0)
+    ) {
+      if (
+        lt.type_code === "CRATE" ||
+        String(lt.type_name).includes("ลัง") ||
+        Number(lt.loading_type_id) === 1
+      ) {
         qty = Number(st.sum_quantity || st.quantity || 0);
       }
     }
@@ -921,7 +1127,7 @@ export const CarReleaseList: React.FC = () => {
       }
 
       const pName = String(
-        st.payment_name || st.payment_type_name || st.payment_type || ""
+        st.payment_name || st.payment_type_name || st.payment_type || "",
       ).toLowerCase();
       const amt = Number(st.amount || st.sum_amount || 0);
       totalAmount += amt;
@@ -946,7 +1152,12 @@ export const CarReleaseList: React.FC = () => {
     });
 
     // Compute summary for active cargo loading types
-    const loadingSummary: { loading_type_id: number; type_name: string; unit_name: string; totalQty: number }[] = [];
+    const loadingSummary: {
+      loading_type_id: number;
+      type_name: string;
+      unit_name: string;
+      totalQty: number;
+    }[] = [];
     let totalCargoQty = 0;
 
     activeLoadingTypes.forEach((lt: any) => {
@@ -1075,7 +1286,11 @@ export const CarReleaseList: React.FC = () => {
     return todayGroups.map((g) => {
       const veh = vehicles.find((v) => String(v.car_id) === String(g.car_id));
       const plate = veh ? veh.license_plate : g.license_plate || "";
-      const isUsed = usedGroupIds.has(String(g.group_store_id));
+      const isUsed =
+        usedGroupIds.has(String(g.group_store_id)) ||
+        Boolean(g.is_released) ||
+        Number(g.status) === 1 ||
+        String(g.status) === "1";
       const isSelectedInForm =
         String(g.group_store_id) === String(formGroupStoreId);
 
@@ -1158,10 +1373,13 @@ export const CarReleaseList: React.FC = () => {
   }, [pdaDevices]);
 
   const accountingOptions = useMemo(() => {
-    return accountingStatuses.map((acc) => ({
-      value: acc.status_id,
-      label: acc.status_name,
-    }));
+    return [
+      { value: "", label: "-- ไม่ระบุ (ว่าง) --" },
+      ...accountingStatuses.map((acc) => ({
+        value: acc.status_id,
+        label: acc.status_name,
+      })),
+    ];
   }, [accountingStatuses]);
 
   // SearchableSelect options for filters
@@ -1175,7 +1393,43 @@ export const CarReleaseList: React.FC = () => {
     ];
   }, [accountingStatuses]);
 
+  const isDriverUser = useMemo(() => {
+    if (!user) return false;
+    const levelId = Number(user.level_user_id || (user as any).level_id);
+    const accessId = Number((user as any).access_id);
+    const levelName = String(
+      user.level_user_name || (user as any).level_name || "",
+    ).toLowerCase();
+    const accessName = String((user as any).access_name || "").toLowerCase();
+
+    const isAdmin =
+      levelId === 1 ||
+      levelId === 2 ||
+      accessId === 1 ||
+      accessId === 2 ||
+      /admin|administrator|แอดมิน|supervisor|manager|หัวหน้า/i.test(
+        levelName,
+      ) ||
+      /admin|administrator|แอดมิน|supervisor|manager|หัวหน้า/i.test(accessName);
+
+    return (
+      !isAdmin &&
+      (levelId === 3 ||
+        accessId === 3 ||
+        /driver|พนักงานขับรถ|คนขับ|staff|เซลส์/i.test(levelName) ||
+        /driver|พนักงานขับรถ|คนขับ|staff|เซลส์/i.test(accessName))
+    );
+  }, [user]);
+
   const driverFilterOptions = useMemo(() => {
+    if (isDriverUser && user?.user_id) {
+      return [
+        {
+          value: String(user.user_id),
+          label: `${user.name || "ตัวเอง"} (ตัวเอง)`,
+        },
+      ];
+    }
     return [
       { value: "all", label: "-- ทั้งหมด --" },
       ...drivers.map((d) => ({
@@ -1183,7 +1437,7 @@ export const CarReleaseList: React.FC = () => {
         label: d.name,
       })),
     ];
-  }, [drivers]);
+  }, [drivers, isDriverUser, user]);
 
   const licensePlateFilterOptions = useMemo(() => {
     return [
@@ -1219,6 +1473,12 @@ export const CarReleaseList: React.FC = () => {
           limit: itemsPerPage,
           search: search,
           date: selectedDate,
+          driver_id:
+            isDriverUser && user?.user_id
+              ? String(user.user_id)
+              : filterDriverId !== "all"
+                ? filterDriverId
+                : undefined,
         },
       });
       if (res.data.success && Array.isArray(res.data.releases)) {
@@ -1237,14 +1497,21 @@ export const CarReleaseList: React.FC = () => {
           brand: r.brand || "",
           model: r.model || "",
           sub_model: r.sub_model || "",
-          brand_model: [r.brand, r.model, r.sub_model].filter(Boolean).join(" ") || r.brand_model || "-",
+          brand_model:
+            [r.brand, r.model, r.sub_model].filter(Boolean).join(" ") ||
+            r.brand_model ||
+            "-",
           is_returned: !!r.is_returned,
           completedStores: r.completed_stores || 0,
           totalStores: r.total_stores || 0,
           allowance: r.allowance || "-",
           allowance_paid: r.allowance_paid || "-",
           total_number_of_bills: r.total_number_of_bills ?? 0,
-          total_amount: r.total_amount ? Number(r.total_amount).toLocaleString("th-TH", { minimumFractionDigits: 2 }) : "0.00",
+          total_amount: r.total_amount
+            ? Number(r.total_amount).toLocaleString("th-TH", {
+                minimumFractionDigits: 2,
+              })
+            : "0.00",
           accounting_status_name: r.accounting_status_name || "-",
           accounting_status_id: r.accounting_status_id || "-",
           mileage: r.mileage || 0,
@@ -1257,7 +1524,8 @@ export const CarReleaseList: React.FC = () => {
           dateGroup: formatDateNumeric(r.created_at || Date.now()),
           dateCount: 5,
           pda_device: r.pda_device || "-",
-          pda_device_name: r.pda_device_name || (r.pda_device ? `PDA-${r.pda_device}` : "-"),
+          pda_device_name:
+            r.pda_device_name || (r.pda_device ? `PDA-${r.pda_device}` : "-"),
           created_at: formatDateNumeric(r.created_at),
           description: r.description || "-",
           image_mileage: r.image_mileage || "",
@@ -1277,7 +1545,15 @@ export const CarReleaseList: React.FC = () => {
     } catch (err) {
       console.error("Fetch car release error:", err);
     }
-  }, [currentPage, itemsPerPage, search, selectedDate]);
+  }, [
+    currentPage,
+    itemsPerPage,
+    search,
+    selectedDate,
+    filterDriverId,
+    isDriverUser,
+    user,
+  ]);
 
   useEffect(() => {
     fetchReleases();
@@ -1291,15 +1567,20 @@ export const CarReleaseList: React.FC = () => {
     setFormCarId("");
     setFormPlateText("");
     setFormCarBrandModel("");
-    setFormUserId("");
-    setFormDriverName("");
+    if (isDriverUser && user?.user_id) {
+      setFormUserId(user.user_id);
+      setFormDriverName(user.name || "");
+    } else {
+      setFormUserId("");
+      setFormDriverName("");
+    }
     setFormReleaseTypeId("1");
     setFormFollowers([]);
     setFollowerSearch("");
     setFormMileage(0);
     setFormAllowance("");
     setFormPda(pdaDevices[0]?.device_name || pdaDevices[0]?.device_code || "");
-    setFormAccountingStatus(accountingStatuses[0]?.status_id || "");
+    setFormAccountingStatus("");
     setFormDescription("");
     setGroupStoresPreview([]);
 
@@ -1385,7 +1666,9 @@ export const CarReleaseList: React.FC = () => {
     const currentStatusId =
       rel.accounting_status_id ||
       rel.accounting_status ||
-      (accountingStatuses[0]?.status_id || accountingStatuses[0]?.id || "");
+      accountingStatuses[0]?.status_id ||
+      accountingStatuses[0]?.id ||
+      "";
     const currentNote = rel.accounting_note || rel.description || "";
     setAccFormStatusId(currentStatusId);
     setAccFormNote(currentNote);
@@ -1397,12 +1680,15 @@ export const CarReleaseList: React.FC = () => {
     if (!selectedRelease?.car_release_id) return;
     setIsSubmittingAcc(true);
     try {
-      const res = await api.patch(`/car-release/${selectedRelease.car_release_id}/accounting`, {
-        accounting_status: accFormStatusId,
-        accounting_status_id: accFormStatusId,
-        accounting_note: accFormNote,
-        description: accFormNote,
-      });
+      const res = await api.patch(
+        `/car-release/${selectedRelease.car_release_id}/accounting`,
+        {
+          accounting_status: accFormStatusId,
+          accounting_status_id: accFormStatusId,
+          accounting_note: accFormNote,
+          description: accFormNote,
+        },
+      );
 
       if (res.data.success) {
         showSuccess("อัปเดตสถานะทางบัญชีและหมายเหตุเรียบร้อยแล้ว");
@@ -1414,7 +1700,9 @@ export const CarReleaseList: React.FC = () => {
       }
     } catch (err: any) {
       console.error("Update accounting status error:", err);
-      showError(err.response?.data?.message || "เกิดข้อผิดพลาดในการอัปเดตสถานะทางบัญชี");
+      showError(
+        err.response?.data?.message || "เกิดข้อผิดพลาดในการอัปเดตสถานะทางบัญชี",
+      );
     } finally {
       setIsSubmittingAcc(false);
     }
@@ -1471,8 +1759,6 @@ export const CarReleaseList: React.FC = () => {
       showError(
         err?.response?.data?.message || "เกิดข้อผิดพลาดในการบันทึกข้อมูล",
       );
-    } finally {
-      setIsDrawerOpen(false);
     }
   };
 
@@ -1482,10 +1768,10 @@ export const CarReleaseList: React.FC = () => {
 
     setReturnMileage(existingReturn?.mileage || rel.mileage || 0);
     setReturnKeyHolderId(
-      existingReturn?.key_holder_id ? String(existingReturn.key_holder_id) : ""
+      existingReturn?.key_holder_id ? String(existingReturn.key_holder_id) : "",
     );
     setReturnParkingId(
-      existingReturn?.parking_id ? String(existingReturn.parking_id) : ""
+      existingReturn?.parking_id ? String(existingReturn.parking_id) : "",
     );
     setReturnGasBill(existingReturn?.gas_bill || "");
     setReturnNote(existingReturn?.note || "");
@@ -1512,7 +1798,7 @@ export const CarReleaseList: React.FC = () => {
 
     if (Number(returnMileage) < Number(returnTargetRelease.mileage || 0)) {
       showError(
-        `เลขไมล์ตอนคืน (${returnMileage}) ต้องไม่น้อยกว่าเลขไมล์ตอนออก (${returnTargetRelease.mileage})`
+        `เลขไมล์ตอนคืน (${returnMileage}) ต้องไม่น้อยกว่าเลขไมล์ตอนออก (${returnTargetRelease.mileage})`,
       );
       return;
     }
@@ -1535,7 +1821,7 @@ export const CarReleaseList: React.FC = () => {
           image_around_4: returnImgAround4,
           image_return: returnImgReturn,
           image_pda: returnImgPda,
-        }
+        },
       );
 
       if (res.data.success) {
@@ -1553,7 +1839,7 @@ export const CarReleaseList: React.FC = () => {
       }
     } catch (err: any) {
       showError(
-        err?.response?.data?.message || "เกิดข้อผิดพลาดในการบันทึกการคืนรถ"
+        err?.response?.data?.message || "เกิดข้อผิดพลาดในการบันทึกการคืนรถ",
       );
     } finally {
       setIsSubmittingReturn(false);
@@ -1747,10 +2033,11 @@ export const CarReleaseList: React.FC = () => {
           {/* Filter Toggle Button */}
           <button
             onClick={() => setShowFilterPanel((prev) => !prev)}
-            className={`text-xs font-semibold px-3 py-1.5 rounded-lg border transition-all flex items-center gap-1.5 shrink-0 ${showFilterPanel || activeFilterCount > 0
+            className={`text-xs font-semibold px-3 py-1.5 rounded-lg border transition-all flex items-center gap-1.5 shrink-0 ${
+              showFilterPanel || activeFilterCount > 0
                 ? "bg-slate-900 text-white border-slate-900 shadow-2xs"
                 : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
-              }`}
+            }`}
           >
             <Filter className="w-3.5 h-3.5" />
             <span>ตัวกรองข้อมูล</span>
@@ -1764,7 +2051,7 @@ export const CarReleaseList: React.FC = () => {
           {/* + Button opens Right Create Form Drawer */}
           <button
             onClick={handleOpenAdd}
-            className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold px-3.5 py-1.5 rounded-lg transition-colors shadow-2xs flex items-center gap-1.5 shrink-0"
+            className="bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold px-3.5 py-1.5 rounded-lg transition-colors shadow-2xs flex items-center gap-1.5 shrink-0"
           >
             <Truck className="w-3.5 h-3.5" />
             <span>สร้างใบปล่อยรถใหม่</span>
@@ -1785,10 +2072,11 @@ export const CarReleaseList: React.FC = () => {
             />
             <button
               onClick={() => updateDateFilter(getTodayDateString(), "today")}
-              className={`text-[11px] px-2.5 py-1 rounded-md font-bold transition-colors shadow-2xs ${selectedDate === getTodayDateString()
+              className={`text-[11px] px-2.5 py-1 rounded-md font-bold transition-colors shadow-2xs ${
+                selectedDate === getTodayDateString()
                   ? "bg-emerald-600 text-white"
                   : "bg-slate-100 text-slate-700 hover:bg-slate-200"
-                }`}
+              }`}
               title="ตั้งเป็นวันที่วันนี้"
             >
               วันนี้
@@ -1835,22 +2123,22 @@ export const CarReleaseList: React.FC = () => {
               filterDriverId !== "all" ||
               filterLicensePlate !== "all" ||
               search) && (
-                <button
-                  onClick={() => {
-                    setFilterReleaseStatus("all");
-                    setFilterReturnStatus("all");
-                    setFilterAccountingStatus("all");
-                    setFilterDriverId("all");
-                    setFilterLicensePlate("all");
-                    setSearch("");
-                    updateDateFilter(getTodayDateString(), "today");
-                  }}
-                  className="text-[10px] text-rose-600 hover:text-rose-800 bg-rose-50 hover:bg-rose-100 border border-rose-200 px-2 py-1 rounded-md font-semibold transition-colors flex items-center gap-1"
-                >
-                  <RotateCcw className="w-3 h-3" />
-                  <span>ล้างฟิลเตอร์</span>
-                </button>
-              )}
+              <button
+                onClick={() => {
+                  setFilterReleaseStatus("all");
+                  setFilterReturnStatus("all");
+                  setFilterAccountingStatus("all");
+                  setFilterDriverId("all");
+                  setFilterLicensePlate("all");
+                  setSearch("");
+                  updateDateFilter(getTodayDateString(), "today");
+                }}
+                className="text-[10px] text-rose-600 hover:text-rose-800 bg-rose-50 hover:bg-rose-100 border border-rose-200 px-2 py-1 rounded-md font-semibold transition-colors flex items-center gap-1"
+              >
+                <RotateCcw className="w-3 h-3" />
+                <span>ล้างฟิลเตอร์</span>
+              </button>
+            )}
           </div>
         </div>
 
@@ -2043,8 +2331,9 @@ export const CarReleaseList: React.FC = () => {
                         <tr
                           key={rel.car_release_id}
                           onClick={() => handleViewDetail(rel)}
-                          className={`hover:bg-slate-100/80 cursor-pointer transition-colors ${isSelected ? "bg-slate-100 font-semibold" : ""
-                            }`}
+                          className={`hover:bg-slate-100/80 cursor-pointer transition-colors ${
+                            isSelected ? "bg-slate-100 font-semibold" : ""
+                          }`}
                         >
                           {/* 1. เลขที่ปล่อยรถ */}
                           {visibleColumns.car_release_no !== false && (
@@ -2069,7 +2358,7 @@ export const CarReleaseList: React.FC = () => {
                                 <img
                                   src={getImageUrl(
                                     rel.car_image ||
-                                    "https://images.unsplash.com/photo-1533473359331-0135ef1b58bf?w=100&q=80",
+                                      "https://images.unsplash.com/photo-1533473359331-0135ef1b58bf?w=100&q=80",
                                   )}
                                   alt="car"
                                   className="w-7 h-7 rounded-full object-cover border border-slate-200 shrink-0"
@@ -2100,12 +2389,23 @@ export const CarReleaseList: React.FC = () => {
                                     className="h-full rounded-full transition-all duration-300"
                                     style={{
                                       width: `${rel.totalStores > 0 ? Math.min(100, Math.round((rel.completedStores / rel.totalStores) * 100)) : 0}%`,
-                                      backgroundColor: rel.group_color || "#3b82f6",
+                                      backgroundColor:
+                                        rel.group_color || "#3b82f6",
                                     }}
                                   />
                                 </div>
                                 <span className="text-[10px] font-bold text-slate-500 font-mono shrink-0">
-                                  {rel.totalStores > 0 ? Math.min(100, Math.round((rel.completedStores / rel.totalStores) * 100)) : 0}%
+                                  {rel.totalStores > 0
+                                    ? Math.min(
+                                        100,
+                                        Math.round(
+                                          (rel.completedStores /
+                                            rel.totalStores) *
+                                            100,
+                                        ),
+                                      )
+                                    : 0}
+                                  %
                                 </span>
                               </div>
                             </td>
@@ -2133,7 +2433,7 @@ export const CarReleaseList: React.FC = () => {
                             <td className="py-1 px-3 text-center">
                               {(rel.completedStores === rel.totalStores &&
                                 rel.totalStores > 0) ||
-                                rel.is_returned ? (
+                              rel.is_returned ? (
                                 <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
                                   <CheckCircle2 className="w-3 h-3" /> เสร็จสิ้น
                                 </span>
@@ -2148,16 +2448,16 @@ export const CarReleaseList: React.FC = () => {
                           {/* 8. คืนรถ */}
                           {visibleColumns.return_status !== false && (
                             <td className="py-1 px-3 text-center">
-                                {rel.is_returned ? (
-                                  <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 px-2 py-0.5 rounded-md border border-emerald-200/60 transition-colors cursor-pointer">
-                                    <CheckCircle2 className="w-3 h-3" /> คืนรถแล้ว
-                                  </span>
-                                ) : (
-                                  <span className="inline-flex items-center gap-1 text-[10px] font-bold text-rose-600 bg-rose-50 hover:bg-rose-100 px-2 py-0.5 rounded-md border border-rose-200/60 transition-colors cursor-pointer">
-                                    <XCircle className="w-3 h-3 text-rose-600" />{" "}
-                                    ยังไม่คืนรถ
-                                  </span>
-                                )}
+                              {rel.is_returned ? (
+                                <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 px-2 py-0.5 rounded-md border border-emerald-200/60 transition-colors cursor-pointer">
+                                  <CheckCircle2 className="w-3 h-3" /> คืนรถแล้ว
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 text-[10px] font-bold text-rose-600 bg-rose-50 hover:bg-rose-100 px-2 py-0.5 rounded-md border border-rose-200/60 transition-colors cursor-pointer">
+                                  <XCircle className="w-3 h-3 text-rose-600" />{" "}
+                                  ยังไม่คืนรถ
+                                </span>
+                              )}
                             </td>
                           )}
 
@@ -2185,7 +2485,9 @@ export const CarReleaseList: React.FC = () => {
                           {/* 12. ยอดเงินรวม */}
                           {visibleColumns.total_amount !== false && (
                             <td className="py-1 px-3 text-right font-mono font-bold text-emerald-700">
-                              {rel.total_amount !== "-" ? `฿${rel.total_amount}` : "-"}
+                              {rel.total_amount !== "-"
+                                ? `฿${rel.total_amount}`
+                                : "-"}
                             </td>
                           )}
 
@@ -2210,7 +2512,7 @@ export const CarReleaseList: React.FC = () => {
                                 <img
                                   src={getImageUrl(
                                     rel.driver_avatar ||
-                                    "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&q=80",
+                                      "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&q=80",
                                   )}
                                   alt={rel.driver_name}
                                   className="w-5 h-5 rounded-full object-cover border border-slate-200 shrink-0"
@@ -2243,7 +2545,10 @@ export const CarReleaseList: React.FC = () => {
 
                           {/* 19. หมายเหตุ */}
                           {visibleColumns.description !== false && (
-                            <td className="py-1 px-3 text-slate-500 max-w-xs truncate" title={rel.description}>
+                            <td
+                              className="py-1 px-3 text-slate-500 max-w-xs truncate"
+                              title={rel.description}
+                            >
                               {rel.description || "-"}
                             </td>
                           )}
@@ -2404,16 +2709,17 @@ export const CarReleaseList: React.FC = () => {
                       สถานะกรุ๊ป:
                     </span>
                     <span
-                      className={`text-[10px] font-bold px-2 py-0.5 rounded-md border shadow-2xs ${selectedGroupObj.status === 1 ||
+                      className={`text-[10px] font-bold px-2 py-0.5 rounded-md border shadow-2xs ${
+                        selectedGroupObj.status === 1 ||
                         selectedGroupObj.status === true ||
                         selectedGroupObj.is_released
-                        ? "bg-emerald-50 text-emerald-800 border-emerald-300"
-                        : "bg-red-50 text-red-800 border-red-300"
-                        }`}
+                          ? "bg-emerald-50 text-emerald-800 border-emerald-300"
+                          : "bg-red-50 text-red-800 border-red-300"
+                      }`}
                     >
                       {selectedGroupObj.status === 1 ||
-                        selectedGroupObj.status === true ||
-                        selectedGroupObj.is_released
+                      selectedGroupObj.status === true ||
+                      selectedGroupObj.is_released
                         ? "ปล่อยรถแล้ว"
                         : "ยังไม่ปล่อยรถ"}
                     </span>
@@ -2570,16 +2876,18 @@ export const CarReleaseList: React.FC = () => {
                           key={opt.value}
                           type="button"
                           onClick={() => setFormReleaseTypeId(opt.value)}
-                          className={`flex flex-col items-center justify-center py-3 px-3 rounded-xl border text-center transition-all cursor-pointer select-none ${isSelected
-                            ? "bg-blue-50/90 border-2 border-blue-500 text-blue-600 shadow-2xs font-bold ring-2 ring-blue-500/10"
-                            : "bg-white border-slate-200 text-slate-600 hover:border-slate-300 hover:bg-slate-50/80 font-medium"
-                            }`}
+                          className={`flex flex-col items-center justify-center py-3 px-3 rounded-xl border text-center transition-all cursor-pointer select-none ${
+                            isSelected
+                              ? "bg-blue-50/90 border-2 border-blue-500 text-blue-600 shadow-2xs font-bold ring-2 ring-blue-500/10"
+                              : "bg-white border-slate-200 text-slate-600 hover:border-slate-300 hover:bg-slate-50/80 font-medium"
+                          }`}
                         >
                           <IconComponent
-                            className={`w-6 h-6 mb-1.5 ${isSelected
-                              ? "text-blue-500 scale-105"
-                              : "text-slate-400"
-                              } transition-transform`}
+                            className={`w-6 h-6 mb-1.5 ${
+                              isSelected
+                                ? "text-blue-500 scale-105"
+                                : "text-slate-400"
+                            } transition-transform`}
                           />
                           <span
                             className={`text-xs tracking-tight ${isSelected ? "text-blue-600 font-bold" : "text-slate-700 font-medium"}`}
@@ -2662,12 +2970,13 @@ export const CarReleaseList: React.FC = () => {
                         return (
                           <label
                             key={u.user_id}
-                            className={`flex items-center justify-between p-1.5 rounded-md transition-colors text-xs ${isForbidden
-                              ? "opacity-50 cursor-not-allowed bg-slate-100/80"
-                              : isChecked
-                                ? "bg-blue-50/90 text-blue-900 border border-blue-200 font-semibold cursor-pointer"
-                                : "hover:bg-slate-100 text-slate-700 cursor-pointer"
-                              }`}
+                            className={`flex items-center justify-between p-1.5 rounded-md transition-colors text-xs ${
+                              isForbidden
+                                ? "opacity-50 cursor-not-allowed bg-slate-100/80"
+                                : isChecked
+                                  ? "bg-blue-50/90 text-blue-900 border border-blue-200 font-semibold cursor-pointer"
+                                  : "hover:bg-slate-100 text-slate-700 cursor-pointer"
+                            }`}
                           >
                             <div className="flex items-center gap-2 min-w-0">
                               <input
@@ -2692,7 +3001,7 @@ export const CarReleaseList: React.FC = () => {
                               <img
                                 src={getImageUrl(
                                   u.user_image ||
-                                  "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&q=80",
+                                    "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&q=80",
                                 )}
                                 alt={u.name}
                                 className="w-5 h-5 rounded-full object-cover border border-slate-200 shrink-0"
@@ -2900,10 +3209,11 @@ export const CarReleaseList: React.FC = () => {
             <div className="flex border-b border-slate-200 bg-slate-50/80 -mt-2 -mx-5 px-5 pt-1 shrink-0">
               <button
                 onClick={() => setActiveDetailTab("info")}
-                className={`py-2.5 px-4 font-bold text-xs border-b-2 flex items-center gap-2 transition-colors ${activeDetailTab === "info"
-                  ? "border-slate-900 text-slate-900 bg-white"
-                  : "border-transparent text-slate-500 hover:text-slate-800"
-                  }`}
+                className={`py-2.5 px-4 font-bold text-xs border-b-2 flex items-center gap-2 transition-colors ${
+                  activeDetailTab === "info"
+                    ? "border-slate-900 text-slate-900 bg-white"
+                    : "border-transparent text-slate-500 hover:text-slate-800"
+                }`}
               >
                 <FileText className="w-4 h-4 text-blue-600" />
                 <span>รายละเอียด</span>
@@ -2911,10 +3221,11 @@ export const CarReleaseList: React.FC = () => {
 
               <button
                 onClick={() => setActiveDetailTab("gps")}
-                className={`py-2.5 px-4 font-bold text-xs border-b-2 flex items-center gap-2 transition-colors ${activeDetailTab === "gps"
-                  ? "border-slate-900 text-slate-900 bg-white"
-                  : "border-transparent text-slate-500 hover:text-slate-800"
-                  }`}
+                className={`py-2.5 px-4 font-bold text-xs border-b-2 flex items-center gap-2 transition-colors ${
+                  activeDetailTab === "gps"
+                    ? "border-slate-900 text-slate-900 bg-white"
+                    : "border-transparent text-slate-500 hover:text-slate-800"
+                }`}
               >
                 <Truck className="w-4 h-4 text-emerald-600 animate-pulse" />
                 <span>ติดตาม GPS (Live)</span>
@@ -2922,10 +3233,11 @@ export const CarReleaseList: React.FC = () => {
 
               <button
                 onClick={() => setActiveDetailTab("chat")}
-                className={`py-2.5 px-4 font-bold text-xs border-b-2 flex items-center gap-2 transition-colors ${activeDetailTab === "chat"
-                  ? "border-slate-900 text-slate-900 bg-white"
-                  : "border-transparent text-slate-500 hover:text-slate-800"
-                  }`}
+                className={`py-2.5 px-4 font-bold text-xs border-b-2 flex items-center gap-2 transition-colors ${
+                  activeDetailTab === "chat"
+                    ? "border-slate-900 text-slate-900 bg-white"
+                    : "border-transparent text-slate-500 hover:text-slate-800"
+                }`}
               >
                 <MessageSquare className="w-4 h-4 text-blue-600" />
                 <span>แชทสื่อสาร (Chat)</span>
@@ -2949,9 +3261,13 @@ export const CarReleaseList: React.FC = () => {
                       const isAccountingAction =
                         menu.action_key === "accounting" ||
                         menu.action_key === "accounting_status" ||
-                        (menu.menu_name && menu.menu_name.includes("สถานะบัญชี"));
-                      const isAlreadyReturned =
-                        Boolean(selectedRelease?.is_returned || selectedRelease?.car_return || selectedRelease?.return_date);
+                        (menu.menu_name &&
+                          menu.menu_name.includes("สถานะบัญชี"));
+                      const isAlreadyReturned = Boolean(
+                        selectedRelease?.is_returned ||
+                        selectedRelease?.car_return ||
+                        selectedRelease?.return_date,
+                      );
 
                       const isDisabled = isCarReturnAction && isAlreadyReturned;
 
@@ -2971,7 +3287,9 @@ export const CarReleaseList: React.FC = () => {
                           key={menu.id || menu.action_key}
                           onClick={handleActionClick}
                           disabled={isDisabled}
-                          title={isDisabled ? "คืนรถเรียบร้อยแล้ว" : menu.menu_name}
+                          title={
+                            isDisabled ? "คืนรถเรียบร้อยแล้ว" : menu.menu_name
+                          }
                           className={`flex flex-col items-center justify-center p-2 rounded-lg border transition-all ${
                             isDisabled
                               ? "opacity-40 cursor-not-allowed bg-slate-100 border-slate-200 text-slate-400"
@@ -3040,8 +3358,8 @@ export const CarReleaseList: React.FC = () => {
                           loading="lazy"
                           src={getImageUrl(
                             selectedRelease.driver_avatar ||
-                            selectedRelease.user_image ||
-                            "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&q=80",
+                              selectedRelease.user_image ||
+                              "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&q=80",
                           )}
                           alt={selectedRelease.driver_name}
                           className="w-6 h-6 rounded-full object-cover border border-slate-200 shrink-0"
@@ -3086,19 +3404,22 @@ export const CarReleaseList: React.FC = () => {
                       </span>
                       <div className="flex flex-wrap gap-1">
                         {Array.isArray(selectedRelease.followers) &&
-                          selectedRelease.followers.length > 0 ? (
+                        selectedRelease.followers.length > 0 ? (
                           selectedRelease.followers.map(
                             (f: any, idx: number) => (
                               <span
                                 key={idx}
                                 className="bg-blue-50 text-blue-700 border border-blue-200 px-2 py-0.5 rounded text-[11px] font-medium inline-flex items-center gap-1"
                               >
-                                <span>{typeof f === "string" ? f : f.follower_name}</span>
-                                {typeof f === "object" && (f.follower_phone || f.phone) && (
-                                  <span className="font-mono text-[10px] text-blue-600">
-                                    ({f.follower_phone || f.phone})
-                                  </span>
-                                )}
+                                <span>
+                                  {typeof f === "string" ? f : f.follower_name}
+                                </span>
+                                {typeof f === "object" &&
+                                  (f.follower_phone || f.phone) && (
+                                    <span className="font-mono text-[10px] text-blue-600">
+                                      ({f.follower_phone || f.phone})
+                                    </span>
+                                  )}
                               </span>
                             ),
                           )
@@ -3116,9 +3437,14 @@ export const CarReleaseList: React.FC = () => {
                       </span>
                       <span className="font-medium text-slate-800 font-mono">
                         {selectedRelease.follower_phone ||
-                          (Array.isArray(selectedRelease.followers) && selectedRelease.followers.length > 0
+                          (Array.isArray(selectedRelease.followers) &&
+                          selectedRelease.followers.length > 0
                             ? selectedRelease.followers
-                                .map((f: any) => (typeof f === "object" ? f.follower_phone || f.phone : null))
+                                .map((f: any) =>
+                                  typeof f === "object"
+                                    ? f.follower_phone || f.phone
+                                    : null,
+                                )
                                 .filter(Boolean)
                                 .join(", ") || "-"
                             : "-")}
@@ -3139,7 +3465,11 @@ export const CarReleaseList: React.FC = () => {
                         วันที่ออกรถ
                       </span>
                       <span className="font-medium text-slate-800 font-mono">
-                        {formatDateTimeString(selectedRelease.created_at || selectedRelease.release_date || selectedRelease.dateGroup)}
+                        {formatDateTimeString(
+                          selectedRelease.created_at ||
+                            selectedRelease.release_date ||
+                            selectedRelease.dateGroup,
+                        )}
                       </span>
                     </div>
                   </div>
@@ -3169,21 +3499,44 @@ export const CarReleaseList: React.FC = () => {
                   <div className="grid grid-cols-4 sm:grid-cols-8 gap-2 pt-1">
                     {(() => {
                       const photoItems = [
-                        { label: "เลขไมล์", val: selectedRelease.image_mileage },
+                        {
+                          label: "เลขไมล์",
+                          val: selectedRelease.image_mileage,
+                        },
                         { label: "หน้ารถ", val: selectedRelease.image_front },
-                        { label: "รอบคัน 1", val: selectedRelease.image_around_1 },
-                        { label: "รอบคัน 2", val: selectedRelease.image_around_2 },
-                        { label: "รอบคัน 3", val: selectedRelease.image_around_3 },
-                        { label: "รอบคัน 4", val: selectedRelease.image_around_4 },
-                        { label: "รอบคัน 5", val: selectedRelease.image_around_5 },
-                        { label: "อุปกรณ์ PDA", val: selectedRelease.image_pda },
+                        {
+                          label: "รอบคัน 1",
+                          val: selectedRelease.image_around_1,
+                        },
+                        {
+                          label: "รอบคัน 2",
+                          val: selectedRelease.image_around_2,
+                        },
+                        {
+                          label: "รอบคัน 3",
+                          val: selectedRelease.image_around_3,
+                        },
+                        {
+                          label: "รอบคัน 4",
+                          val: selectedRelease.image_around_4,
+                        },
+                        {
+                          label: "รอบคัน 5",
+                          val: selectedRelease.image_around_5,
+                        },
+                        {
+                          label: "อุปกรณ์ PDA",
+                          val: selectedRelease.image_pda,
+                        },
                       ].filter((item) => !!item.val);
 
-                      const lightboxList: LightboxImage[] = photoItems.map((item) => ({
-                        url: getImageUrl(item.val),
-                        title: `รูปถ่ายปล่อยรถ (${selectedRelease.car_release_no}): ${item.label}`,
-                        description: `ทะเบียน: ${selectedRelease.license_plate} | พนักงาน: ${selectedRelease.driver_name || "ไม่ระบุ"}`,
-                      }));
+                      const lightboxList: LightboxImage[] = photoItems.map(
+                        (item) => ({
+                          url: getImageUrl(item.val),
+                          title: `รูปถ่ายปล่อยรถ (${selectedRelease.car_release_no}): ${item.label}`,
+                          description: `ทะเบียน: ${selectedRelease.license_plate} | พนักงาน: ${selectedRelease.driver_name || "ไม่ระบุ"}`,
+                        }),
+                      );
 
                       if (photoItems.length === 0) {
                         return (
@@ -3224,7 +3577,10 @@ export const CarReleaseList: React.FC = () => {
                         <div className="flex flex-wrap items-center justify-between gap-2">
                           <h4 className="font-bold text-slate-900 text-xs flex items-center gap-2">
                             <PackageCheck className="w-4 h-4 text-blue-600" />
-                            <span>ตารางรายการจุดจัดส่งในกรุ๊ป ({selectedRelease.stores.length} ร้าน)</span>
+                            <span>
+                              ตารางรายการจุดจัดส่งในกรุ๊ป (
+                              {selectedRelease.stores.length} ร้าน)
+                            </span>
                           </h4>
                         </div>
 
@@ -3237,7 +3593,9 @@ export const CarReleaseList: React.FC = () => {
                                 <Clock className="w-3 h-3 text-slate-400" />
                                 <span>สถานะการจัดส่ง</span>
                               </span>
-                              <span>รวม {deliverySummary.totalStores} ร้าน</span>
+                              <span>
+                                รวม {deliverySummary.totalStores} ร้าน
+                              </span>
                             </div>
 
                             <div className="grid grid-cols-3 gap-2">
@@ -3245,7 +3603,9 @@ export const CarReleaseList: React.FC = () => {
                               <div className="bg-slate-50/80 rounded-lg p-2 text-center border border-slate-100">
                                 <div className="flex items-center justify-center gap-1 mb-0.5">
                                   <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
-                                  <span className="text-[10px] font-semibold text-slate-600">รอดำเนินการ</span>
+                                  <span className="text-[10px] font-semibold text-slate-600">
+                                    รอดำเนินการ
+                                  </span>
                                 </div>
                                 <div className="text-sm font-bold text-slate-900 font-mono">
                                   {deliverySummary.pendingCount}
@@ -3256,7 +3616,9 @@ export const CarReleaseList: React.FC = () => {
                               <div className="bg-slate-50/80 rounded-lg p-2 text-center border border-slate-100">
                                 <div className="flex items-center justify-center gap-1 mb-0.5">
                                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                                  <span className="text-[10px] font-semibold text-slate-600">เสร็จสิ้น</span>
+                                  <span className="text-[10px] font-semibold text-slate-600">
+                                    เสร็จสิ้น
+                                  </span>
                                 </div>
                                 <div className="text-sm font-bold text-slate-900 font-mono">
                                   {deliverySummary.completedCount}
@@ -3267,7 +3629,9 @@ export const CarReleaseList: React.FC = () => {
                               <div className="bg-slate-50/80 rounded-lg p-2 text-center border border-slate-100">
                                 <div className="flex items-center justify-center gap-1 mb-0.5">
                                   <span className="w-1.5 h-1.5 rounded-full bg-rose-500"></span>
-                                  <span className="text-[10px] font-semibold text-slate-600">ติดปัญหา</span>
+                                  <span className="text-[10px] font-semibold text-slate-600">
+                                    ติดปัญหา
+                                  </span>
                                 </div>
                                 <div className="text-sm font-bold text-slate-900 font-mono">
                                   {deliverySummary.problemCount}
@@ -3283,31 +3647,45 @@ export const CarReleaseList: React.FC = () => {
                                 <Wallet className="w-3 h-3 text-slate-400" />
                                 <span>ประเภทการชำระเงิน</span>
                               </span>
-                              <span>{deliverySummary.cashCount + deliverySummary.transferCount + deliverySummary.creditCount} ออเดอร์</span>
+                              <span>
+                                {deliverySummary.cashCount +
+                                  deliverySummary.transferCount +
+                                  deliverySummary.creditCount}{" "}
+                                ออเดอร์
+                              </span>
                             </div>
 
                             <div className="grid grid-cols-3 gap-2">
                               {/* เงินสด */}
                               <div className="bg-slate-50/80 rounded-lg p-2 text-center border border-slate-100">
-                                <div className="text-[10px] font-semibold text-slate-600 mb-0.5">เงินสด</div>
+                                <div className="text-[10px] font-semibold text-slate-600 mb-0.5">
+                                  เงินสด
+                                </div>
                                 <div className="text-xs font-bold text-slate-900 font-mono truncate">
-                                  {deliverySummary.cashAmount.toLocaleString()} ฿
+                                  {deliverySummary.cashAmount.toLocaleString()}{" "}
+                                  ฿
                                 </div>
                               </div>
 
                               {/* โอน */}
                               <div className="bg-slate-50/80 rounded-lg p-2 text-center border border-slate-100">
-                                <div className="text-[10px] font-semibold text-slate-600 mb-0.5">โอน</div>
+                                <div className="text-[10px] font-semibold text-slate-600 mb-0.5">
+                                  โอน
+                                </div>
                                 <div className="text-xs font-bold text-slate-900 font-mono truncate">
-                                  {deliverySummary.transferAmount.toLocaleString()} ฿
+                                  {deliverySummary.transferAmount.toLocaleString()}{" "}
+                                  ฿
                                 </div>
                               </div>
 
                               {/* ยอดชำระเงินรวม (ย้ายมาจากด้านบน) */}
                               <div className="bg-blue-50/70 rounded-lg p-2 text-center border border-blue-100/80">
-                                <div className="text-[10px] font-semibold text-blue-900 mb-0.5 truncate">ยอดชำระรวม</div>
+                                <div className="text-[10px] font-semibold text-blue-900 mb-0.5 truncate">
+                                  ยอดชำระรวม
+                                </div>
                                 <div className="text-xs font-extrabold text-blue-700 font-mono truncate">
-                                  {deliverySummary.totalAmount.toLocaleString()} ฿
+                                  {deliverySummary.totalAmount.toLocaleString()}{" "}
+                                  ฿
                                 </div>
                               </div>
                             </div>
@@ -3320,18 +3698,34 @@ export const CarReleaseList: React.FC = () => {
                                 <PackageCheck className="w-3 h-3 text-slate-400" />
                                 <span>การโหลดสินค้า</span>
                               </span>
-                              <span>รวม {deliverySummary.totalCargoQty.toLocaleString()} รายการ</span>
+                              <span>
+                                รวม{" "}
+                                {deliverySummary.totalCargoQty.toLocaleString()}{" "}
+                                รายการ
+                              </span>
                             </div>
 
-                            {deliverySummary.loadingSummary && deliverySummary.loadingSummary.length > 0 ? (
-                              <div className={`grid gap-2 ${deliverySummary.loadingSummary.length === 1 ? 'grid-cols-1' : deliverySummary.loadingSummary.length === 2 ? 'grid-cols-2' : 'grid-cols-3'}`}>
+                            {deliverySummary.loadingSummary &&
+                            deliverySummary.loadingSummary.length > 0 ? (
+                              <div
+                                className={`grid gap-2 ${deliverySummary.loadingSummary.length === 1 ? "grid-cols-1" : deliverySummary.loadingSummary.length === 2 ? "grid-cols-2" : "grid-cols-3"}`}
+                              >
                                 {deliverySummary.loadingSummary.map((ls) => (
-                                  <div key={ls.loading_type_id} className="bg-slate-50/80 rounded-lg p-2 text-center border border-slate-100">
-                                    <div className="text-[10px] font-semibold text-slate-600 mb-0.5 truncate" title={ls.type_name}>
+                                  <div
+                                    key={ls.loading_type_id}
+                                    className="bg-slate-50/80 rounded-lg p-2 text-center border border-slate-100"
+                                  >
+                                    <div
+                                      className="text-[10px] font-semibold text-slate-600 mb-0.5 truncate"
+                                      title={ls.type_name}
+                                    >
                                       {ls.type_name}
                                     </div>
                                     <div className="text-xs font-bold text-slate-900 font-mono truncate">
-                                      {ls.totalQty.toLocaleString()} <span className="text-[10px] font-normal text-slate-500">{ls.unit_name}</span>
+                                      {ls.totalQty.toLocaleString()}{" "}
+                                      <span className="text-[10px] font-normal text-slate-500">
+                                        {ls.unit_name}
+                                      </span>
                                     </div>
                                   </div>
                                 ))}
@@ -3351,15 +3745,29 @@ export const CarReleaseList: React.FC = () => {
                             <tr className="text-left text-[11px] text-slate-700 font-semibold uppercase tracking-wider">
                               <th className="px-2.5 py-1 w-28">สถานะ</th>
                               <th className="px-2.5 py-1 w-28">รหัสออเดอร์</th>
-                              <th className="px-2.5 py-1 min-w-[200px]">ที่ตั้ง / ร้านค้า</th>
-                              <th className="px-2.5 py-1 w-32">สายรถ / ทะเบียน</th>
-                              <th className="px-2.5 py-1 w-20">ลำดับความสำคัญ</th>
-                              <th className="px-2.5 py-1 text-center w-24">จุดวาง</th>
-                              <th className="px-2.5 py-1 w-24">กำหนดเวลาไว้ที่</th>
+                              <th className="px-2.5 py-1 min-w-[200px]">
+                                ที่ตั้ง / ร้านค้า
+                              </th>
+                              <th className="px-2.5 py-1 w-32">
+                                สายรถ / ทะเบียน
+                              </th>
+                              <th className="px-2.5 py-1 w-20">
+                                ลำดับความสำคัญ
+                              </th>
+                              <th className="px-2.5 py-1 text-center w-24">
+                                จุดวาง
+                              </th>
+                              <th className="px-2.5 py-1 w-24">
+                                กำหนดเวลาไว้ที่
+                              </th>
                               <th className="px-2.5 py-1 w-36">เริ่มบริการ</th>
-                              <th className="px-2.5 py-1 w-36">สิ้นสุดบริการ</th>
+                              <th className="px-2.5 py-1 w-36">
+                                สิ้นสุดบริการ
+                              </th>
                               <th className="px-2.5 py-1 w-24">ระยะเวลาจริง</th>
-                              <th className="px-2.5 py-1 w-24 text-center">หลักฐานการส่ง</th>
+                              <th className="px-2.5 py-1 w-24 text-center">
+                                หลักฐานการส่ง
+                              </th>
                               {/* 12. Active Cargo Loading Types Headers */}
                               {activeLoadingTypes.map((lt) => (
                                 <th
@@ -3369,8 +3777,21 @@ export const CarReleaseList: React.FC = () => {
                                   {lt.type_name || lt.loading_type_name}
                                 </th>
                               ))}
-                              <th className="px-2.5 py-1 text-center w-24">จำนวนทั้งหมด</th>
-                              <th className="px-2.5 py-1 text-right w-16">จัดการ</th>
+                              <th className="px-2.5 py-1 text-center w-24">
+                                จำนวนโหลดทั้งหมด
+                              </th>
+                              <th className="px-2.5 py-1 text-center w-24">
+                                การชำระเงิน
+                              </th>
+                              <th className="px-2.5 py-1 text-center w-24">
+                                จำนวนเงินสด
+                              </th>
+                              <th className="px-2.5 py-1 text-center w-24">
+                                จำนวนเงินโอน
+                              </th>                              
+                              <th className="px-2.5 py-1 text-right w-16">
+                                จัดการ
+                              </th>
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-slate-100">
@@ -3391,7 +3812,11 @@ export const CarReleaseList: React.FC = () => {
                                   st.scheduled_time,
                                   endTime,
                                 );
-                                const actualDur = getRouteDuration(startTime, endTime);
+                                const actualDur = getRouteDuration(
+                                  startTime,
+                                  endTime,
+                                );
+                                const bypass = st.bypass ? "text-rose-800" : "text-slate-800"
 
                                 return (
                                   <tr
@@ -3425,18 +3850,33 @@ export const CarReleaseList: React.FC = () => {
                                     </td>
 
                                     {/* 2. รหัสออเดอร์ */}
-                                    <td className="px-2.5 py-1 font-mono font-bold text-slate-800">
-                                      {st.data_store_no || st.order_no || st.orderNo || "-"}
+                                    <td className={`px-2.5 py-1 font-mono font-bold flex items-center gap-1 ${bypass}`}>
+                                      {st.bypass && (
+                                        <ChevronRight className="w-4 h-4"/>
+                                      )}
+                                      {st.data_store_no ||
+                                        st.order_no ||
+                                        st.orderNo ||
+                                        "-"}
                                     </td>
 
                                     {/* 3. ที่ตั้ง / ร้านค้า */}
                                     <td className="px-2.5 py-1">
                                       <span className="font-semibold text-slate-900">
-                                        {st.store_name_result || st.store_name || st.storeName || "ร้านค้า"}
+                                        {st.store_name_result ||
+                                          st.store_name ||
+                                          st.storeName ||
+                                          "ร้านค้า"}
                                       </span>
-                                      {(st.store_address || st.address || st.telephone_number) && (
+                                      {(st.store_address ||
+                                        st.address ||
+                                        st.telephone_number) && (
                                         <span className="text-[10px] text-slate-500 font-normal ml-1">
-                                          ({st.store_address || st.address || st.telephone_number})
+                                          (
+                                          {st.store_address ||
+                                            st.address ||
+                                            st.telephone_number}
+                                          )
                                         </span>
                                       )}
                                     </td>
@@ -3444,11 +3884,16 @@ export const CarReleaseList: React.FC = () => {
                                     {/* 4. สายรถ / ทะเบียน */}
                                     <td className="px-2.5 py-1">
                                       <span className="font-medium text-slate-800 text-[11px]">
-                                        {selectedRelease.group_store_name || "-"}
+                                        {selectedRelease.group_store_name ||
+                                          "-"}
                                       </span>
-                                      {(selectedRelease.license_plate || st.license_plate) && (
+                                      {(selectedRelease.license_plate ||
+                                        st.license_plate) && (
                                         <span className="text-[10px] font-mono text-slate-500 ml-1">
-                                          [{selectedRelease.license_plate || st.license_plate}]
+                                          [
+                                          {selectedRelease.license_plate ||
+                                            st.license_plate}
+                                          ]
                                         </span>
                                       )}
                                     </td>
@@ -3461,7 +3906,7 @@ export const CarReleaseList: React.FC = () => {
                                     {/* 6. จุดวาง */}
                                     <td className="px-2.5 py-1 text-center font-mono font-bold">
                                       {st.position_product_name ||
-                                        st.position_product_id ? (
+                                      st.position_product_id ? (
                                         <span className="inline-flex items-center text-amber-900 font-mono font-extrabold text-[10px] px-1.5 py-0.2 rounded shadow-2xs shrink-0">
                                           {st.position_product_name ||
                                             st.position_product_id}
@@ -3476,7 +3921,9 @@ export const CarReleaseList: React.FC = () => {
 
                                     {/* 7. กำหนดเวลาไว้ที่ */}
                                     <td className="px-2.5 py-1 font-mono font-bold text-slate-700">
-                                      {ed?.scheduledText || st.scheduled_time?.slice(0, 5) || "-"}
+                                      {ed?.scheduledText ||
+                                        st.scheduled_time?.slice(0, 5) ||
+                                        "-"}
                                     </td>
 
                                     {/* 8. เริ่มบริการ */}
@@ -3488,10 +3935,11 @@ export const CarReleaseList: React.FC = () => {
                                           </span>
                                           {ed.earlyDelayText && (
                                             <span
-                                              className={`text-[10px] font-bold px-1.5 py-0.2 rounded ${ed.isEarly
-                                                ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
-                                                : "bg-amber-50 text-amber-700 border border-amber-200"
-                                                }`}
+                                              className={`text-[10px] font-bold px-1.5 py-0.2 rounded ${
+                                                ed.isEarly
+                                                  ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                                                  : "bg-amber-50 text-amber-700 border border-amber-200"
+                                              }`}
                                             >
                                               {ed.earlyDelayText}
                                             </span>
@@ -3513,10 +3961,11 @@ export const CarReleaseList: React.FC = () => {
                                           </span>
                                           {edEnd.earlyDelayText && (
                                             <span
-                                              className={`text-[10px] font-bold px-1.5 py-0.2 rounded ${edEnd.isEarly
-                                                ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
-                                                : "bg-amber-50 text-amber-700 border border-amber-200"
-                                                }`}
+                                              className={`text-[10px] font-bold px-1.5 py-0.2 rounded ${
+                                                edEnd.isEarly
+                                                  ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                                                  : "bg-amber-50 text-amber-700 border border-amber-200"
+                                              }`}
                                             >
                                               {edEnd.earlyDelayText}
                                             </span>
@@ -3575,7 +4024,22 @@ export const CarReleaseList: React.FC = () => {
                                       {st.sum_quantity ?? st.quantity ?? 1}
                                     </td>
 
-                                    {/* 14. จัดการ */}
+                                    {/* 14. การชำระเงิน */}
+                                    <td className="px-2.5 py-1 text-center font-bold text-slate-900">
+                                      {st.payment_name ?? "-" }
+                                    </td>
+
+                                    {/* 15. จำนวนเงินสด */}
+                                    <td className="px-2.5 py-1 text-center font-bold text-slate-900">
+                                      {st.cash ?? "-" }
+                                    </td>
+
+                                    {/* 16. จำนวนเงินโอน */}
+                                    <td className="px-2.5 py-1 text-center font-bold text-slate-900">
+                                      {st.transfer ?? "-" }
+                                    </td>
+
+                                    {/* 17. จัดการ */}
                                     <td className="px-2.5 py-1 text-right">
                                       <button
                                         onClick={(e) => {
@@ -3670,43 +4134,70 @@ export const CarReleaseList: React.FC = () => {
                         <span>รูปถ่ายตอนคืนรถ</span>
                       </div>
                       <div className="grid grid-cols-4 sm:grid-cols-8 gap-2 pt-1">
-                      {(() => {
-                        const returnPhotoItems = [
-                          { label: "เลขไมล์คืน", val: selectedRelease.car_return.image_mileage },
-                          { label: "หน้ารถคืน", val: selectedRelease.car_return.image_front },
-                          { label: "รอบคัน 1", val: selectedRelease.car_return.image_around_1 },
-                          { label: "รอบคัน 2", val: selectedRelease.car_return.image_around_2 },
-                          { label: "รอบคัน 3", val: selectedRelease.car_return.image_around_3 },
-                          { label: "รอบคัน 4", val: selectedRelease.car_return.image_around_4 },
-                          { label: "คืนรถโดยรวม", val: selectedRelease.car_return.image_return },
-                          { label: "PDA คืน", val: selectedRelease.car_return.image_pda },
-                        ].filter((item) => !!item.val);
+                        {(() => {
+                          const returnPhotoItems = [
+                            {
+                              label: "เลขไมล์คืน",
+                              val: selectedRelease.car_return.image_mileage,
+                            },
+                            {
+                              label: "หน้ารถคืน",
+                              val: selectedRelease.car_return.image_front,
+                            },
+                            {
+                              label: "รอบคัน 1",
+                              val: selectedRelease.car_return.image_around_1,
+                            },
+                            {
+                              label: "รอบคัน 2",
+                              val: selectedRelease.car_return.image_around_2,
+                            },
+                            {
+                              label: "รอบคัน 3",
+                              val: selectedRelease.car_return.image_around_3,
+                            },
+                            {
+                              label: "รอบคัน 4",
+                              val: selectedRelease.car_return.image_around_4,
+                            },
+                            {
+                              label: "คืนรถโดยรวม",
+                              val: selectedRelease.car_return.image_return,
+                            },
+                            {
+                              label: "PDA คืน",
+                              val: selectedRelease.car_return.image_pda,
+                            },
+                          ].filter((item) => !!item.val);
 
-                        const returnLightboxList: LightboxImage[] = returnPhotoItems.map((item) => ({
-                          url: getImageUrl(item.val),
-                          title: `รูปถ่ายคืนรถ (${selectedRelease.car_release_no}): ${item.label}`,
-                          description: `ทะเบียน: ${selectedRelease.license_plate} | เวลาคืนรถ: ${selectedRelease.car_return.created_at || "-"}`,
-                        }));
+                          const returnLightboxList: LightboxImage[] =
+                            returnPhotoItems.map((item) => ({
+                              url: getImageUrl(item.val),
+                              title: `รูปถ่ายคืนรถ (${selectedRelease.car_release_no}): ${item.label}`,
+                              description: `ทะเบียน: ${selectedRelease.license_plate} | เวลาคืนรถ: ${selectedRelease.car_return.created_at || "-"}`,
+                            }));
 
-                        return returnPhotoItems.map((item, idx) => (
-                          <div
-                            key={idx}
-                            onClick={() => openLightbox(returnLightboxList, idx)}
-                            className="border border-slate-200 rounded-lg overflow-hidden bg-slate-100 aspect-video relative group shadow-2xs cursor-pointer hover:border-emerald-500 hover:shadow-md transition-all"
-                            title={`คลิกเพื่อดูและขยายรูป ${item.label}`}
-                          >
-                            <img
-                              loading="lazy"
-                              src={getImageUrl(item.val)}
-                              alt={item.label}
-                              className="w-full h-full object-cover group-hover:scale-105 transition-transform"
-                            />
-                            <div className="absolute bottom-0.5 right-0.5 bg-slate-900/80 text-white text-[8px] px-1 py-0.2 rounded font-medium">
-                              {item.label}
+                          return returnPhotoItems.map((item, idx) => (
+                            <div
+                              key={idx}
+                              onClick={() =>
+                                openLightbox(returnLightboxList, idx)
+                              }
+                              className="border border-slate-200 rounded-lg overflow-hidden bg-slate-100 aspect-video relative group shadow-2xs cursor-pointer hover:border-emerald-500 hover:shadow-md transition-all"
+                              title={`คลิกเพื่อดูและขยายรูป ${item.label}`}
+                            >
+                              <img
+                                loading="lazy"
+                                src={getImageUrl(item.val)}
+                                alt={item.label}
+                                className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                              />
+                              <div className="absolute bottom-0.5 right-0.5 bg-slate-900/80 text-white text-[8px] px-1 py-0.2 rounded font-medium">
+                                {item.label}
+                              </div>
                             </div>
-                          </div>
-                        ));
-                      })()}
+                          ));
+                        })()}
                       </div>
                     </div>
                   </div>
@@ -3791,7 +4282,8 @@ export const CarReleaseList: React.FC = () => {
                   เลขไมล์ปล่อยรถ (ตอนออก)
                 </span>
                 <span className="font-bold text-xs text-slate-900 font-mono">
-                  {Number(returnTargetRelease.mileage || 0).toLocaleString()} กม.
+                  {Number(returnTargetRelease.mileage || 0).toLocaleString()}{" "}
+                  กม.
                 </span>
               </div>
             </div>
@@ -3807,7 +4299,8 @@ export const CarReleaseList: React.FC = () => {
                 {/* Mileage */}
                 <div>
                   <label className="text-[11px] font-semibold text-slate-700 block mb-1">
-                    เลขไมล์ตอนกลับ (กม.) <span className="text-rose-500">*</span>
+                    เลขไมล์ตอนกลับ (กม.){" "}
+                    <span className="text-rose-500">*</span>
                   </label>
                   <input
                     type="number"
@@ -3817,9 +4310,11 @@ export const CarReleaseList: React.FC = () => {
                     className="w-full border border-slate-200 rounded-lg p-2 font-mono font-bold text-slate-900 focus:outline-none focus:border-blue-500 text-xs"
                     placeholder="ระบุเลขไมล์คืน..."
                   />
-                  {Number(returnMileage) < Number(returnTargetRelease.mileage || 0) && (
+                  {Number(returnMileage) <
+                    Number(returnTargetRelease.mileage || 0) && (
                     <span className="text-[10px] text-rose-500 mt-0.5 block">
-                      * ต้องไม่น้อยกว่าเลขไมล์ออก ({returnTargetRelease.mileage} กม.)
+                      * ต้องไม่น้อยกว่าเลขไมล์ออก ({returnTargetRelease.mileage}{" "}
+                      กม.)
                     </span>
                   )}
                 </div>
@@ -3968,8 +4463,11 @@ export const CarReleaseList: React.FC = () => {
         onSubmit={handleUpdateAccountingStatus}
         submitLabel={isSubmittingAcc ? "กำลังบันทึก..." : "บันทึกสถานะทางบัญชี"}
       >
-        <form id="accounting-status-form" onSubmit={handleUpdateAccountingStatus} className="space-y-4 text-xs">
-
+        <form
+          id="accounting-status-form"
+          onSubmit={handleUpdateAccountingStatus}
+          className="space-y-4 text-xs"
+        >
           {/* Select Accounting Status with SearchableSelect */}
           <div>
             <label className="block font-bold text-slate-700 mb-1">
@@ -4016,19 +4514,23 @@ export const CarReleaseList: React.FC = () => {
       <DeliveryCheckInOutModal
         isOpen={!!selectedStoreItem}
         onClose={() => setSelectedStoreItem(null)}
+        car_release_no={selectedRelease?.car_release_no}
         storeItem={selectedStoreItem}
         onStatusUpdated={async () => {
           await fetchReleases();
           if (selectedRelease) {
             try {
-              const relRes = await api.get(`/car-release/${selectedRelease.car_release_id}`);
+              const relRes = await api.get(
+                `/car-release/${selectedRelease.car_release_id}`,
+              );
               if (relRes.data.success && relRes.data.release) {
                 const freshRel = relRes.data.release;
                 setSelectedRelease(freshRel);
                 if (selectedStoreItem) {
-                  const currentId = selectedStoreItem.list_id || selectedStoreItem.id;
+                  const currentId =
+                    selectedStoreItem.list_id || selectedStoreItem.id;
                   const freshStore = (freshRel.stores || []).find(
-                    (s: any) => (s.list_id || s.id) === currentId
+                    (s: any) => (s.list_id || s.id) === currentId,
                   );
                   if (freshStore) {
                     setSelectedStoreItem(freshStore);

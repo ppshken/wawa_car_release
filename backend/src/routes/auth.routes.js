@@ -43,6 +43,8 @@ router.post('/login', async (req, res) => {
       name: user.name,
       level_user_id: user.level_user_id,
       level_user_name: user.level_user_name,
+      access_id: user.access_id,
+      access_name: user.access_name,
       setting_car_release: user.setting_car_release
     };
 

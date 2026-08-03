@@ -120,12 +120,12 @@ export const AnimatedDrawer: React.FC<AnimatedDrawerProps> = ({
             <form
               id={formId}
               onSubmit={onSubmit}
-              className="flex-1 overflow-y-auto p-5 space-y-4 text-xs custom-scrollbar"
+              className="flex-1 overflow-y-auto p-3.5 space-y-4 text-xs custom-scrollbar"
             >
               <div className="space-y-3">{children}</div>
             </form>
           ) : (
-            <div className="flex-1 overflow-y-auto pl-5 pr-5 pb-5 space-y-4 text-xs custom-scrollbar">
+            <div className="flex-1 overflow-y-auto p-3.5 space-y-4 text-xs custom-scrollbar">
               {children}
             </div>
           )}
