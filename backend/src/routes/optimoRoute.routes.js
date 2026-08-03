@@ -728,7 +728,8 @@ router.put('/stops/:listId', authenticateToken, async (req, res) => {
       scheduledTime,
       status,
       position_product_id,
-      position_production_order
+      position_production_order,
+      priority,
     } = req.body;
 
     const rowOrderNum = row_order ? parseInt(row_order, 10) : 1;
@@ -768,9 +769,10 @@ router.put('/stops/:listId', authenticateToken, async (req, res) => {
              scheduled_time = COALESCE(?, scheduled_time),
              status = COALESCE(?, status),
              position_product_id = ?,
-             position_production_order = ?
+             position_production_order = ?,
+             priority = ?
          WHERE list_id = ?`,
-        [targetGroupId, store_id || null, rowOrderNum, quantityNum, lat_long || null, store_name || null, targetOrderNo, targetScheduledTime, status || null, targetPosProdId, targetPosProdOrder, listId]
+        [targetGroupId, store_id || null, rowOrderNum, quantityNum, lat_long || null, store_name || null, targetOrderNo, targetScheduledTime, status || null, targetPosProdId, targetPosProdOrder, priority || null, listId]
       );
     } catch (eUp) {
       await query(

@@ -42,6 +42,37 @@ interface DeliveryCheckInOutModalProps {
   onStatusUpdated?: () => void;
 }
 
+function formatDateNumeric (val?: any) {
+  if (!val || val === "-") return "-";
+  if (typeof val === "string") {
+    const trimmed = val.trim();
+    if (!trimmed || trimmed === "Invalid Date") return "-";
+    if (/^\d{1,2}\/\d{1,2}\/\d{4}/.test(trimmed)) {
+      return trimmed;
+    }
+  }
+  let dateObj = new Date(val);
+  if (
+    Number.isNaN(dateObj.getTime()) &&
+    typeof val === "string" &&
+    val.includes(" ")
+  ) {
+    dateObj = new Date(val.replace(" ", "T"));
+  }
+  if (Number.isNaN(dateObj.getTime())) {
+    return typeof val === "string" && val !== "Invalid Date" ? val : "-";
+  }
+  const dd = dateObj.getDate();
+  const mmm = dateObj.getMonth() + 1;
+  const yyyy = dateObj.getFullYear();
+
+  const hh = dateObj.getHours();
+  const mm = dateObj.getMinutes();
+  const ss = dateObj.getSeconds();
+
+  return `${dd}/${mmm}/${yyyy} ${hh}:${mm}:${ss}`;
+};
+
 // Haversine distance formula in meters
 function calculateDistanceMeters(
   lat1: number,
@@ -1245,7 +1276,7 @@ export const DeliveryCheckInOutDrawer: React.FC<DeliveryCheckInOutModalProps> = 
                       <div className="flex items-center justify-between">
                         <span className="font-bold text-slate-900 text-xs">1. เช็คอินเข้าจุดส่ง</span>
                         <span className="font-mono text-[11px] text-slate-500">
-                          {storeItem.date_time_check_in || "-"}
+                          {formatDateNumeric(storeItem.date_time_check_in || "-")}
                         </span>
                       </div>
 
@@ -1320,7 +1351,7 @@ export const DeliveryCheckInOutDrawer: React.FC<DeliveryCheckInOutModalProps> = 
                           <span>2. เช็คเอาท์ (ส่งสินค้าสำเร็จ)</span>
                         </span>
                         <span className="font-mono text-[11px] text-slate-500">
-                          {storeItem.date_time_check_out || "-"}
+                          {formatDateNumeric(storeItem.date_time_check_out) || "-"}
                         </span>
                       </div>
 
@@ -1428,6 +1459,9 @@ export const DeliveryCheckInOutDrawer: React.FC<DeliveryCheckInOutModalProps> = 
                       <div className="flex items-center justify-between">
                         <span className="font-bold text-xs text-rose-950 flex items-center gap-1.5">
                           <span>ติดปัญหา: {storeItem.problem_name || "ติดปัญหาจัดส่ง"}</span>
+                        </span>
+                        <span className="font-mono text-[11px] text-slate-500">
+                          {formatDateNumeric(storeItem.date_time_problem)}
                         </span>
                       </div>
 

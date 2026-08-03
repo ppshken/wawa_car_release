@@ -123,6 +123,13 @@ interface CarReleaseData {
   created_at: string;
 }
 
+const formatMoney = (number: number | string) => {
+  return Number(number).toLocaleString("th-TH", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  });
+};
+
 const getRouteStopStatus = (store: any) => {
   if (store.problem_id || store.status === "problem") return "problem";
   if (store.check_out_id || store.status === "completed") return "completed";
@@ -174,10 +181,15 @@ const formatDateNumeric = (val?: any) => {
   if (Number.isNaN(dateObj.getTime())) {
     return typeof val === "string" && val !== "Invalid Date" ? val : "-";
   }
-  const d = dateObj.getDate();
-  const m = dateObj.getMonth() + 1;
-  const y = dateObj.getFullYear();
-  return `${d}/${m}/${y}`;
+  const dd = dateObj.getDate();
+  const mmm = dateObj.getMonth() + 1;
+  const yyyy = dateObj.getFullYear();
+
+  const hh = dateObj.getHours();
+  const mm = dateObj.getMinutes();
+  const ss = dateObj.getSeconds();
+
+  return `${dd}/${mmm}/${yyyy} ${hh}:${mm}:${ss}`;
 };
 
 const formatDateTimeString = (val?: any) => {
@@ -261,7 +273,7 @@ const getEarlyDelayBadge = (
     const abs = Math.abs(diff);
     const h = Math.floor(abs / 60);
     const m = abs % 60;
-    const txt = h > 0 ? `${h}h ${m}m early` : `${m}m early`;
+    const txt = h > 0 ? `${h}h ${m}m ก่อนเวลา` : `${m}m ก่อนเวลา`;
     return {
       scheduledText: formattedScheduled,
       startText: startTimeFormatted,
@@ -272,7 +284,7 @@ const getEarlyDelayBadge = (
   } else {
     const h = Math.floor(diff / 60);
     const m = diff % 60;
-    const txt = h > 0 ? `${h}h ${m}m delay` : `${m}m delay`;
+    const txt = h > 0 ? `${h}h ${m}m เลท` : `${m}m เลท`;
     return {
       scheduledText: formattedScheduled,
       startText: startTimeFormatted,
@@ -4026,17 +4038,17 @@ export const CarReleaseList: React.FC = () => {
 
                                     {/* 14. การชำระเงิน */}
                                     <td className="px-2.5 py-1 text-center font-bold text-slate-900">
-                                      {st.payment_name ?? "-" }
+                                      {st.payment_name ?? "-"}
                                     </td>
 
                                     {/* 15. จำนวนเงินสด */}
                                     <td className="px-2.5 py-1 text-center font-bold text-slate-900">
-                                      {st.cash ?? "-" }
+                                      {formatMoney(st.cash ?? 0)}
                                     </td>
 
                                     {/* 16. จำนวนเงินโอน */}
                                     <td className="px-2.5 py-1 text-center font-bold text-slate-900">
-                                      {st.transfer ?? "-" }
+                                      {formatMoney(st.transfer ?? 0)}
                                     </td>
 
                                     {/* 17. จัดการ */}

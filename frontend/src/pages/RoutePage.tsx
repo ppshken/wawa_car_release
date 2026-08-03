@@ -77,10 +77,10 @@ import {
 interface DeliverySettings {
   serviceTimePerStop: number;
   priorityStrategy:
-    | "fastest_time"
-    | "distance_first"
-    | "max_load_first"
-    | "order_fifo";
+  | "fastest_time"
+  | "distance_first"
+  | "max_load_first"
+  | "order_fifo";
   depotStartTime: string;
   bufferTimePerRoute: number;
 }
@@ -631,7 +631,7 @@ export const RoutePage: React.FC = () => {
       if (saved) {
         try {
           return JSON.parse(saved);
-        } catch (e) {}
+        } catch (e) { }
       }
       return {
         status: true,
@@ -749,7 +749,7 @@ export const RoutePage: React.FC = () => {
       try {
         const saved = localStorage.getItem("wawa_delivery_settings");
         if (saved) return JSON.parse(saved);
-      } catch (e) {}
+      } catch (e) { }
       return DEFAULT_DELIVERY_SETTINGS;
     },
   );
@@ -952,6 +952,7 @@ export const RoutePage: React.FC = () => {
     fetchStoresList();
   }, [fetchVehiclesList, fetchStoresList]);
 
+  // ระบบดึงรายการยังไม่จัดสาย
   const fetchUnassignedStops = useCallback(async (date: string) => {
     setLoadingUnassigned(true);
     try {
@@ -966,6 +967,7 @@ export const RoutePage: React.FC = () => {
     }
   }, []);
 
+  // ระบบดึงรายการสินค้าที่จัดวางแล้ว
   const fetchPositionProducts = useCallback(async () => {
     try {
       const res = await api.get("/master/position-product");
@@ -977,6 +979,7 @@ export const RoutePage: React.FC = () => {
     }
   }, []);
 
+  // ระบบดึงประเภทการขนถ่าย
   const fetchLoadingTypes = useCallback(async () => {
     try {
       const res = await api.get("/master/loading-types", {
@@ -1003,6 +1006,7 @@ export const RoutePage: React.FC = () => {
     selectedDate,
   ]);
 
+  // ระบบดาวน์โหลดไฟล์ Excel
   const handleDownloadSampleExcel = () => {
     try {
       const sampleData = [
@@ -1078,6 +1082,7 @@ export const RoutePage: React.FC = () => {
     }
   };
 
+  // ระบบนำเข้าไฟล์ Excel
   const handleExcelFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -1101,18 +1106,18 @@ export const RoutePage: React.FC = () => {
         const parsedStops = rawData.map((row: any, idx: number) => {
           const storeId = String(
             row["รหัสร้านค้า"] ||
-              row["store_id"] ||
-              row["Code"] ||
-              row["Location No"] ||
-              `ST-${Date.now().toString().slice(-4)}-${idx + 1}`,
+            row["store_id"] ||
+            row["Code"] ||
+            row["Location No"] ||
+            `ST-${Date.now().toString().slice(-4)}-${idx + 1}`,
           ).trim();
 
           const orderNo = String(
             row["รหัสออเดอร์"] ||
-              row["order_no"] ||
-              row["data_store_no"] ||
-              row["Order No"] ||
-              `ORD-${Date.now().toString().slice(-4)}-${idx + 1}`,
+            row["order_no"] ||
+            row["data_store_no"] ||
+            row["Order No"] ||
+            `ORD-${Date.now().toString().slice(-4)}-${idx + 1}`,
           ).trim();
 
           // Dynamic Cargo Loading Type Detection from Excel Columns
@@ -1151,34 +1156,34 @@ export const RoutePage: React.FC = () => {
             totalLoadsSum > 0
               ? totalLoadsSum
               : parseInt(
-                  row["จำนวนสินค้า"] ||
-                    row["จำนวน"] ||
-                    row["sum_quantity"] ||
-                    row["quantity"] ||
-                    row["Qty"] ||
-                    "1",
-                  10,
-                ) || 1;
+                row["จำนวนสินค้า"] ||
+                row["จำนวน"] ||
+                row["sum_quantity"] ||
+                row["quantity"] ||
+                row["Qty"] ||
+                "1",
+                10,
+              ) || 1;
 
           const positionValue = String(
             row["ตำแหน่งวางสินค้า"] ||
-              row["position_product"] ||
-              row["position_product_id"] ||
-              row["Position Product"] ||
-              "",
+            row["position_product"] ||
+            row["position_product_id"] ||
+            row["Position Product"] ||
+            "",
           ).trim();
           const matchedPosition = positionProductsList.find(
             (position) =>
               String(position.position_product_id) === positionValue ||
               String(position.position_product_name).trim().toLowerCase() ===
-                positionValue.toLowerCase(),
+              positionValue.toLowerCase(),
           );
           const positionOrder =
             parseInt(
               row["แถว"] ||
-                row["position_production_order"] ||
-                row["Position Row"] ||
-                "1",
+              row["position_production_order"] ||
+              row["Position Row"] ||
+              "1",
               10,
             ) || 1;
 
@@ -1190,27 +1195,27 @@ export const RoutePage: React.FC = () => {
 
           const storeName = String(
             row["ชื่อร้านค้า"] ||
-              row["store_name"] ||
-              row["Name"] ||
-              row["Store Name"] ||
-              (foundMaster ? foundMaster.store_name : `ร้านค้า ${storeId}`),
+            row["store_name"] ||
+            row["Name"] ||
+            row["Store Name"] ||
+            (foundMaster ? foundMaster.store_name : `ร้านค้า ${storeId}`),
           ).trim();
 
           const address = String(
             row["ที่อยู่"] ||
-              row["address"] ||
-              row["Address"] ||
-              row["Store Address"] ||
-              (foundMaster ? foundMaster.store_address || "" : ""),
+            row["address"] ||
+            row["Address"] ||
+            row["Store Address"] ||
+            (foundMaster ? foundMaster.store_address || "" : ""),
           ).trim();
 
           const latLong = String(
             row["พิกัด"] ||
-              row["lat_long"] ||
-              row["location"] ||
-              row["GPS"] ||
-              row["Coordinates"] ||
-              (foundMaster ? foundMaster.store_location || "" : ""),
+            row["lat_long"] ||
+            row["location"] ||
+            row["GPS"] ||
+            row["Coordinates"] ||
+            (foundMaster ? foundMaster.store_location || "" : ""),
           ).trim();
 
           return {
@@ -1249,6 +1254,7 @@ export const RoutePage: React.FC = () => {
     reader.readAsBinaryString(file);
   };
 
+  // ระบบเพิ่มแถวว่างใน Excel
   const handleAddEmptyExcelRow = () => {
     const newRow = {
       id: `preview-manual-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
@@ -1266,7 +1272,7 @@ export const RoutePage: React.FC = () => {
     setExcelPreviewStops((prev) => [...prev, newRow]);
   };
 
-  // ─── Multi-Add Handlers ───
+  // ระบบเพิ่มรายการรวดเร็ว
   const handleOpenMultiAddDrawer = () => {
     const initialRows = Array.from({ length: 5 }, (_, i) => ({
       id: `multi-${Date.now()}-${i}-${Math.random().toString(36).slice(2, 6)}`,
@@ -1285,6 +1291,7 @@ export const RoutePage: React.FC = () => {
     setIsMultiAddDrawerOpen(true);
   };
 
+  // ระบบเพิ่มแถวว่างใน Multi-Add
   const handleAddEmptyMultiAddRow = () => {
     const newRow = {
       id: `multi-manual-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
@@ -1302,6 +1309,7 @@ export const RoutePage: React.FC = () => {
     setMultiAddStops((prev) => [...prev, newRow]);
   };
 
+  // ระบบยืนยันการนำเข้าข้อมูลแบบ Multi-Add
   const handleConfirmMultiAddImport = async () => {
     const validStops = multiAddStops.filter(
       (s) => s.store_id && String(s.store_id).trim(),
@@ -1367,6 +1375,7 @@ export const RoutePage: React.FC = () => {
     }
   };
 
+  // ระบบยืนยันการนำเข้าไฟล์ Excel
   const handleConfirmExcelImport = async () => {
     if (excelPreviewStops.length === 0) {
       showError("ไม่พบรายการที่ต้องนำเข้า");
@@ -1433,6 +1442,7 @@ export const RoutePage: React.FC = () => {
     }
   };
 
+  // ระบบคำนวณเส้นทาง
   const handleRunAutoRoute = async () => {
     if (unassignedStops.length === 0) {
       showError("ไม่พบรายการรอจัดสายเพื่อคำนวณเส้นทาง");
@@ -1453,7 +1463,7 @@ export const RoutePage: React.FC = () => {
           JSON.stringify(deliverySettings),
         );
         await api.post("/optimoroute/delivery-settings", deliverySettings);
-      } catch (e) {}
+      } catch (e) { }
 
       const res = await api.post("/optimoroute/auto-route", {
         date: selectedDate,
@@ -1476,13 +1486,14 @@ export const RoutePage: React.FC = () => {
     } catch (err: any) {
       showError(
         err?.response?.data?.message ||
-          "เกิดข้อผิดพลาดในการคำนวณจัดสายรถอัตโนมัติ",
+        "เกิดข้อผิดพลาดในการคำนวณจัดสายรถอัตโนมัติ",
       );
     } finally {
       setCalculatingAutoRoute(false);
     }
   };
 
+  // ระบบเลือกรถอัตโนมัติ
   const handleAutoSelectVehicles = () => {
     const availableVehicles = vehiclesList
       .filter((v) => !v.is_assigned_today)
@@ -1518,6 +1529,7 @@ export const RoutePage: React.FC = () => {
     );
   };
 
+  // ระบบเคลียร์รายการยังไม่จัดสาย
   const handleClearUnassignedStops = async () => {
     setClearingUnassigned(true);
     try {
@@ -1527,7 +1539,7 @@ export const RoutePage: React.FC = () => {
       if (res.data.success) {
         showSuccess(
           res.data.message ||
-            `ล้างรายการยังไม่จัดสายของวันที่ ${selectedDate} สำเร็จ!`,
+          `ล้างรายการยังไม่จัดสายของวันที่ ${selectedDate} สำเร็จ!`,
         );
         await fetchUnassignedStops(selectedDate);
       } else {
@@ -1557,6 +1569,7 @@ export const RoutePage: React.FC = () => {
     lng: number;
   } | null>(null);
 
+  // todo: ดึงข้อมูล GPS Devices
   const fetchGpsDevices = useCallback(async () => {
     setGpsLoading(true);
     try {
@@ -1572,6 +1585,7 @@ export const RoutePage: React.FC = () => {
     }
   }, []);
 
+  // todo: ดึงข้อมูล GPS Devices
   useEffect(() => {
     fetchGpsDevices();
     const interval = setInterval(() => {
@@ -1581,7 +1595,7 @@ export const RoutePage: React.FC = () => {
     return () => clearInterval(interval);
   }, [fetchGpsDevices]);
 
-  // Load Real Road Geometries for Routes (OSRM Road Routing)
+  // todo: Load Real Road Geometries for Routes (OSRM Road Routing)
   useEffect(() => {
     if (!routes || routes.length === 0) {
       setRouteGeometries({});
@@ -1609,6 +1623,7 @@ export const RoutePage: React.FC = () => {
     };
   }, [routes]);
 
+  // todo: เลือก Master Store
   const handleSelectMasterStore = (storeId: string) => {
     setSelectedMasterStoreId(storeId);
     if (!storeId) return;
@@ -1624,6 +1639,7 @@ export const RoutePage: React.FC = () => {
     }
   };
 
+  // todo: สร้างกลุ่มสายจัดส่ง
   const handleCreateGroup = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newGroupName.trim()) {
@@ -1652,7 +1668,7 @@ export const RoutePage: React.FC = () => {
     } catch (err: any) {
       showError(
         err?.response?.data?.message ||
-          "เกิดข้อผิดพลาดในการสร้างกลุ่มสายจัดส่ง",
+        "เกิดข้อผิดพลาดในการสร้างกลุ่มสายจัดส่ง",
       );
     } finally {
       setCreatingGroup(false);
@@ -1694,6 +1710,7 @@ export const RoutePage: React.FC = () => {
     []
   );
 
+  // todo: ส่งออกข้อมูลเส้นทางการจัดส่ง
   const routeExportData = useMemo(() => {
     const list: any[] = [];
     routes.forEach((r) => {
@@ -1710,6 +1727,7 @@ export const RoutePage: React.FC = () => {
     return list;
   }, [routes]);
 
+  // todo: ส่งออกข้อมูลเส้นทางการจัดส่ง
   const getRouteExportValue = useCallback((item: any, columnId: string): string | number => {
     switch (columnId) {
       case "driver_name":
@@ -1732,8 +1750,8 @@ export const RoutePage: React.FC = () => {
         return item.status === "completed"
           ? "ส่งสำเร็จ"
           : item.status === "failed"
-          ? "ติดปัญหา"
-          : "กำลังจัดส่ง";
+            ? "ติดปัญหา"
+            : "กำลังจัดส่ง";
       case "scheduled_time":
         return item.scheduled_time || item.scheduledTime
           ? String(item.scheduled_time || item.scheduledTime).slice(0, 5)
@@ -1742,13 +1760,14 @@ export const RoutePage: React.FC = () => {
         return item.priority === "high"
           ? "สูง"
           : item.priority === "low"
-          ? "ต่ำ"
-          : "ปกติ";
+            ? "ต่ำ"
+            : "ปกติ";
       default:
         return item[columnId] ?? "-";
     }
   }, []);
 
+  // todo: ส่งออกข้อมูลเส้นทางการจัดส่ง
   const selectedGroupRouteObj = useMemo(() => {
     if (!formStopGroupId) return null;
     return (
@@ -1903,19 +1922,23 @@ export const RoutePage: React.FC = () => {
   const [editFormQuantity, setEditFormQuantity] = useState<number>(1);
   const [editFormLatLong, setEditFormLatLong] = useState("");
   const [editFormStatus, setEditFormStatus] = useState("pending");
+  const [editFormStopLoads, setEditFormStopLoads] = useState<Record<string, number>>({});
+  const [editFormStopScheduledTime, setEditFormStopScheduledTime] = useState("00:00");
+  const [editFormStopPriority, setEditFormStopPriority] = useState("");
   const [updatingStop, setUpdatingStop] = useState(false);
 
   // Delete Stop Confirm Modal State
   const [stopToDelete, setStopToDelete] = useState<any | null>(null);
   const [deletingStop, setDeletingStop] = useState(false);
 
+  // แก้ไขจุดจัดส่ง (Edit Stop)
   const handleOpenEditStopDrawer = (stop: any) => {
     setEditingStop(stop);
     setEditFormGroupId(
       stop.groupStoreId ||
-        stop.group_store_id ||
-        (stop.routeId ? String(stop.routeId).replace("ROUTE-", "") : "") ||
-        "",
+      stop.group_store_id ||
+      (stop.routeId ? String(stop.routeId).replace("ROUTE-", "") : "") ||
+      "",
     );
     setEditFormStoreId(stop.locationNo || stop.store_id || "");
     setEditFormOrderNo(stop.data_store_no || stop.orderNo || "");
@@ -1935,9 +1958,21 @@ export const RoutePage: React.FC = () => {
     setEditFormPositionOrder(
       stop.position_production_order || stop.positionProductionOrder || 1,
     );
+    setEditFormStopScheduledTime(stop.scheduledTime || stop.scheduled_time || "00:00");
+    setEditFormStopPriority(stop.priority || "");
+    const initLoads: Record<number, number> = {};
+    if (Array.isArray(stop.loads)) {
+      stop.loads.forEach((l: any) => {
+        if (l.loading_type_id) {
+          initLoads[l.loading_type_id] = l.quantity || 0;
+        }
+      });
+    }
+    setEditFormStopLoads(initLoads);
     setIsEditStopDrawerOpen(true);
   };
 
+  // แก้ไขจุดจัดส่ง (Edit Stop) - เลือกจาก master store
   const handleSelectEditMasterStore = (storeId: string) => {
     setEditFormStoreId(storeId);
     if (!storeId) return;
@@ -1953,6 +1988,7 @@ export const RoutePage: React.FC = () => {
     }
   };
 
+  // แก้ไขจุดจัดส่ง (Edit Stop) - บันทึก
   const handleSaveEditStop = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingStop) return;
@@ -1961,6 +1997,20 @@ export const RoutePage: React.FC = () => {
       showError("ไม่พบรหัสรายการจุดจัดส่ง (list_id)");
       return;
     }
+    const loadsPayload = Object.entries(editFormStopLoads)
+      .map(([id, qty]) => ({
+        loading_type_id: parseInt(id, 10),
+        quantity: parseInt(String(qty), 10),
+      }))
+      .filter((item) => item.quantity > 0);
+
+    const totalLoadsQty = loadsPayload.reduce(
+      (sum, item) => sum + item.quantity,
+      0,
+    );
+    const finalQuantity =
+      totalLoadsQty > 0 ? totalLoadsQty : editFormQuantity;
+
 
     setUpdatingStop(true);
     try {
@@ -1971,11 +2021,14 @@ export const RoutePage: React.FC = () => {
         store_name: editFormStoreName.trim(),
         address: editFormAddress.trim(),
         row_order: editFormRowOrder,
-        sum_quantity: editFormQuantity,
+        sum_quantity: finalQuantity,
         lat_long: editFormLatLong.trim(),
         status: editFormStatus,
         position_product_id: editFormPositionProductId || null,
         position_production_order: editFormPositionOrder || 1,
+        loads: loadsPayload,
+        scheduled_time: editFormStopScheduledTime,
+        priority: editFormStopPriority,
       });
 
       if (res.data.success) {
@@ -1996,7 +2049,7 @@ export const RoutePage: React.FC = () => {
     }
   };
 
-  // Edit Unassigned Stop Handler
+  // แก้ไขจุดจัดส่งแบบไม่เลือกกรุ๊ป (Edit Unassigned Stop)
   const handleOpenEditUnassignedStopDrawer = (stop: any) => {
     setEditingUnassignedStop(stop);
     setUnassignedEditStoreId(stop.store_id || stop.locationNo || "");
@@ -2029,6 +2082,7 @@ export const RoutePage: React.FC = () => {
     setIsEditUnassignedModalOpen(true);
   };
 
+  // แก้ไขจุดจัดส่งแบบไม่เลือกกรุ๊ป (Edit Unassigned Stop) - บันทึก
   const handleSaveEditUnassignedStop = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingUnassignedStop) return;
@@ -2087,6 +2141,7 @@ export const RoutePage: React.FC = () => {
     }
   };
 
+  // ลบจุดจัดส่ง (Delete Stop)
   const handleConfirmDeleteStop = async () => {
     if (!stopToDelete) return;
     const targetListId = stopToDelete.stopId || stopToDelete.list_id;
@@ -2120,7 +2175,7 @@ export const RoutePage: React.FC = () => {
     }
   };
 
-  // Edit Group Modal State
+  // แก้ไขกลุ่ม (Edit Group)
   const [isEditGroupModalOpen, setIsEditGroupModalOpen] = useState(false);
   const [editingGroup, setEditingGroup] = useState<any | null>(null);
   const [editGroupName, setEditGroupName] = useState("");
@@ -2129,10 +2184,11 @@ export const RoutePage: React.FC = () => {
   const [editGroupDate, setEditGroupDate] = useState(selectedDate);
   const [updatingGroup, setUpdatingGroup] = useState(false);
 
-  // Delete Group Modal State
+  // ลบกลุ่ม (Delete Group)
   const [groupToDelete, setGroupToDelete] = useState<any | null>(null);
   const [deletingGroup, setDeletingGroup] = useState(false);
 
+  // ตัวเลือกยานพาหนะสำหรับแก้ไขกลุ่ม
   const editVehicleOptions = useMemo(() => {
     const opts = vehiclesList.map((v) => ({
       value: String(v.car_id),
@@ -2154,6 +2210,7 @@ export const RoutePage: React.FC = () => {
     return opts;
   }, [vehiclesList, editGroupCarId]);
 
+  // แก้ไขกลุ่ม (Edit Group) - เปิด modal
   const handleOpenEditGroupModal = (route: any) => {
     setEditingGroup(route);
     setEditGroupName(route.groupStoreName || route.driverName || "");
@@ -2216,6 +2273,7 @@ export const RoutePage: React.FC = () => {
     setIsEditGroupModalOpen(true);
   };
 
+  // แก้ไขกลุ่ม (Edit Group) - บันทึก
   const handleSaveEditGroup = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingGroup) return;
@@ -2251,13 +2309,14 @@ export const RoutePage: React.FC = () => {
     } catch (err: any) {
       showError(
         err?.response?.data?.message ||
-          "เกิดข้อผิดพลาดในการอัปเดตกลุ่มสายจัดส่ง",
+        "เกิดข้อผิดพลาดในการอัปเดตกลุ่มสายจัดส่ง",
       );
     } finally {
       setUpdatingGroup(false);
     }
   };
 
+  // ลบกลุ่ม (Delete Group) - เปิด modal
   const handleConfirmDeleteGroup = async () => {
     if (!groupToDelete) return;
     const targetGroupId =
@@ -2287,7 +2346,7 @@ export const RoutePage: React.FC = () => {
     }
   };
 
-  // Active selected stop for Map FlyTo & Detail Card
+  // เลือกจุดจัดส่ง (Select Stop)
   const [activeStop, setActiveStop] = useState<{
     routeId: string;
     stopId: number | string;
@@ -2308,6 +2367,7 @@ export const RoutePage: React.FC = () => {
 
   const [checkInOutStore, setCheckInOutStore] = useState<any | null>(null);
 
+  // เลือกจุดจัดส่ง (Select Stop) - เปิด Detail Card & FlyTo
   const handleSelectStopRow = (stop: any) => {
     if (stop.routeId) {
       setSelectedRouteId(stop.routeId);
@@ -2344,6 +2404,7 @@ export const RoutePage: React.FC = () => {
     setCheckInOutStore(stop);
   };
 
+  // ดึงข้อมูลเส้นทาง
   const fetchRoutes = useCallback(
     async (date: string, preserveSelection: boolean = true) => {
       setLoading(true);
@@ -2378,15 +2439,19 @@ export const RoutePage: React.FC = () => {
     [showError],
   );
 
+  // เรียกใช้ fetchRoutes เมื่อ selectedDate เปลี่ยน
   useEffect(() => {
     fetchRoutes(selectedDate, false);
   }, [selectedDate, fetchRoutes]);
 
-  // Stats
+  // สถิติ (Stats)
+  // จำนวนจุดจัดส่งทั้งหมด
   const totalStops = routes.reduce(
     (sum, r) => sum + r.stops.filter((s) => s.type !== "depot").length,
     0,
   );
+
+  // จำนวนจุดจัดส่งที่เสร็จสิ้นแล้ว
   const completedStops = routes.reduce(
     (sum, r) =>
       sum +
@@ -2394,6 +2459,8 @@ export const RoutePage: React.FC = () => {
         .length,
     0,
   );
+
+  // จำนวนจุดจัดส่งที่มีปัญหา
   const problemStops = routes.reduce(
     (sum, r) =>
       sum +
@@ -2404,9 +2471,11 @@ export const RoutePage: React.FC = () => {
       ).length,
     0,
   );
+
+  // จำนวนจุดจัดส่งที่รอ
   const pendingStops = totalStops - completedStops - problemStops;
 
-  // Filter routes for left sidebar
+  // กรองเส้นทาง (Filter Routes)
   const filteredRoutes = useMemo(() => {
     if (!searchRouteText.trim()) return routes;
     const q = searchRouteText.trim().toLowerCase();
@@ -2419,7 +2488,7 @@ export const RoutePage: React.FC = () => {
     );
   }, [routes, searchRouteText]);
 
-  // Map bounds (Only compute for visible routes on map)
+  // ขอบเขตแผนที่ (Map Bounds)
   const mapBounds = useMemo(() => {
     const coords: [number, number][] = [[17.1266642, 102.9635667]];
     routes.forEach((r) => {
@@ -2432,7 +2501,7 @@ export const RoutePage: React.FC = () => {
     return coords.length > 1 ? L.latLngBounds(coords) : null;
   }, [routes, isRouteVisibleOnMap]);
 
-  // Active Vehicle Plates for filtering GPS devices
+  // กรองข้อมูลยานพาหนะที่ถูกเลือก (Active Vehicle Plates)
   const activeRouteVehicles = useMemo(() => {
     const activeRouteIds = new Set<string>();
     if (checkedRoutes.size > 0) {
@@ -2453,7 +2522,7 @@ export const RoutePage: React.FC = () => {
     return plates;
   }, [checkedRoutes, selectedRouteId, routes]);
 
-  // Scoped stops for active group/selection
+  // ขอบเขตที่จำกัดสำหรับกลุ่มที่เลือก (Scoped stops)
   const scopeStops = useMemo(() => {
     const stops: (StopData & {
       routeColor: string;
@@ -2479,32 +2548,31 @@ export const RoutePage: React.FC = () => {
     return stops;
   }, [routes, selectedRouteId]);
 
+  // จำนวนจุดจัดส่งทั้งหมดในกลุ่ม
   const scopeTotalCount = scopeStops.length;
+  // จำนวนจุดจัดส่งที่เสร็จสิ้นแล้ว
   const scopeCompletedCount = useMemo(
     () => scopeStops.filter((s) => s.status === "completed").length,
     [scopeStops],
   );
+  // จำนวนจุดจัดส่งที่มีปัญหา
   const scopeProblemCount = useMemo(
     () =>
       scopeStops.filter((s) => s.status === "problem" || s.status === "failed")
         .length,
     [scopeStops],
   );
+  // จำนวนจุดจัดส่งที่รอ
   const scopePendingCount =
     scopeTotalCount - scopeCompletedCount - scopeProblemCount;
 
-  // Bottom table stops (filtered by tab and search)
+  // ตารางด้านล่าง (Bottom Table)
   const tableStops = useMemo(() => {
     let filtered = scopeStops;
     if (bottomTab === "completed")
       filtered = scopeStops.filter((s) => s.status === "completed");
     if (bottomTab === "pending")
-      filtered = scopeStops.filter(
-        (s) =>
-          s.status !== "completed" &&
-          s.status !== "problem" &&
-          s.status !== "failed",
-      );
+      filtered = scopeStops.filter((s) => s.status === "in_progress");
     if (bottomTab === "problem")
       filtered = scopeStops.filter(
         (s) => s.status === "problem" || s.status === "failed",
@@ -2589,11 +2657,10 @@ export const RoutePage: React.FC = () => {
             <button
               onClick={() => setShowGpsVehicles((prev) => !prev)}
               title="คลิกเพื่อ เปิด/ปิด การแสดงตำแหน่งรถ GPS บนแผนที่"
-              className={`flex items-center gap-1.5 px-2 py-1 rounded-md text-[11px] font-semibold border transition-all ${
-                showGpsVehicles
+              className={`flex items-center gap-1.5 px-2 py-1 rounded-md text-[11px] font-semibold border transition-all ${showGpsVehicles
                   ? "bg-emerald-50 text-emerald-700 border-emerald-300 hover:bg-emerald-100 shadow-2xs"
                   : "bg-slate-100 text-slate-500 border-slate-200 hover:bg-slate-200"
-              }`}
+                }`}
             >
               <span
                 className={`w-2 h-2 rounded-full ${gpsLoading ? "bg-amber-400 animate-ping" : showGpsVehicles ? "bg-emerald-500" : "bg-slate-400"}`}
@@ -2663,13 +2730,12 @@ export const RoutePage: React.FC = () => {
       <div className="flex flex-col sm:flex-row flex-1 overflow-hidden">
         {/* ─── LEFT SIDEBAR (Route List + GPS Monitor) ─── */}
         <div
-          className={`bg-white border-r border-slate-200 flex flex-col shrink-0 overflow-hidden transition-all duration-200 ${
-            isMobileSidebarOpen
+          className={`bg-white border-r border-slate-200 flex flex-col shrink-0 overflow-hidden transition-all duration-200 ${isMobileSidebarOpen
               ? "w-full sm:w-80 h-64 sm:h-auto border-b sm:border-b-0"
               : isLeftPanelCollapsed
                 ? "hidden sm:flex sm:w-9"
                 : "hidden sm:flex sm:w-80"
-          }`}
+            }`}
         >
           {/* Search Routes & GPS Devices */}
           <div className="p-2 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between gap-1">
@@ -2800,11 +2866,10 @@ export const RoutePage: React.FC = () => {
                                       setSelectedRouteId(route.routeId);
                                     }
                                   }}
-                                  className={`w-3.5 h-3.5 rounded border flex items-center justify-center cursor-pointer transition-all shrink-0 ${
-                                    isChecked
+                                  className={`w-3.5 h-3.5 rounded border flex items-center justify-center cursor-pointer transition-all shrink-0 ${isChecked
                                       ? "bg-blue-600 border-blue-600 text-white shadow-2xs"
                                       : "bg-white border-slate-300 hover:border-blue-400 text-transparent"
-                                  }`}
+                                    }`}
                                   title={
                                     isChecked
                                       ? "แสดงเฉพาะสายนี้บนแผนที่"
@@ -2863,11 +2928,10 @@ export const RoutePage: React.FC = () => {
 
                               {/* Group Status Badge */}
                               <span
-                                className={`text-[9px] font-bold px-1.5 py-0.2 rounded border shrink-0 ${
-                                  route.status === 1 || route.is_released
+                                className={`text-[9px] font-bold px-1.5 py-0.2 rounded border shrink-0 ${route.status === 1 || route.is_released
                                     ? "bg-emerald-50 text-emerald-800 border-emerald-300"
                                     : "bg-red-50 text-red-800 border-red-300"
-                                }`}
+                                  }`}
                               >
                                 {route.status === 1 || route.is_released
                                   ? "ปล่อยแล้ว"
@@ -2878,16 +2942,16 @@ export const RoutePage: React.FC = () => {
                                 const totalBoxes =
                                   route.stops && route.stops.length > 0
                                     ? route.stops.reduce(
-                                        (sum, s) => sum + (s.quantity || 0),
-                                        0,
-                                      )
+                                      (sum, s) => sum + (s.quantity || 0),
+                                      0,
+                                    )
                                     : route.load1 || 0;
 
                                 const matchedVehicle = vehiclesList.find(
                                   (v) =>
                                     (route.car_id &&
                                       String(v.car_id) ===
-                                        String(route.car_id)) ||
+                                      String(route.car_id)) ||
                                     (route.vehiclePlate &&
                                       v.license_plate === route.vehiclePlate),
                                 );
@@ -3704,11 +3768,10 @@ export const RoutePage: React.FC = () => {
                     <button
                       type="button"
                       onClick={() => setAssignedTab("assigned")}
-                      className={`px-3 py-1 rounded-md text-xs font-bold transition-all flex items-center gap-1.5 ${
-                        assignedTab === "assigned"
+                      className={`px-3 py-1 rounded-md text-xs font-bold transition-all flex items-center gap-1.5 ${assignedTab === "assigned"
                           ? "bg-white text-blue-700 shadow-2xs"
                           : "text-slate-600 hover:text-slate-900"
-                      }`}
+                        }`}
                     >
                       <Truck className="w-3.5 h-3.5" />
                       <span>จัดสายแล้ว ({totalStops})</span>
@@ -3716,11 +3779,10 @@ export const RoutePage: React.FC = () => {
                     <button
                       type="button"
                       onClick={() => setAssignedTab("unassigned")}
-                      className={`px-3 py-1 rounded-md text-xs font-bold transition-all flex items-center gap-1.5 ${
-                        assignedTab === "unassigned"
+                      className={`px-3 py-1 rounded-md text-xs font-bold transition-all flex items-center gap-1.5 ${assignedTab === "unassigned"
                           ? "bg-white text-amber-700 shadow-2xs"
                           : "text-slate-600 hover:text-slate-900"
-                      }`}
+                        }`}
                     >
                       <Package className="w-3.5 h-3.5" />
                       <span>ยังไม่จัดสาย ({unassignedStops.length})</span>
@@ -3781,7 +3843,7 @@ export const RoutePage: React.FC = () => {
                               if (matched)
                                 autoGroupId = String(
                                   matched.groupStoreId ||
-                                    matched.routeId.replace("ROUTE-", ""),
+                                  matched.routeId.replace("ROUTE-", ""),
                                 );
                             }
                             if (!autoGroupId && checkedRoutes.size > 0) {
@@ -3792,13 +3854,13 @@ export const RoutePage: React.FC = () => {
                               if (matched)
                                 autoGroupId = String(
                                   matched.groupStoreId ||
-                                    matched.routeId.replace("ROUTE-", ""),
+                                  matched.routeId.replace("ROUTE-", ""),
                                 );
                             }
                             if (!autoGroupId && routes.length > 0) {
                               autoGroupId = String(
                                 routes[0].groupStoreId ||
-                                  routes[0].routeId.replace("ROUTE-", ""),
+                                routes[0].routeId.replace("ROUTE-", ""),
                               );
                             }
                             setFormStopGroupId(autoGroupId);
@@ -3819,44 +3881,40 @@ export const RoutePage: React.FC = () => {
                         <button
                           type="button"
                           onClick={() => setBottomTab("all")}
-                          className={`px-2.5 py-1 rounded-md text-[11px] font-semibold transition-colors ${
-                            bottomTab === "all"
+                          className={`px-2.5 py-1 rounded-md text-[11px] font-semibold transition-colors ${bottomTab === "all"
                               ? "bg-blue-600 text-white"
                               : "text-slate-600 hover:bg-slate-100"
-                          }`}
+                            }`}
                         >
                           ทั้งหมด ({scopeTotalCount})
                         </button>
                         <button
                           type="button"
                           onClick={() => setBottomTab("pending")}
-                          className={`px-2.5 py-1 rounded-md text-[11px] font-semibold transition-colors ${
-                            bottomTab === "pending"
+                          className={`px-2.5 py-1 rounded-md text-[11px] font-semibold transition-colors ${bottomTab === "pending"
                               ? "bg-yellow-500 text-white"
                               : "text-slate-600 hover:bg-slate-100"
-                          }`}
+                            }`}
                         >
                           รอดำเนินการ ({scopePendingCount})
                         </button>
                         <button
                           type="button"
                           onClick={() => setBottomTab("completed")}
-                          className={`px-2.5 py-1 rounded-md text-[11px] font-semibold transition-colors ${
-                            bottomTab === "completed"
+                          className={`px-2.5 py-1 rounded-md text-[11px] font-semibold transition-colors ${bottomTab === "completed"
                               ? "bg-emerald-600 text-white"
                               : "text-slate-600 hover:bg-slate-100"
-                          }`}
+                            }`}
                         >
                           สำเร็จ ({scopeCompletedCount})
                         </button>
                         <button
                           type="button"
                           onClick={() => setBottomTab("problem")}
-                          className={`px-2.5 py-1 rounded-md text-[11px] font-semibold transition-colors ${
-                            bottomTab === "problem"
+                          className={`px-2.5 py-1 rounded-md text-[11px] font-semibold transition-colors ${bottomTab === "problem"
                               ? "bg-rose-600 text-white"
                               : "text-slate-600 hover:bg-slate-100"
-                          }`}
+                            }`}
                         >
                           ติดปัญหา ({scopeProblemCount})
                         </button>
@@ -3890,11 +3948,10 @@ export const RoutePage: React.FC = () => {
                         </button>
 
                         <label
-                          className={`bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs px-2.5 py-1 rounded-md flex items-center gap-1 shadow-2xs transition-colors shrink-0 ${
-                            isParsingExcel || importingExcelStops
+                          className={`bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs px-2.5 py-1 rounded-md flex items-center gap-1 shadow-2xs transition-colors shrink-0 ${isParsingExcel || importingExcelStops
                               ? "opacity-70 cursor-not-allowed pointer-events-none"
                               : "cursor-pointer"
-                          }`}
+                            }`}
                         >
                           {isParsingExcel || importingExcelStops ? (
                             <>
@@ -3995,7 +4052,7 @@ export const RoutePage: React.FC = () => {
                 </div>
               </div>
 
-              {/* Table */}
+              {/* Table Unassigned */}
               <div className="flex-1 overflow-auto custom-scrollbar">
                 {assignedTab === "unassigned" ? (
                   <table className="w-full text-[11px] min-w-[1300px] border-collapse whitespace-nowrap text-slate-700">
@@ -4041,7 +4098,7 @@ export const RoutePage: React.FC = () => {
                         {loadingTypesList.map(
                           (lt) =>
                             visibleColumns[`loading_type_${lt.loading_type_id}`] !==
-                              false && (
+                            false && (
                               <th
                                 key={lt.loading_type_id}
                                 className="px-2.5 py-1 text-center w-20"
@@ -4056,7 +4113,7 @@ export const RoutePage: React.FC = () => {
                           </th>
                         )}
                         {visibleColumns.actions !== false && (
-                          <th className="px-2.5 py-1 text-right w-16">จัดการ</th>
+                          <th className="px-2.5 py-1 text-right w-16 sticky right-0 bg-white z-10">จัดการ</th>
                         )}
                       </tr>
                     </thead>
@@ -4150,10 +4207,10 @@ export const RoutePage: React.FC = () => {
                                     stop,
                                     positionProductsList,
                                   ) || (
-                                    <span className="text-slate-400 font-normal">
-                                      -
-                                    </span>
-                                  )}
+                                      <span className="text-slate-400 font-normal">
+                                        -
+                                      </span>
+                                    )}
                                 </td>
                               )}
 
@@ -4196,16 +4253,16 @@ export const RoutePage: React.FC = () => {
                               {loadingTypesList.map((lt) => {
                                 if (
                                   visibleColumns[
-                                    `loading_type_${lt.loading_type_id}`
+                                  `loading_type_${lt.loading_type_id}`
                                   ] === false
                                 )
                                   return null;
                                 const loadObj = Array.isArray(stop.loads)
                                   ? stop.loads.find(
-                                      (l: any) =>
-                                        Number(l.loading_type_id) ===
-                                        Number(lt.loading_type_id),
-                                    )
+                                    (l: any) =>
+                                      Number(l.loading_type_id) ===
+                                      Number(lt.loading_type_id),
+                                  )
                                   : null;
                                 const qty = loadObj ? loadObj.quantity : 0;
                                 return (
@@ -4227,7 +4284,7 @@ export const RoutePage: React.FC = () => {
 
                               {/* 14. จัดการ */}
                               {visibleColumns.actions !== false && (
-                                <td className="px-2.5 py-1 text-right">
+                                <td className="px-2.5 py-1 text-right sticky right-0 bg-white z-10">
                                   <div className="flex items-center justify-end gap-1">
                                     <button
                                       type="button"
@@ -4299,7 +4356,7 @@ export const RoutePage: React.FC = () => {
                         {loadingTypesList.map(
                           (lt) =>
                             visibleColumns[`loading_type_${lt.loading_type_id}`] !==
-                              false && (
+                            false && (
                               <th
                                 key={lt.loading_type_id}
                                 className="px-2.5 py-1 text-center w-20"
@@ -4314,7 +4371,7 @@ export const RoutePage: React.FC = () => {
                           </th>
                         )}
                         {visibleColumns.actions !== false && (
-                          <th className="px-2.5 py-1 text-right w-16">จัดการ</th>
+                          <th className="px-2.5 py-1 text-right w-16 sticky right-0 bg-white z-10">จัดการ</th>
                         )}
                       </tr>
                     </thead>
@@ -4419,10 +4476,10 @@ export const RoutePage: React.FC = () => {
                                   stop,
                                   positionProductsList,
                                 ) || (
-                                  <span className="text-slate-400 font-normal">
-                                    -
-                                  </span>
-                                )}
+                                    <span className="text-slate-400 font-normal">
+                                      -
+                                    </span>
+                                  )}
                               </td>
                             )}
 
@@ -4445,11 +4502,10 @@ export const RoutePage: React.FC = () => {
                                     </span>
                                     {ed.earlyDelayText && (
                                       <span
-                                        className={`text-[10px] font-bold px-1.5 py-0.2 rounded ${
-                                          ed.isEarly
+                                        className={`text-[10px] font-bold px-1.5 py-0.2 rounded ${ed.isEarly
                                             ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
                                             : "bg-amber-50 text-amber-700 border border-amber-200"
-                                        }`}
+                                          }`}
                                       >
                                         {ed.earlyDelayText}
                                       </span>
@@ -4471,11 +4527,10 @@ export const RoutePage: React.FC = () => {
                                     </span>
                                     {edEnd.earlyDelayText && (
                                       <span
-                                        className={`text-[10px] font-bold px-1.5 py-0.2 rounded ${
-                                          edEnd.isEarly
+                                        className={`text-[10px] font-bold px-1.5 py-0.2 rounded ${edEnd.isEarly
                                             ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
                                             : "bg-amber-50 text-amber-700 border border-amber-200"
-                                        }`}
+                                          }`}
                                       >
                                         {edEnd.earlyDelayText}
                                       </span>
@@ -4523,16 +4578,16 @@ export const RoutePage: React.FC = () => {
                             {loadingTypesList.map((lt) => {
                               if (
                                 visibleColumns[
-                                  `loading_type_${lt.loading_type_id}`
+                                `loading_type_${lt.loading_type_id}`
                                 ] === false
                               )
                                 return null;
                               const loadObj = Array.isArray(stop.loads)
                                 ? stop.loads.find(
-                                    (l: any) =>
-                                      Number(l.loading_type_id) ===
-                                      Number(lt.loading_type_id),
-                                  )
+                                  (l: any) =>
+                                    Number(l.loading_type_id) ===
+                                    Number(lt.loading_type_id),
+                                )
                                 : null;
                               const qty = isDepot ? 0 : loadObj ? loadObj.quantity : 0;
                               return (
@@ -4556,7 +4611,7 @@ export const RoutePage: React.FC = () => {
 
                             {/* 14. จัดการ */}
                             {visibleColumns.actions !== false && (
-                              <td className="px-2.5 py-1 text-right">
+                              <td className="px-2.5 py-1 text-right sticky right-0 bg-white z-10">
                                 <div className="flex items-center justify-end gap-1">
                                   <button
                                     type="button"
@@ -4675,11 +4730,10 @@ export const RoutePage: React.FC = () => {
                   key={c}
                   type="button"
                   onClick={() => setNewGroupColor(c)}
-                  className={`w-7 h-7 rounded-full transition-all border-2 ${
-                    newGroupColor === c
+                  className={`w-7 h-7 rounded-full transition-all border-2 ${newGroupColor === c
                       ? "border-slate-900 scale-110 shadow-sm"
                       : "border-white hover:scale-105"
-                  }`}
+                    }`}
                   style={{ background: c }}
                 />
               ))}
@@ -4821,9 +4875,9 @@ export const RoutePage: React.FC = () => {
                     0,
                   ) > 0
                     ? Object.values(formStopLoads).reduce(
-                        (a, b) => (Number(a) || 0) + (Number(b) || 0),
-                        0,
-                      )
+                      (a, b) => (Number(a) || 0) + (Number(b) || 0),
+                      0,
+                    )
                     : formStopQuantity
                 }
                 onChange={(e) =>
@@ -4923,22 +4977,22 @@ export const RoutePage: React.FC = () => {
           </div>
 
           <SearchableSelect
-            label="ลำดับความสำคัญ (Priority) *"
+            label="ลำดับความสำคัญ"
             value={formStopPriority}
             onChange={(val) => setFormStopPriority(String(val))}
             placeholder="-- เลือกลำดับความสำคัญ --"
             options={[
               {
                 value: "high",
-                label: "สูง (High Priority)",
+                label: "สูง",
                 badge: "ด่วนที่สุด",
               },
               {
                 value: "medium",
-                label: "กลาง (Medium Priority)",
+                label: "กลาง",
                 badge: "ปกติ",
               },
-              { value: "low", label: "ต่ำ (Low Priority)", badge: "ไม่รีบ" },
+              { value: "low", label: "ต่ำ", badge: "ไม่รีบ" },
             ]}
             required
           />
@@ -5045,6 +5099,71 @@ export const RoutePage: React.FC = () => {
             ]}
           />
 
+          {/* Cargo Loading Types Breakdown Input Section - Table List with White Background */}
+          {loadingTypesList.length > 0 && (
+            <div className="space-y-1.5 bg-white rounded-xl shadow-2xs">
+              <div className="flex items-center justify-between text-slate-800 font-bold mb-1">
+                <span className="flex items-center gap-1.5 text-slate-800 text-xs">
+                  <Package className="w-4 h-4 text-blue-600" />
+                  จำนวนประเภทของการโหลด
+                </span>
+                <span className="text-[11px] text-blue-700 font-mono bg-blue-50 px-2.5 py-0.5 rounded-full font-bold border border-blue-200">
+                  รวม:{" "}
+                  {Object.values(editFormStopLoads).reduce(
+                    (a, b) => (Number(a) || 0) + (Number(b) || 0),
+                    0,
+                  )}{" "}
+                  ชิ้น
+                </span>
+              </div>
+              <div className="border border-slate-200 rounded-lg overflow-hidden bg-white">
+                <table className="w-full text-xs text-left border-collapse">
+                  <thead className="bg-slate-50 border-b border-slate-200 text-slate-700 font-bold text-[11px]">
+                    <tr>
+                      <th className="px-3 py-1.5 w-10 text-center">#</th>
+                      <th className="px-3 py-1.5">ประเภทการโหลด</th>
+                      <th className="px-3 py-1.5 w-24 text-center">หน่วยนับ</th>
+                      <th className="px-3 py-1.5 w-28 text-right">จำนวน</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 bg-white">
+                    {loadingTypesList.map((lt, idx) => (
+                      <tr
+                        key={lt.loading_type_id}
+                        className="hover:bg-slate-50/80 transition-colors"
+                      >
+                        <td className="px-3 py-1.5 text-center font-mono text-slate-400 text-[11px]">
+                          {idx + 1}
+                        </td>
+                        <td className="px-3 py-1.5 font-bold text-slate-800">
+                          {lt.type_name}
+                        </td>
+                        <td className="px-3 py-1.5 text-center font-mono text-slate-500 text-[11px]">
+                          {lt.unit_name || "ชิ้น"}
+                        </td>
+                        <td className="px-3 py-1.5 text-right">
+                          <input
+                            type="number"
+                            min={0}
+                            value={editFormStopLoads[lt.loading_type_id] || 0}
+                            onChange={(e) => {
+                              const val = parseInt(e.target.value, 10) || 0;
+                              setEditFormStopLoads((prev) => ({
+                                ...prev,
+                                [lt.loading_type_id]: val,
+                              }));
+                            }}
+                            className="w-20 border border-slate-300 rounded px-2 py-1 text-right font-bold text-slate-900 bg-white focus:outline-none focus:border-blue-500 font-mono text-xs"
+                          />
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-slate-700 font-semibold mb-1">
@@ -5063,7 +5182,7 @@ export const RoutePage: React.FC = () => {
             </div>
             <div>
               <label className="block text-slate-700 font-semibold mb-1">
-                จำนวนสินค้า (ลัง) <span className="text-rose-500">*</span>
+                จำนวนสินค้ารวม <span className="text-rose-500">*</span>
               </label>
               <input
                 type="number"
@@ -5134,6 +5253,57 @@ export const RoutePage: React.FC = () => {
               required
             />
           </div>
+
+          <div>
+            <label className="block text-slate-700 font-semibold mb-1 flex items-center justify-between">
+              <span>เวลาจัดส่งที่กำหนด</span>
+              {previousStopInGroup?.scheduled_time && (
+                <span className="text-[10px] text-blue-700 font-bold bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
+                  จุดก่อนหน้า:{" "}
+                  {String(previousStopInGroup.scheduled_time).slice(0, 5)} น.
+                </span>
+              )}
+            </label>
+            <input
+              type="time"
+              value={editFormStopScheduledTime}
+              onChange={(e) => setEditFormStopScheduledTime(e.target.value)}
+              className="w-full border border-slate-200 rounded-lg p-2.5 text-slate-800 bg-slate-50 focus:bg-white focus:outline-none focus:border-slate-400 font-mono font-bold"
+              required
+            />
+            {previousStopInGroup?.scheduled_time ? (
+              <p className="text-[10px] text-amber-600 mt-1 font-medium">
+                ⚠️ *เงื่อนไข:*
+                เวลาที่กรอกต้องมากกว่าเวลาจุดจัดส่งก่อนหน้าในกรุ๊ปนี้ (
+                {String(previousStopInGroup.scheduled_time).slice(0, 5)} น.)
+              </p>
+            ) : (
+              <p className="text-[10px] text-slate-500 mt-1">
+                ระบุเวลาจัดส่งที่ต้องการ (เช่น 09:30)
+              </p>
+            )}
+          </div>
+
+          <SearchableSelect
+            label="ลำดับความสำคัญ"
+            value={editFormStopPriority}
+            onChange={(val) => setEditFormStopPriority(String(val))}
+            placeholder="-- เลือกลำดับความสำคัญ --"
+            options={[
+              {
+                value: "high",
+                label: "สูง",
+                badge: "ด่วนที่สุด",
+              },
+              {
+                value: "medium",
+                label: "กลาง",
+                badge: "ปกติ",
+              },
+              { value: "low", label: "ต่ำ", badge: "ไม่รีบ" },
+            ]}
+            required
+          />
 
           <SearchableSelect
             label="เลือกร้านค้าจากมาสเตอร์"
@@ -5307,11 +5477,10 @@ export const RoutePage: React.FC = () => {
                   key={c}
                   type="button"
                   onClick={() => setEditGroupColor(c)}
-                  className={`w-7 h-7 rounded-full transition-all border-2 ${
-                    editGroupColor === c
+                  className={`w-7 h-7 rounded-full transition-all border-2 ${editGroupColor === c
                       ? "border-slate-900 scale-110 shadow-sm"
                       : "border-white hover:scale-105"
-                  }`}
+                    }`}
                   style={{ background: c }}
                 />
               ))}
@@ -5398,22 +5567,22 @@ export const RoutePage: React.FC = () => {
       >
         <div className="space-y-4 text-xs">
           <SearchableSelect
-            label="ลำดับความสำคัญ (Priority) *"
+            label="ลำดับความสำคัญ"
             value={unassignedPriority}
             onChange={(val) => setUnassignedPriority(String(val))}
             placeholder="-- เลือกลำดับความสำคัญ --"
             options={[
               {
                 value: "high",
-                label: "สูง (High Priority)",
+                label: "สูง",
                 badge: "ด่วนที่สุด",
               },
               {
                 value: "medium",
-                label: "กลาง (Medium Priority)",
+                label: "กลาง",
                 badge: "ปกติ",
               },
-              { value: "low", label: "ต่ำ (Low Priority)", badge: "ไม่รีบ" },
+              { value: "low", label: "ต่ำ", badge: "ไม่รีบ" },
             ]}
             required
           />
@@ -5510,7 +5679,7 @@ export const RoutePage: React.FC = () => {
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-slate-700 font-semibold mb-1">
-                จำนวนสินค้ารวม (ลัง/ชิ้น){" "}
+                จำนวนสินค้ารวม{" "}
                 <span className="text-rose-500">*</span>
               </label>
               <input
@@ -5522,9 +5691,9 @@ export const RoutePage: React.FC = () => {
                     0,
                   ) > 0
                     ? Object.values(unassignedLoads).reduce(
-                        (a, b) => (Number(a) || 0) + (Number(b) || 0),
-                        0,
-                      )
+                      (a, b) => (Number(a) || 0) + (Number(b) || 0),
+                      0,
+                    )
                     : unassignedQuantity
                 }
                 onChange={(e) =>
@@ -5648,22 +5817,22 @@ export const RoutePage: React.FC = () => {
       >
         <div className="space-y-4 text-xs">
           <SearchableSelect
-            label="ลำดับความสำคัญ (Priority) *"
+            label="ลำดับความสำคัญ"
             value={unassignedEditPriority}
             onChange={(val) => setUnassignedEditPriority(String(val))}
             placeholder="-- เลือกลำดับความสำคัญ --"
             options={[
               {
                 value: "high",
-                label: "สูง (High Priority)",
+                label: "สูง",
                 badge: "ด่วนที่สุด",
               },
               {
                 value: "medium",
-                label: "กลาง (Medium Priority)",
+                label: "กลาง",
                 badge: "ปกติ",
               },
-              { value: "low", label: "ต่ำ (Low Priority)", badge: "ไม่รีบ" },
+              { value: "low", label: "ต่ำ", badge: "ไม่รีบ" },
             ]}
             required
           />
@@ -5760,7 +5929,7 @@ export const RoutePage: React.FC = () => {
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-slate-700 font-semibold mb-1">
-                จำนวนสินค้ารวม (ลัง/ชิ้น){" "}
+                จำนวนสินค้ารวม{" "}
                 <span className="text-rose-500">*</span>
               </label>
               <input
@@ -5772,9 +5941,9 @@ export const RoutePage: React.FC = () => {
                     0,
                   ) > 0
                     ? Object.values(unassignedEditLoads).reduce(
-                        (a, b) => (Number(a) || 0) + (Number(b) || 0),
-                        0,
-                      )
+                      (a, b) => (Number(a) || 0) + (Number(b) || 0),
+                      0,
+                    )
                     : unassignedEditQuantity
                 }
                 onChange={(e) =>
@@ -5979,19 +6148,19 @@ export const RoutePage: React.FC = () => {
                             prev.map((row) =>
                               row.id === item.id
                                 ? {
-                                    ...row,
-                                    store_id: selectedVal,
-                                    store_name: found
-                                      ? found.store_name
-                                      : row.store_name,
-                                    address: found
-                                      ? found.store_address || ""
-                                      : row.address,
-                                    lat_long: found
-                                      ? found.store_location || ""
-                                      : row.lat_long,
-                                    is_mapped_master: !!found,
-                                  }
+                                  ...row,
+                                  store_id: selectedVal,
+                                  store_name: found
+                                    ? found.store_name
+                                    : row.store_name,
+                                  address: found
+                                    ? found.store_address || ""
+                                    : row.address,
+                                  lat_long: found
+                                    ? found.store_location || ""
+                                    : row.lat_long,
+                                  is_mapped_master: !!found,
+                                }
                                 : row,
                             ),
                           );
@@ -6010,18 +6179,18 @@ export const RoutePage: React.FC = () => {
                         )}
                         options={
                           !item.store_id ||
-                          storesMap.has(
-                            String(item.store_id).trim().toLowerCase(),
-                          )
+                            storesMap.has(
+                              String(item.store_id).trim().toLowerCase(),
+                            )
                             ? masterStoreSearchableOptions
                             : [
-                                {
-                                  value: String(item.store_id),
-                                  label: `${item.store_id} - ${item.store_name || "ไม่อยู่ในมาสเตอร์"}`,
-                                  badge: "ไม่อยู่ในมาสเตอร์",
-                                },
-                                ...masterStoreSearchableOptions,
-                              ]
+                              {
+                                value: String(item.store_id),
+                                label: `${item.store_id} - ${item.store_name || "ไม่อยู่ในมาสเตอร์"}`,
+                                badge: "ไม่อยู่ในมาสเตอร์",
+                              },
+                              ...masterStoreSearchableOptions,
+                            ]
                         }
                       />
                     </td>
@@ -6092,14 +6261,14 @@ export const RoutePage: React.FC = () => {
                         min={1}
                         value={
                           item.loads &&
-                          Object.values(item.loads).reduce<number>(
-                            (a, b) => a + (Number(b) || 0),
-                            0,
-                          ) > 0
+                            Object.values(item.loads).reduce<number>(
+                              (a, b) => a + (Number(b) || 0),
+                              0,
+                            ) > 0
                             ? Object.values(item.loads).reduce<number>(
-                                (a, b) => a + (Number(b) || 0),
-                                0,
-                              )
+                              (a, b) => a + (Number(b) || 0),
+                              0,
+                            )
                             : item.sum_quantity
                         }
                         onChange={(e) => {
@@ -6130,12 +6299,12 @@ export const RoutePage: React.FC = () => {
                             prev.map((row) =>
                               row.id === item.id
                                 ? {
-                                    ...row,
-                                    position_product_id: positionId,
-                                    position_product_name:
-                                      foundPosition?.position_product_name ||
-                                      "",
-                                  }
+                                  ...row,
+                                  position_product_id: positionId,
+                                  position_product_name:
+                                    foundPosition?.position_product_name ||
+                                    "",
+                                }
                                 : row,
                             ),
                           );
@@ -6165,9 +6334,9 @@ export const RoutePage: React.FC = () => {
                             prev.map((row) =>
                               row.id === item.id
                                 ? {
-                                    ...row,
-                                    position_production_order: positionOrder,
-                                  }
+                                  ...row,
+                                  position_production_order: positionOrder,
+                                }
                                 : row,
                             ),
                           );
@@ -6190,12 +6359,11 @@ export const RoutePage: React.FC = () => {
                           );
                         }}
                         placeholder="กรอกรหัสออเดอร์ *"
-                        className={`w-full border rounded px-1.5 py-1 text-xs font-mono font-bold transition-all ${
-                          !item.data_store_no ||
-                          !String(item.data_store_no).trim()
+                        className={`w-full border rounded px-1.5 py-1 text-xs font-mono font-bold transition-all ${!item.data_store_no ||
+                            !String(item.data_store_no).trim()
                             ? "border-2 border-rose-500 bg-rose-50/70 text-rose-900 focus:border-rose-600 shadow-2xs"
                             : "border-slate-200 text-slate-800 focus:border-blue-400"
-                        }`}
+                          }`}
                       />
                     </td>
                     <td className="p-1">
@@ -6343,19 +6511,19 @@ export const RoutePage: React.FC = () => {
                             prev.map((row) =>
                               row.id === item.id
                                 ? {
-                                    ...row,
-                                    store_id: selectedVal,
-                                    store_name: found
-                                      ? found.store_name
-                                      : row.store_name,
-                                    address: found
-                                      ? found.store_address || ""
-                                      : row.address,
-                                    lat_long: found
-                                      ? found.store_location || ""
-                                      : row.lat_long,
-                                    is_mapped_master: !!found,
-                                  }
+                                  ...row,
+                                  store_id: selectedVal,
+                                  store_name: found
+                                    ? found.store_name
+                                    : row.store_name,
+                                  address: found
+                                    ? found.store_address || ""
+                                    : row.address,
+                                  lat_long: found
+                                    ? found.store_location || ""
+                                    : row.lat_long,
+                                  is_mapped_master: !!found,
+                                }
                                 : row,
                             ),
                           );
@@ -6440,14 +6608,14 @@ export const RoutePage: React.FC = () => {
                         min={1}
                         value={
                           item.loads &&
-                          Object.values(item.loads).reduce<number>(
-                            (a, b) => a + (Number(b) || 0),
-                            0,
-                          ) > 0
+                            Object.values(item.loads).reduce<number>(
+                              (a, b) => a + (Number(b) || 0),
+                              0,
+                            ) > 0
                             ? Object.values(item.loads).reduce<number>(
-                                (a, b) => a + (Number(b) || 0),
-                                0,
-                              )
+                              (a, b) => a + (Number(b) || 0),
+                              0,
+                            )
                             : item.sum_quantity
                         }
                         onChange={(e) => {
@@ -6478,12 +6646,12 @@ export const RoutePage: React.FC = () => {
                             prev.map((row) =>
                               row.id === item.id
                                 ? {
-                                    ...row,
-                                    position_product_id: positionId,
-                                    position_product_name:
-                                      foundPosition?.position_product_name ||
-                                      "",
-                                  }
+                                  ...row,
+                                  position_product_id: positionId,
+                                  position_product_name:
+                                    foundPosition?.position_product_name ||
+                                    "",
+                                }
                                 : row,
                             ),
                           );
@@ -6513,9 +6681,9 @@ export const RoutePage: React.FC = () => {
                             prev.map((row) =>
                               row.id === item.id
                                 ? {
-                                    ...row,
-                                    position_production_order: positionOrder,
-                                  }
+                                  ...row,
+                                  position_production_order: positionOrder,
+                                }
                                 : row,
                             ),
                           );
@@ -6538,13 +6706,12 @@ export const RoutePage: React.FC = () => {
                           );
                         }}
                         placeholder="กรอกรหัสออเดอร์ *"
-                        className={`w-full border rounded px-1.5 py-1 text-xs font-mono font-bold transition-all ${
-                          item.store_id &&
-                          (!item.data_store_no ||
-                            !String(item.data_store_no).trim())
+                        className={`w-full border rounded px-1.5 py-1 text-xs font-mono font-bold transition-all ${item.store_id &&
+                            (!item.data_store_no ||
+                              !String(item.data_store_no).trim())
                             ? "border-2 border-rose-500 bg-rose-50/70 text-rose-900 focus:border-rose-600 shadow-2xs"
                             : "border-slate-200 text-slate-800 focus:border-blue-400"
-                        }`}
+                          }`}
                       />
                     </td>
                     <td className="p-1">
@@ -6670,11 +6837,10 @@ export const RoutePage: React.FC = () => {
                         priorityStrategy: opt.id as any,
                       }));
                     }}
-                    className={`p-2.5 rounded-lg border text-left flex flex-col justify-between transition-all cursor-pointer ${
-                      deliverySettings.priorityStrategy === opt.id
+                    className={`p-2.5 rounded-lg border text-left flex flex-col justify-between transition-all cursor-pointer ${deliverySettings.priorityStrategy === opt.id
                         ? "border-blue-600 bg-blue-50/90 text-blue-950 font-bold shadow-2xs ring-1 ring-blue-500"
                         : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
-                    }`}
+                      }`}
                   >
                     <div className="flex items-center gap-1.5 text-xs">
                       <span>{opt.icon}</span>
@@ -6771,22 +6937,20 @@ export const RoutePage: React.FC = () => {
             {/* Capacity Progress Bar */}
             <div className="w-full bg-slate-200 h-2.5 rounded-full overflow-hidden">
               <div
-                className={`h-full transition-all duration-300 ${
-                  totalSelectedCapacity === 0
+                className={`h-full transition-all duration-300 ${totalSelectedCapacity === 0
                     ? "bg-slate-300 w-0"
                     : totalSelectedCapacity >= totalUnassignedBoxes
                       ? "bg-emerald-500"
                       : "bg-amber-500"
-                }`}
+                  }`}
                 style={{
-                  width: `${
-                    totalSelectedCapacity === 0
+                  width: `${totalSelectedCapacity === 0
                       ? 0
                       : Math.min(
-                          100,
-                          (totalUnassignedBoxes / totalSelectedCapacity) * 100,
-                        )
-                  }%`,
+                        100,
+                        (totalUnassignedBoxes / totalSelectedCapacity) * 100,
+                      )
+                    }%`,
                 }}
               />
             </div>
@@ -6881,11 +7045,10 @@ export const RoutePage: React.FC = () => {
                 return (
                   <label
                     key={vId}
-                    className={`flex items-center justify-between p-2 rounded transition-colors ${
-                      isAssigned
+                    className={`flex items-center justify-between p-2 rounded transition-colors ${isAssigned
                         ? "bg-slate-100/70 text-slate-400 cursor-not-allowed"
                         : "hover:bg-white cursor-pointer"
-                    }`}
+                      }`}
                   >
                     <div className="flex items-center gap-2">
                       <input
@@ -7004,11 +7167,10 @@ export const RoutePage: React.FC = () => {
                       serviceTimePerStop: mins,
                     }))
                   }
-                  className={`py-2 px-3 rounded-lg border text-center font-bold transition-all ${
-                    deliverySettings.serviceTimePerStop === mins
+                  className={`py-2 px-3 rounded-lg border text-center font-bold transition-all ${deliverySettings.serviceTimePerStop === mins
                       ? "border-blue-600 bg-blue-50 text-blue-900 shadow-2xs ring-1 ring-blue-500"
                       : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
-                  }`}
+                    }`}
                 >
                   {mins} นาที
                 </button>
@@ -7066,11 +7228,10 @@ export const RoutePage: React.FC = () => {
               ].map((strat) => (
                 <label
                   key={strat.id}
-                  className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-all ${
-                    deliverySettings.priorityStrategy === strat.id
+                  className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-all ${deliverySettings.priorityStrategy === strat.id
                       ? "border-blue-600 bg-blue-50/70 text-blue-900 ring-1 ring-blue-500"
                       : "border-slate-200 bg-white hover:bg-slate-50 text-slate-700"
-                  }`}
+                    }`}
                 >
                   <input
                     type="radio"

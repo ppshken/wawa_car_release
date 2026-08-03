@@ -428,7 +428,7 @@ router.get('/car-release/:id', authenticateToken, async (req, res) => {
               co.visit_type_id, vt.visit_type_name, co.visit_note,
               p.payment_name,
               gs.group_store_name,
-              prob.problem_id, prob.problem_name, prob.normal_bill, prob.edit_bill, prob.product_swap, prob.out_of_stock, prob.overstock
+              prob.problem_id, prob.problem_name, prob.normal_bill, prob.edit_bill, prob.product_swap, prob.out_of_stock, prob.overstock, prob.created_at
        FROM list_store ls
        LEFT JOIN store s ON ls.store_id = s.store_id
        LEFT JOIN position_product pp ON ls.position_product_id = pp.position_product_id
