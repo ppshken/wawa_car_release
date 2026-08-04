@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 const api = axios.create({
-  baseURL: 'http://187.127.216.219:5001/api',
+  baseURL: 'http://187.127.216.219/api',
   headers: {
     'Content-Type': 'application/json',
   },
@@ -38,10 +38,10 @@ export const getImageUrl = (path?: string) => {
   if (!path) return "";
   if (path.startsWith("data:") || path.startsWith("blob:")) return path;
   if (path.startsWith("http://") || path.startsWith("https://")) {
-    return path.replace("http://187.127.216.219:5000", "http://187.127.216.219:5001");
+    return path.replace("http://187.127.216.219", "http://187.127.216.219");
   }
   const cleanPath = path.startsWith("/") ? path : `/${path}`;
-  return `http://187.127.216.219:5001${cleanPath}`;
+  return `http://187.127.216.219${cleanPath}`;
 };
 
 export default api;
