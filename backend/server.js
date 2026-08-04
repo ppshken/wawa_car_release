@@ -14,7 +14,7 @@ const optimoRouteRoutes = require('./src/routes/optimoRoute.routes');
 const apiKeyRoutes = require('./src/routes/apiKey.routes');
 
 const app = express();
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT;
 
 // Middlewares
 app.use(cors());
