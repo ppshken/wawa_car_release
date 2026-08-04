@@ -1693,6 +1693,62 @@ export const RoutePage: React.FC = () => {
   // Export Drawer State & Helpers for RoutePage
   const [isExportDrawerOpen, setIsExportDrawerOpen] = useState(false);
 
+  const normalizeLoadTypeName = useCallback((value: string) => {
+    return (value || "")
+      .normalize("NFKD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase()
+      .trim();
+  }, []);
+
+  const getLoadTypeIdByName = useCallback(
+    (name: string) => {
+      const target = normalizeLoadTypeName(name);
+      const match = loadingTypesList.find((lt) => {
+        const typeName = normalizeLoadTypeName(lt.type_name || "");
+        return (
+          typeName === target ||
+          typeName.includes(target) ||
+          target.includes(typeName)
+        );
+      });
+      return match?.loading_type_id ?? null;
+    },
+    [loadingTypesList, normalizeLoadTypeName],
+  );
+
+  const getLoadValueByType = useCallback(
+    (item: any, targetName: string): string | number => {
+      const normalizedTarget = normalizeLoadTypeName(targetName);
+      const entries = Array.isArray(item?.loads) ? item.loads : [];
+      const loadTypeId = getLoadTypeIdByName(targetName);
+
+      for (const entry of entries) {
+        const quantity = entry?.quantity ?? entry?.qty ?? entry?.value ?? null;
+        if (quantity == null) continue;
+
+        const candidateNames = [entry?.type_name, entry?.loading_type_name, entry?.name, entry?.label]
+          .filter(Boolean)
+          .map((name) => normalizeLoadTypeName(String(name)));
+
+        const matchedByName = candidateNames.some(
+          (name) => name === normalizedTarget || name.includes(normalizedTarget) || normalizedTarget.includes(name),
+        );
+
+        if (matchedByName) {
+          return quantity;
+        }
+
+        if (loadTypeId != null && Number(entry?.loading_type_id) === Number(loadTypeId)) {
+          return quantity;
+        }
+      }
+
+      return 0;
+    },
+    [getLoadTypeIdByName, normalizeLoadTypeName],
+  );
+
   const routeExportColumns = useMemo(
     () => [
       { id: "driver_name", label: "สายรถ / พนักงานขับรถ" },
@@ -1702,30 +1758,21 @@ export const RoutePage: React.FC = () => {
       { id: "store_name", label: "ชื่อร้านค้า" },
       { id: "address", label: "ที่อยู่" },
       { id: "order_no", label: "รหัสออเดอร์" },
+      { id: "load_crate", label: "ลัง" },
+      { id: "load_pickup", label: "กระบะ" },
+      { id: "load_pallet", label: "พาเลท" },
+      { id: "load_cage", label: "กรงเหล็ก" },
+      { id: "load_cart", label: "รถเข็น" },
+      { id: "load_box", label: "กล่อง" },
       { id: "sum_quantity", label: "จำนวนสินค้า" },
       { id: "status", label: "สถานะการจัดส่ง" },
       { id: "scheduled_time", label: "เวลาจัดส่งที่กำหนด" },
       { id: "priority", label: "ความสำคัญ" },
+      { id: "position_product_name", label: "ตำแหน่งวางสินค้า" },
+      { id: "position_production_order", label: "แถว" },
     ],
     []
   );
-
-  // todo: ส่งออกข้อมูลเส้นทางการจัดส่ง
-  const routeExportData = useMemo(() => {
-    const list: any[] = [];
-    routes.forEach((r) => {
-      if (Array.isArray(r.stops)) {
-        r.stops.forEach((s) => {
-          list.push({
-            ...s,
-            driver_name: r.driverName,
-            vehicle_plate: r.vehiclePlate,
-          });
-        });
-      }
-    });
-    return list;
-  }, [routes]);
 
   // todo: ส่งออกข้อมูลเส้นทางการจัดส่ง
   const getRouteExportValue = useCallback((item: any, columnId: string): string | number => {
@@ -1746,6 +1793,22 @@ export const RoutePage: React.FC = () => {
         return item.data_store_no || item.dataStoreNo || item.order_no || item.orderNo || "-";
       case "sum_quantity":
         return item.sum_quantity ?? item.sumQuantity ?? item.quantity ?? 0;
+      case "load_crate":
+      case "load_pickup":
+      case "load_pallet":
+      case "load_cage":
+      case "load_cart":
+      case "load_box": {
+        const labelMap: Record<string, string> = {
+          load_crate: "ลัง",
+          load_pickup: "กระบะ",
+          load_pallet: "พาเลท",
+          load_cage: "กรงเหล็ก",
+          load_cart: "รถเข็น",
+          load_box: "กล่อง",
+        };
+        return getLoadValueByType(item, labelMap[columnId]);
+      }
       case "status":
         return item.status === "completed"
           ? "ส่งสำเร็จ"
@@ -1765,7 +1828,7 @@ export const RoutePage: React.FC = () => {
       default:
         return item[columnId] ?? "-";
     }
-  }, []);
+  }, [getLoadValueByType]);
 
   // todo: ส่งออกข้อมูลเส้นทางการจัดส่ง
   const selectedGroupRouteObj = useMemo(() => {
@@ -2590,6 +2653,14 @@ export const RoutePage: React.FC = () => {
     }
     return filtered;
   }, [scopeStops, bottomTab, searchText]);
+
+  const routeExportData = useMemo(() => {
+    return tableStops.map((s) => ({
+      ...s,
+      driver_name: s.routeDriverName || "-",
+      vehicle_plate: s.routeVehicle || "-",
+    }));
+  }, [tableStops]);
 
   return (
     <div
@@ -4947,7 +5018,7 @@ export const RoutePage: React.FC = () => {
           </div>
 
           <div>
-            <label className="block text-slate-700 font-semibold mb-1 flex items-center justify-between">
+            <label className="flex text-slate-700 font-semibold mb-1 items-center justify-between">
               <span>เวลาจัดส่งที่กำหนด</span>
               {previousStopInGroup?.scheduled_time && (
                 <span className="text-[10px] text-blue-700 font-bold bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
@@ -5255,7 +5326,7 @@ export const RoutePage: React.FC = () => {
           </div>
 
           <div>
-            <label className="block text-slate-700 font-semibold mb-1 flex items-center justify-between">
+            <label className="flex text-slate-700 font-semibold mb-1 items-center justify-between">
               <span>เวลาจัดส่งที่กำหนด</span>
               {previousStopInGroup?.scheduled_time && (
                 <span className="text-[10px] text-blue-700 font-bold bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
@@ -6791,7 +6862,7 @@ export const RoutePage: React.FC = () => {
           <div className="space-y-3 bg-slate-50 border border-slate-200/80 p-3 rounded-xl">
             {/* 1. Strategy */}
             <div>
-              <label className="block text-slate-800 font-bold mb-1.5 flex items-center justify-between">
+              <label className="flex text-slate-800 font-bold mb-1.5 items-center justify-between">
                 <span>กลยุทธ์การคำนวณจัดสาย (ซิงก์กับการตั้งค่าระบบ)</span>
                 <span className="text-[10px] text-blue-600 font-semibold bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
                   ซิงก์ฐานข้อมูลแล้ว
@@ -7325,11 +7396,12 @@ export const RoutePage: React.FC = () => {
       <ExportDrawer
         isOpen={isExportDrawerOpen}
         onClose={() => setIsExportDrawerOpen(false)}
-        title="ส่งออกข้อมูลสายจัดส่งสินค้า (Route Report)"
+        title="ส่งออกข้อมูล"
         columns={routeExportColumns}
         data={routeExportData}
         getValue={getRouteExportValue}
         fileNamePrefix="Route_Stops_Report"
+        storageKey="wawa_route_export_selected_columns"
       />
     </div>
   );

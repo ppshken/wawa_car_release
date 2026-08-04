@@ -17,16 +17,18 @@ export interface ExportDrawerProps {
   data: any[];
   getValue: (item: any, columnId: string) => string | number;
   fileNamePrefix?: string;
+  storageKey?: string;
 }
 
 export const ExportDrawer: React.FC<ExportDrawerProps> = ({
   isOpen,
   onClose,
-  title = "ส่งออกข้อมูล (Export Data)",
+  title = "ส่งออกข้อมูล",
   columns,
   data,
   getValue,
   fileNamePrefix = "Export",
+  storageKey,
 }) => {
   const [exportType, setExportType] = useState<"excel" | "pdf">("excel");
   const [selectedColumns, setSelectedColumns] = useState<string[]>([]);
@@ -34,13 +36,39 @@ export const ExportDrawer: React.FC<ExportDrawerProps> = ({
 
   // Initialize selected columns whenever columns change or modal opens
   useEffect(() => {
-    if (isOpen && columns.length > 0) {
-      const initial = columns
+    if (!isOpen || columns.length === 0) return;
+
+    const saved = storageKey ? localStorage.getItem(storageKey) : null;
+    let initial: string[] = [];
+
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          initial = parsed.filter((id) => columns.some((col) => col.id === id));
+        }
+      } catch (error) {
+        console.warn("Failed to parse export column selection:", error);
+      }
+    }
+
+    if (initial.length === 0) {
+      initial = columns
         .filter((col) => col.defaultSelected !== false)
         .map((col) => col.id);
-      setSelectedColumns(initial.length > 0 ? initial : columns.map((c) => c.id));
     }
-  }, [isOpen, columns]);
+
+    if (initial.length === 0) {
+      initial = columns.map((col) => col.id);
+    }
+
+    setSelectedColumns(initial);
+  }, [isOpen, columns, storageKey]);
+
+  useEffect(() => {
+    if (!isOpen || !storageKey) return;
+    localStorage.setItem(storageKey, JSON.stringify(selectedColumns));
+  }, [selectedColumns, isOpen, storageKey]);
 
   const handleToggleColumn = (colId: string) => {
     setSelectedColumns((prev) =>
@@ -88,7 +116,7 @@ export const ExportDrawer: React.FC<ExportDrawerProps> = ({
           const tableHeadersHtml = activeColumns
             .map(
               (col) =>
-                `<th style="padding: 6px 8px; border: 1px solid #cbd5e1; background-color: #f1f5f9; text-align: left; font-size: 11px;">${col.label}</th>`
+                `<th style="padding: 4px 6px; border: 1px solid #cbd5e1; background-color: #f1f5f9; text-align: left; font-size: 8.5px; white-space: nowrap;">${col.label}</th>`
             )
             .join("");
 
@@ -97,7 +125,7 @@ export const ExportDrawer: React.FC<ExportDrawerProps> = ({
               const cells = activeColumns
                 .map(
                   (col) =>
-                    `<td style="padding: 6px 8px; border: 1px solid #e2e8f0; font-size: 10px;">${getValue(
+                    `<td style="padding: 3px 6px; border: 1px solid #e2e8f0; font-size: 8px; line-height: 1.1;">${getValue(
                       item,
                       col.id
                     ) ?? "-"}</td>`
@@ -105,7 +133,7 @@ export const ExportDrawer: React.FC<ExportDrawerProps> = ({
                 .join("");
               return `<tr style="background-color: ${
                 idx % 2 === 0 ? "#ffffff" : "#f8fafc"
-              };"><td style="padding: 6px 8px; border: 1px solid #e2e8f0; text-align: center; font-size: 10px; font-weight: bold;">${
+              };"><td style="padding: 3px 6px; border: 1px solid #e2e8f0; text-align: center; font-size: 8px; font-weight: bold;">${
                 idx + 1
               }</td>${cells}</tr>`;
             })
@@ -119,14 +147,16 @@ export const ExportDrawer: React.FC<ExportDrawerProps> = ({
                 <title>${title}</title>
                 <style>
                   @import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@400;600;700&display=swap');
-                  body { font-family: 'Sarabun', sans-serif; margin: 15px; color: #0f172a; }
-                  .header { text-align: center; margin-bottom: 15px; border-bottom: 2px solid #0f172a; padding-bottom: 8px; }
-                  .title { font-size: 16px; font-weight: bold; margin: 0; color: #0f172a; }
-                  .subtitle { font-size: 10px; color: #64748b; margin-top: 4px; }
-                  table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-                  th, td { word-break: break-word; }
+                  body { font-family: 'Sarabun', sans-serif; margin: 8px; color: #0f172a; }
+                  .header { text-align: center; margin-bottom: 8px; border-bottom: 1px solid #0f172a; padding-bottom: 5px; }
+                  .title { font-size: 13px; font-weight: bold; margin: 0; color: #0f172a; }
+                  .subtitle { font-size: 8.5px; color: #64748b; margin-top: 2px; }
+                  table { width: 100%; border-collapse: collapse; margin-top: 5px; table-layout: auto; }
+                  th, td { word-break: break-word; vertical-align: top; }
+                  th { font-size: 8.5px; padding: 4px 6px; line-height: 1.2; }
+                  td { font-size: 8px; padding: 3px 6px; line-height: 1.1; }
                   @media print {
-                    @page { size: A4 landscape; margin: 8mm; }
+                    @page { size: A4 landscape; margin: 5mm; }
                   }
                 </style>
               </head>
@@ -140,7 +170,7 @@ export const ExportDrawer: React.FC<ExportDrawerProps> = ({
                 <table>
                   <thead>
                     <tr>
-                      <th style="padding: 6px 8px; border: 1px solid #cbd5e1; background-color: #f1f5f9; text-align: center; font-size: 11px; width: 35px;">#</th>
+                      <th style="padding: 4px 6px; border: 1px solid #cbd5e1; background-color: #f1f5f9; text-align: center; font-size: 8.5px; width: 26px;">#</th>
                       ${tableHeadersHtml}
                     </tr>
                   </thead>

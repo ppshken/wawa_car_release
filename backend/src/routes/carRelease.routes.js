@@ -4,6 +4,8 @@ const { query, hasColumn } = require('../config/db');
 const { authenticateToken } = require('../middleware/auth');
 const { saveBase64Image } = require('../middleware/upload');
 const { logAudit } = require('../utils/auditLogger');
+const { normalizeProductControllerImages } = require('../utils/productControllerHelper');
+const { normalizeReturnDocuments } = require('../utils/returnDocumentHelper');
 
 // Helper to determine user role permissions
 async function getUserRoleInfo(reqUser) {
@@ -498,12 +500,90 @@ router.get('/car-release/:id', authenticateToken, async (req, res) => {
       [car_release_id]
     );
 
+    let productControllerImages = [];
+    try {
+      productControllerImages = await query(
+        `SELECT image_url FROM product_controller WHERE car_release_id = ? ORDER BY created_at ASC, id ASC`,
+        [car_release_id]
+      );
+    } catch (err) {
+      console.error('Fetch product controller images error:', err);
+    }
+
+    let returnDocuments = [];
+    try {
+      returnDocuments = await query(
+        `SELECT file_url FROM return_documents WHERE car_release_id = ? ORDER BY created_at ASC, id ASC`,
+        [car_release_id]
+      );
+    } catch (err) {
+      console.error('Fetch return documents error:', err);
+    }
+
     release.stores = stores;
     release.car_return = returns.length > 0 ? returns[0] : null;
+    release.product_controller_images = (productControllerImages || []).map((row) => row.image_url).filter(Boolean);
+    release.return_documents = (returnDocuments || []).map((row) => row.file_url).filter(Boolean);
 
     res.json({ success: true, release });
   } catch (err) {
     console.error('Fetch release detail error:', err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// POST /api/car-release/:id/product-controller (บันทึกภาพสินค้าควบคุม)
+router.post('/car-release/:id/product-controller', authenticateToken, async (req, res) => {
+  try {
+    const car_release_id = req.params.id;
+    const { images = [], car_release_no } = req.body;
+    const normalizedImages = normalizeProductControllerImages(images);
+
+    if (!normalizedImages.length) {
+      return res.status(400).json({ success: false, message: 'กรุณาแนบรูปภาพสินค้าควบคุมอย่างน้อย 1 รูป' });
+    }
+
+    const savedImages = [];
+    for (const image of normalizedImages) {
+      const imageUrl = await saveBase64Image(image, `car_release/${car_release_no}/product_controller`);
+      const result = await query(
+        `INSERT INTO product_controller (car_release_id, image_url, created_at) VALUES (?, ?, NOW())`,
+        [car_release_id, imageUrl]
+      );
+      savedImages.push({ id: result.insertId, image_url: imageUrl });
+    }
+
+    res.json({ success: true, message: 'บันทึกภาพสินค้าควบคุมสำเร็จ', images: savedImages });
+  } catch (err) {
+    console.error('Save product controller images error:', err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// POST /api/car-release/:id/return-documents (บันทึกเอกสารคืนของ)
+router.post('/car-release/:id/return-documents', authenticateToken, async (req, res) => {
+  try {
+    const car_release_id = req.params.id;
+    const { documents = [], car_release_no } = req.body;
+    const normalizedDocuments = normalizeReturnDocuments(documents);
+
+    if (!normalizedDocuments.length) {
+      return res.status(400).json({ success: false, message: 'กรุณาแนบเอกสารคืนของอย่างน้อย 1 ไฟล์' });
+    }
+
+    const savedDocuments = [];
+    for (const document of normalizedDocuments) {
+      const fileUrl = await saveBase64Image(document, `car_release/${car_release_no}/return_documents`);
+      const result = await query(
+        `INSERT INTO return_documents (car_release_id, file_url, created_at) VALUES (?, ?, NOW())`,
+        [car_release_id, fileUrl]
+      );
+      savedDocuments.push({ id: result.insertId, file_url: fileUrl });
+    }
+
+    res.json({ success: true, message: 'บันทึกเอกสารคืนของสำเร็จ', documents: savedDocuments });
+  } catch (err) {
+    console.error('Save return documents error:', err);
     res.status(500).json({ success: false, message: err.message });
   }
 });
@@ -803,6 +883,40 @@ router.delete('/car-release/:id', authenticateToken, async (req, res) => {
     res.status(500).json({ success: false, message: err.message });
   }
 });
+
+// Auto-migration for product_controller table
+(async () => {
+  try {
+    await query(`
+      CREATE TABLE IF NOT EXISTS product_controller (
+        id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+        car_release_id INT UNSIGNED NOT NULL,
+        image_url VARCHAR(1000) NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        INDEX (car_release_id)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    `);
+  } catch (err) {
+    console.error('Error creating product_controller table:', err);
+  }
+})();
+
+// Auto-migration for return_documents table
+(async () => {
+  try {
+    await query(`
+      CREATE TABLE IF NOT EXISTS return_documents (
+        id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+        car_release_id INT UNSIGNED NOT NULL,
+        file_url VARCHAR(1000) NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        INDEX (car_release_id)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    `);
+  } catch (err) {
+    console.error('Error creating return_documents table:', err);
+  }
+})();
 
 // Auto-migration for car_release_chat table
 (async () => {

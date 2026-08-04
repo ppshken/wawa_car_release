@@ -1022,14 +1022,14 @@ export const DeliveryCheckInOutDrawer: React.FC<DeliveryCheckInOutModalProps> = 
               <div className="grid grid-cols-2 gap-2">
                 <button
                   onClick={() => setActiveStep("checkout")}
-                  className="py-2 px-3 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-2xs transition-all"
+                  className="py-3 px-3 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-2xs transition-all"
                 >
                   <CheckCircle2 className="w-4 h-4" />
                   <span>1. เช็คเอาท์</span>
                 </button>
                 <button
                   onClick={() => setActiveStep("problem")}
-                  className="py-2 px-3 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-2xs transition-all"
+                  className="py-3 px-3 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-2xs transition-all"
                 >
                   <AlertTriangle className="w-4 h-4" />
                   <span>2. ระบุ ติดปัญหา</span>

@@ -396,6 +396,17 @@ export const CarReleaseList: React.FC = () => {
   // Accounting Status Drawer State
   const [isAccountingDrawerOpen, setIsAccountingDrawerOpen] =
     useState<boolean>(false);
+  const [isProductControllerDrawerOpen, setIsProductControllerDrawerOpen] =
+    useState<boolean>(false);
+  const [productControllerImages, setProductControllerImages] =
+    useState<string[]>([]);
+  const [productControllerUploading, setProductControllerUploading] =
+    useState<boolean>(false);
+  const [isReturnDocumentsDrawerOpen, setIsReturnDocumentsDrawerOpen] =
+    useState<boolean>(false);
+  const [returnDocuments, setReturnDocuments] = useState<string[]>([]);
+  const [returnDocumentsUploading, setReturnDocumentsUploading] =
+    useState<boolean>(false);
   const [accFormStatusId, setAccFormStatusId] = useState<string | number>("");
   const [accFormNote, setAccFormNote] = useState<string>("");
   const [isSubmittingAcc, setIsSubmittingAcc] = useState<boolean>(false);
@@ -666,6 +677,144 @@ export const CarReleaseList: React.FC = () => {
         setter(reader.result as string);
       };
       reader.readAsDataURL(file);
+    }
+  };
+
+  // Product Controller Images Upload Handlers
+  const handleProductControllerImageChange = (
+    e: React.ChangeEvent<HTMLInputElement>,
+  ) => {
+    const files = Array.from(e.target.files || []);
+    if (!files.length) return;
+
+    const readers = files.map(
+      (file) =>
+        new Promise<string>((resolve) => {
+          const reader = new FileReader();
+          reader.onloadend = () => {
+            if (typeof reader.result === "string") {
+              resolve(reader.result);
+            } else {
+              resolve("");
+            }
+          };
+          reader.readAsDataURL(file);
+        }),
+    );
+
+    Promise.all(readers).then((results) => {
+      setProductControllerImages((prev) => [
+        ...prev,
+        ...results.filter(Boolean),
+      ]);
+    });
+  };
+
+  // Product Controller Images Submit Handler
+  const handleProductControllerSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedRelease?.car_release_id || !productControllerImages.length) {
+      showError("กรุณาเลือกภาพสินค้าควบคุมอย่างน้อย 1 รูป");
+      return;
+    }
+
+    setProductControllerUploading(true);
+    try {
+      const res = await api.post(
+        `/car-release/${selectedRelease.car_release_id}/product-controller`,
+        {
+          images: productControllerImages,
+          car_release_no: selectedRelease.car_release_no,
+        },
+      );
+
+      if (res.data.success) {
+        const refreshed = await api.get(`/car-release/${selectedRelease.car_release_id}`);
+        if (refreshed.data.success && refreshed.data.release) {
+          setSelectedRelease({
+            ...selectedRelease,
+            ...refreshed.data.release,
+            product_controller_images:
+              refreshed.data.release.product_controller_images || [],
+          });
+        }
+        setProductControllerImages([]);
+        setIsProductControllerDrawerOpen(false);
+        showSuccess("บันทึกภาพสินค้าควบคุมสำเร็จ");
+      } else {
+        showError(res.data.message || "บันทึกภาพสินค้าควบคุมไม่สำเร็จ");
+      }
+    } catch (err: any) {
+      console.error("Save product controller images error:", err);
+      showError(err?.response?.data?.message || "บันทึกภาพสินค้าควบคุมไม่สำเร็จ");
+    } finally {
+      setProductControllerUploading(false);
+    }
+  };
+
+  const handleReturnDocumentsFileChange = (
+    e: React.ChangeEvent<HTMLInputElement>,
+  ) => {
+    const files = Array.from(e.target.files || []);
+    if (!files.length) return;
+
+    const readers = files.map(
+      (file) =>
+        new Promise<string>((resolve) => {
+          const reader = new FileReader();
+          reader.onloadend = () => {
+            if (typeof reader.result === "string") {
+              resolve(reader.result);
+            } else {
+              resolve("");
+            }
+          };
+          reader.readAsDataURL(file);
+        }),
+    );
+
+    Promise.all(readers).then((results) => {
+      setReturnDocuments((prev) => [...prev, ...results.filter(Boolean)]);
+    });
+  };
+
+  const handleReturnDocumentsSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedRelease?.car_release_id || !returnDocuments.length) {
+      showError("กรุณาเลือกเอกสารคืนของอย่างน้อย 1 ไฟล์");
+      return;
+    }
+
+    setReturnDocumentsUploading(true);
+    try {
+      const res = await api.post(
+        `/car-release/${selectedRelease.car_release_id}/return-documents`,
+        {
+          documents: returnDocuments,
+          car_release_no: selectedRelease.car_release_no,
+        },
+      );
+
+      if (res.data.success) {
+        const refreshed = await api.get(`/car-release/${selectedRelease.car_release_id}`);
+        if (refreshed.data.success && refreshed.data.release) {
+          setSelectedRelease({
+            ...selectedRelease,
+            ...refreshed.data.release,
+            return_documents: refreshed.data.release.return_documents || [],
+          });
+        }
+        setReturnDocuments([]);
+        setIsReturnDocumentsDrawerOpen(false);
+        showSuccess("บันทึกเอกสารคืนของสำเร็จ");
+      } else {
+        showError(res.data.message || "บันทึกเอกสารคืนของไม่สำเร็จ");
+      }
+    } catch (err: any) {
+      console.error("Save return documents error:", err);
+      showError(err?.response?.data?.message || "บันทึกเอกสารคืนของไม่สำเร็จ");
+    } finally {
+      setReturnDocumentsUploading(false);
     }
   };
 
@@ -1664,6 +1813,7 @@ export const CarReleaseList: React.FC = () => {
           stores: d.stores || [],
           car_return: d.car_return || null,
           driver_phone: d.driver_phone || rel.driver_phone,
+          return_documents: d.return_documents || [],
         });
       } else {
         setSelectedRelease(rel);
@@ -1671,6 +1821,20 @@ export const CarReleaseList: React.FC = () => {
     } catch (err) {
       setSelectedRelease(rel);
     }
+  };
+
+  const handleOpenProductControllerDrawer = (rel: any) => {
+    if (!rel) return;
+    setSelectedRelease(rel);
+    setProductControllerImages([]);
+    setIsProductControllerDrawerOpen(true);
+  };
+
+  const handleOpenReturnDocumentsDrawer = (rel: any) => {
+    if (!rel) return;
+    setSelectedRelease(rel);
+    setReturnDocuments([]);
+    setIsReturnDocumentsDrawerOpen(true);
   };
 
   const handleOpenAccountingDrawer = (rel: any) => {
@@ -3077,43 +3241,6 @@ export const CarReleaseList: React.FC = () => {
                   searchPlaceholder="พิมพ์ค้นหา PDA..."
                 />
               </div>
-
-              <div className="grid grid-cols-2 gap-2.5">
-                <div>
-                  <label className="text-slate-700 font-semibold block mb-1">
-                    เบี้ยเลี้ยง (บาท)
-                  </label>
-                  <input
-                    type="text"
-                    value={formAllowance}
-                    onChange={(e) => setFormAllowance(e.target.value)}
-                    placeholder="ระบุเบี้ยเลี้ยง (เช่น 300)"
-                    className="w-full border border-slate-200 rounded-lg p-2 text-slate-800 bg-slate-50 focus:bg-white focus:outline-none focus:border-slate-400 font-mono"
-                  />
-                </div>
-
-                <SearchableSelect
-                  label="สถานะทางบัญชี"
-                  options={accountingOptions}
-                  value={formAccountingStatus}
-                  onChange={(val) => setFormAccountingStatus(Number(val) || 0)}
-                  placeholder="-- เลือกสถานะบัญชี --"
-                  searchPlaceholder="พิมพ์ค้นหาสถานะ..."
-                />
-              </div>
-
-              <div>
-                <label className="text-slate-700 font-semibold block mb-1">
-                  รายละเอียดเพิ่มเติม / หมายเหตุ
-                </label>
-                <textarea
-                  value={formDescription}
-                  onChange={(e) => setFormDescription(e.target.value)}
-                  placeholder="หมายเหตุเพิ่มเติมสำหรับการปล่อยรถ..."
-                  rows={2}
-                  className="w-full border border-slate-200 rounded-lg p-2 text-slate-800 bg-slate-50 focus:bg-white focus:outline-none focus:border-slate-400 resize-none"
-                />
-              </div>
             </div>
           </div>
 
@@ -3193,6 +3320,178 @@ export const CarReleaseList: React.FC = () => {
             </div>
           </div>
         </form>
+      </AnimatedDrawer>
+
+      {/* RIGHT SLIDE-OVER PRODUCT CONTROLLER DRAWER */}
+      <AnimatedDrawer
+        isOpen={isProductControllerDrawerOpen}
+        onClose={() => setIsProductControllerDrawerOpen(false)}
+        title="ภาพสินค้าควบคุม"
+        formId="product-controller-form"
+        onSubmit={handleProductControllerSubmit}
+        submitLabel={productControllerUploading ? "กำลังบันทึก..." : "บันทึกภาพ"}
+        maxWidthClass="max-w-xl"
+      >
+        <div className="space-y-3">
+          <div className="rounded-xl border border-slate-200 bg-slate-50/80 p-2.5 text-xs text-slate-600">
+            <div className="flex items-center gap-2">
+              <PackageCheck className="w-4 h-4 text-blue-600" />
+              <span className="font-semibold text-slate-700">
+                แนบภาพสินค้าควบคุมสำหรับใบปล่อยรถนี้
+              </span>
+            </div>
+            <p className="mt-1 text-[11px] text-slate-500">
+              คุณสามารถเลือกรูปหลายไฟล์พร้อมกัน และลบรูปที่ไม่ต้องการก่อนกดบันทึก
+            </p>
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="text-xs font-bold text-slate-700 flex items-center justify-between">
+              <span>รูปภาพสินค้าควบคุม</span>
+              <span className="text-xs text-slate-500 font-medium">
+                {productControllerImages.length} รูปที่เตรียมอัปโหลด
+              </span>
+            </label>
+
+            <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+              {productControllerImages.map((image, idx) => (
+                <div
+                  key={`${image}-${idx}`}
+                  className="relative rounded-lg overflow-hidden border border-slate-200 aspect-square bg-slate-100"
+                >
+                  <img
+                    src={image}
+                    alt={`ภาพสินค้าควบคุม ${idx + 1}`}
+                    className="w-full h-full object-cover"
+                  />
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setProductControllerImages((prev) =>
+                        prev.filter((_, i) => i !== idx),
+                      )
+                    }
+                    className="absolute top-1 right-1 bg-slate-900/80 text-white p-1 rounded-full hover:bg-rose-600 transition-colors"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </div>
+              ))}
+
+              <label className="border-2 border-dashed border-slate-300 hover:border-blue-500 bg-slate-50 hover:bg-blue-50/30 rounded-lg aspect-square flex flex-col items-center justify-center cursor-pointer transition-colors p-2 text-center">
+                <PackageCheck className="w-5 h-5 text-blue-600 mb-1" />
+                <span className="text-xs font-bold text-slate-700 leading-tight">
+                  + เพิ่มรูป
+                </span>
+                <input
+                  id="product-controller-form"
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  className="hidden"
+                  onChange={handleProductControllerImageChange}
+                />
+              </label>
+            </div>
+          </div>
+
+          {productControllerImages.length === 0 && (
+            <div className="rounded-lg border border-dashed border-slate-200 bg-white p-3 text-center text-[11px] text-slate-400">
+              ยังไม่มีรูปภาพที่เลือกไว้ กดปุ่ม “+ เพิ่มรูป” เพื่อเลือกภาพสินค้าควบคุม
+            </div>
+          )}
+        </div>
+      </AnimatedDrawer>
+
+      {/* RIGHT SLIDE-OVER RETURN DOCUMENTS DRAWER */}
+      <AnimatedDrawer
+        isOpen={isReturnDocumentsDrawerOpen}
+        onClose={() => setIsReturnDocumentsDrawerOpen(false)}
+        title="เอกสารคืนของ"
+        formId="return-documents-form"
+        onSubmit={handleReturnDocumentsSubmit}
+        submitLabel={returnDocumentsUploading ? "กำลังบันทึก..." : "บันทึกเอกสาร"}
+        maxWidthClass="max-w-xl"
+      >
+        <div className="space-y-3">
+          <div className="rounded-xl border border-slate-200 bg-slate-50/80 p-2.5 text-xs text-slate-600">
+            <div className="flex items-center gap-2">
+              <FileText className="w-4 h-4 text-blue-600" />
+              <span className="font-semibold text-slate-700">
+                แนบเอกสารคืนของสำหรับใบปล่อยรถนี้
+              </span>
+            </div>
+            <p className="mt-1 text-[11px] text-slate-500">
+              คุณสามารถเลือกไฟล์หลายรายการพร้อมกัน และลบไฟล์ที่ไม่ต้องการก่อนกดบันทึก
+            </p>
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="text-xs font-bold text-slate-700 flex items-center justify-between">
+              <span>ไฟล์เอกสารคืนของ</span>
+              <span className="text-xs text-slate-500 font-medium">
+                {returnDocuments.length} ไฟล์ที่เตรียมอัปโหลด
+              </span>
+            </label>
+
+            <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+              {returnDocuments.map((document, idx) => {
+                const isImage = document.startsWith("data:image/");
+                return (
+                  <div
+                    key={`${document}-${idx}`}
+                    className="relative rounded-lg overflow-hidden border border-slate-200 aspect-square bg-slate-100"
+                  >
+                    {isImage ? (
+                      <img
+                        src={document}
+                        alt={`เอกสารคืนของ ${idx + 1}`}
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <div className="flex h-full w-full flex-col items-center justify-center p-2 text-center text-slate-500">
+                        <FileText className="w-6 h-6 text-blue-600 mb-1" />
+                        <span className="text-[10px] font-semibold leading-tight">
+                          เอกสาร {idx + 1}
+                        </span>
+                      </div>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setReturnDocuments((prev) => prev.filter((_, i) => i !== idx))
+                      }
+                      className="absolute top-1 right-1 bg-slate-900/80 text-white p-1 rounded-full hover:bg-rose-600 transition-colors"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </div>
+                );
+              })}
+
+              <label className="border-2 border-dashed border-slate-300 hover:border-blue-500 bg-slate-50 hover:bg-blue-50/30 rounded-lg aspect-square flex flex-col items-center justify-center cursor-pointer transition-colors p-2 text-center">
+                <FileText className="w-5 h-5 text-blue-600 mb-1" />
+                <span className="text-xs font-bold text-slate-700 leading-tight">
+                  + เพิ่มไฟล์
+                </span>
+                <input
+                  id="return-documents-form"
+                  type="file"
+                  accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.csv,.txt"
+                  multiple
+                  className="hidden"
+                  onChange={handleReturnDocumentsFileChange}
+                />
+              </label>
+            </div>
+          </div>
+
+          {returnDocuments.length === 0 && (
+            <div className="rounded-lg border border-dashed border-slate-200 bg-white p-3 text-center text-[11px] text-slate-400">
+              ยังไม่มีไฟล์ที่เลือกไว้ กดปุ่ม “+ เพิ่มไฟล์” เพื่อเลือกเอกสารคืนของ
+            </div>
+          )}
+        </div>
       </AnimatedDrawer>
 
       {/* RIGHT SLIDE-OVER DETAIL INSPECTOR DRAWER (WIDER MAX-W-6XL) */}
@@ -3285,7 +3584,11 @@ export const CarReleaseList: React.FC = () => {
 
                       const handleActionClick = () => {
                         if (isDisabled) return;
-                        if (isCarReturnAction) {
+                        if (menu.action_key === "controlled_items") {
+                          handleOpenProductControllerDrawer(selectedRelease);
+                        } else if (menu.action_key === "return_docs") {
+                          handleOpenReturnDocumentsDrawer(selectedRelease);
+                        } else if (isCarReturnAction) {
                           handleOpenReturnDrawer(selectedRelease);
                         } else if (isAccountingAction) {
                           handleOpenAccountingDrawer(selectedRelease);
@@ -3487,6 +3790,101 @@ export const CarReleaseList: React.FC = () => {
                   </div>
                 </div>
 
+                {/* Product Controller Photos */}
+                <div className="bg-white space-y-2 shadow-2xs">
+                  <h4 className="font-bold text-slate-900 text-xs border-b border-slate-100 pb-2 flex items-center justify-between">
+                    <span>ภาพสินค้าควบคุม</span>
+                    <button
+                      type="button"
+                      onClick={() => handleOpenProductControllerDrawer(selectedRelease)}
+                      className="text-[10px] text-blue-600 font-semibold"
+                    >
+                      เพิ่มภาพ
+                    </button>
+                  </h4>
+
+                  {Array.isArray(selectedRelease.product_controller_images) &&
+                  selectedRelease.product_controller_images.length > 0 ? (
+                    <div className="grid grid-cols-4 sm:grid-cols-8 gap-2 pt-1">
+                      {selectedRelease.product_controller_images.map((image: string, idx: number) => (
+                        <div
+                          key={`${image}-${idx}`}
+                          onClick={() => openLightbox([{ url: getImageUrl(image), title: "ภาพสินค้าควบคุม", description: selectedRelease.car_release_no }], 0)}
+                          className="border border-slate-200 rounded-lg overflow-hidden bg-slate-100 aspect-video relative group shadow-2xs cursor-pointer hover:border-blue-500 hover:shadow-md transition-all"
+                        >
+                          <img
+                            loading="lazy"
+                            src={getImageUrl(image)}
+                            alt={`ภาพสินค้าควบคุม ${idx + 1}`}
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-center py-3 text-slate-400 bg-slate-50 rounded-lg border border-dashed border-slate-200 text-[11px]">
+                      ยังไม่มีภาพสินค้าควบคุมสำหรับใบปล่อยรถนี้
+                    </div>
+                  )}
+                </div>
+
+                {/* Return Documents */}
+                <div className="bg-white space-y-2 shadow-2xs">
+                  <h4 className="font-bold text-slate-900 text-xs border-b border-slate-100 pb-2 flex items-center justify-between">
+                    <span>เอกสารคืนของ</span>
+                    <button
+                      type="button"
+                      onClick={() => handleOpenReturnDocumentsDrawer(selectedRelease)}
+                      className="text-[10px] text-blue-600 font-semibold"
+                    >
+                      เพิ่มไฟล์
+                    </button>
+                  </h4>
+
+                  {Array.isArray(selectedRelease.return_documents) &&
+                  selectedRelease.return_documents.length > 0 ? (
+                    <div className="grid grid-cols-4 sm:grid-cols-8 gap-2 pt-1">
+                      {selectedRelease.return_documents.map((document: string, idx: number) => {
+                        const docUrl = getImageUrl(document);
+                        const isImage = /\.(jpg|jpeg|png|webp|gif)$/i.test(document) || document.startsWith("data:image/");
+                        return (
+                          <div
+                            key={`${document}-${idx}`}
+                            onClick={() => {
+                              if (isImage) {
+                                openLightbox([{ url: docUrl, title: "เอกสารคืนของ", description: selectedRelease.car_release_no }], 0);
+                              } else {
+                                window.open(docUrl, "_blank", "noopener,noreferrer");
+                              }
+                            }}
+                            className="border border-slate-200 rounded-lg overflow-hidden bg-slate-100 aspect-video relative group shadow-2xs cursor-pointer hover:border-blue-500 hover:shadow-md transition-all"
+                          >
+                            {isImage ? (
+                              <img
+                                loading="lazy"
+                                src={docUrl}
+                                alt={`เอกสารคืนของ ${idx + 1}`}
+                                className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                              />
+                            ) : (
+                              <div className="flex h-full w-full flex-col items-center justify-center p-2 text-center text-slate-500">
+                                <FileText className="w-6 h-6 text-blue-600 mb-1" />
+                                <span className="text-[10px] font-semibold leading-tight">
+                                  เอกสาร {idx + 1}
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className="text-center py-3 text-slate-400 bg-slate-50 rounded-lg border border-dashed border-slate-200 text-[11px]">
+                      ยังไม่มีเอกสารคืนของสำหรับใบปล่อยรถนี้
+                    </div>
+                  )}
+                </div>
+
                 {/* Lazy-Loaded Car Release Photos (Smooth rendering) */}
                 <div className="bg-white space-y-2 shadow-2xs">
                   <h4 className="font-bold text-slate-900 text-xs border-b border-slate-100 pb-2 flex items-center justify-between">
@@ -3657,7 +4055,7 @@ export const CarReleaseList: React.FC = () => {
                             <div className="text-[10px] font-semibold text-slate-500 flex items-center justify-between">
                               <span className="flex items-center gap-1">
                                 <Wallet className="w-3 h-3 text-slate-400" />
-                                <span>ประเภทการชำระเงิน</span>
+                                <span>การชำระเงิน</span>
                               </span>
                               <span>
                                 {deliverySummary.cashCount +
@@ -3863,9 +4261,9 @@ export const CarReleaseList: React.FC = () => {
 
                                     {/* 2. รหัสออเดอร์ */}
                                     <td className={`px-2.5 py-1 font-mono font-bold flex items-center gap-1 ${bypass}`}>
-                                      {st.bypass && (
+                                      {st.bypass ? (
                                         <ChevronRight className="w-4 h-4"/>
-                                      )}
+                                      ) : null}
                                       {st.data_store_no ||
                                         st.order_no ||
                                         st.orderNo ||
@@ -4301,7 +4699,7 @@ export const CarReleaseList: React.FC = () => {
             </div>
 
             {/* Form Section 1: Information */}
-            <div className="border border-slate-200/80 bg-white rounded-xl p-4 space-y-3.5 shadow-2xs">
+            <div className=" bg-white space-y-3.5 shadow-2xs">
               <h4 className="font-bold text-slate-900 text-xs border-b border-slate-100 pb-2 flex items-center gap-1.5">
                 <FileText className="w-3.5 h-3.5 text-slate-600" />
                 <span>1. ข้อมูลการคืนรถ</span>
@@ -4388,7 +4786,7 @@ export const CarReleaseList: React.FC = () => {
             </div>
 
             {/* Form Section 2: 8 Vehicle Return Photos */}
-            <div className="border border-slate-200/80 bg-white rounded-xl p-4 space-y-3.5 shadow-2xs">
+            <div className=" bg-white space-y-3.5 shadow-2xs">
               <h4 className="font-bold text-slate-900 text-xs border-b border-slate-100 pb-2 flex items-center justify-between">
                 <span className="flex items-center gap-1.5">
                   <Camera className="w-3.5 h-3.5 text-slate-600" />
@@ -4470,7 +4868,7 @@ export const CarReleaseList: React.FC = () => {
         isOpen={isAccountingDrawerOpen}
         onClose={() => setIsAccountingDrawerOpen(false)}
         title="อัปเดตสถานะทางบัญชี"
-        maxWidthClass="max-w-md"
+        maxWidthClass="max-w-xl"
         formId="accounting-status-form"
         onSubmit={handleUpdateAccountingStatus}
         submitLabel={isSubmittingAcc ? "กำลังบันทึก..." : "บันทึกสถานะทางบัญชี"}

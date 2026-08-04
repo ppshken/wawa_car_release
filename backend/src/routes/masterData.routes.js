@@ -5,35 +5,9 @@ const { authenticateToken } = require('../middleware/auth');
 const { upload, saveBase64Image } = require('../middleware/upload');
 const xlsx = require('xlsx');
 
-// Auto-migration for car and group_store tables
-(async () => {
-  try {
-    await query("ALTER TABLE car ADD COLUMN car_image LONGTEXT NULL");
-  } catch (err) {}
-  try {
-    await query("ALTER TABLE group_store MODIFY COLUMN car_id VARCHAR(100) NULL DEFAULT NULL");
-  } catch (err) {}
-  try {
-    await query("ALTER TABLE group_store MODIFY COLUMN load1 INT(11) NULL DEFAULT 0");
-  } catch (err) {}
-})();
-
 // =========================================================
 // 1. STORES (ตาราง: store)
 // =========================================================
-
-// Auto-migration for store opening and closing time columns
-(async () => {
-  try {
-    const cols = [
-      "ALTER TABLE store ADD COLUMN open_time VARCHAR(10) DEFAULT '08:00'",
-      "ALTER TABLE store ADD COLUMN close_time VARCHAR(10) DEFAULT '17:00'"
-    ];
-    for (const sql of cols) {
-      try { await query(sql); } catch (e) {}
-    }
-  } catch (err) {}
-})();
 
 // GET /api/master/stores (Supports server-side pagination & search: ?page=1&limit=10&search=xyz)
 router.get('/stores', authenticateToken, async (req, res) => {
@@ -501,9 +475,9 @@ router.get('/vehicles', authenticateToken, async (req, res) => {
       vehicles = await query('SELECT * FROM car ORDER BY car_id DESC');
     } catch (e1) {
       try {
-        vehicles = await query('SELECT car_id AS vehicle_id, car_id, license_plate, brand, model, sub_model, year, quantity FROM car ORDER BY car_id DESC');
+        vehicles = await query('SELECT car_id AS vehicle_id, car_id, license_plate, brand, model, sub_model, year, quantity, gps FROM car WHERE active = "active" ORDER BY car_id DESC');
       } catch (e2) {
-        vehicles = await query('SELECT * FROM car');
+        vehicles = await query('SELECT * FROM car WHERE active = "active" ORDER BY car_id DESC');
       }
     }
 
@@ -530,7 +504,7 @@ router.get('/vehicles', authenticateToken, async (req, res) => {
 // POST /api/master/vehicles
 router.post('/vehicles', authenticateToken, async (req, res) => {
   try {
-    const { car_id, car_code, license_plate, brand, model, sub_model, year, quantity, car_image } = req.body;
+    const { car_id, car_code, license_plate, brand, model, sub_model, year, quantity, car_image, active, gps } = req.body;
     if (!license_plate) {
       return res.status(400).json({ success: false, message: 'กรุณากรอกทะเบียนรถ' });
     }
@@ -550,19 +524,19 @@ router.post('/vehicles', authenticateToken, async (req, res) => {
 
     try {
       await query(
-        'INSERT INTO car (car_id, car_code, license_plate, brand, model, sub_model, year, quantity, car_image) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
-        [finalCarId, car_code || null, license_plate, brand || null, model || null, sub_model || null, year ? parseInt(year, 10) : null, qtyNum, finalCarImage || null]
+        'INSERT INTO car (car_id, car_code, license_plate, brand, model, sub_model, year, quantity, car_image, active, gps) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        [finalCarId, car_code || null, license_plate, brand || null, model || null, sub_model || null, year ? parseInt(year, 10) : null, qtyNum, finalCarImage || null, active || "active", gps || null]
       );
     } catch (dbErr) {
       try {
         await query(
-          'INSERT INTO car (car_id, license_plate, brand, model, sub_model, year, quantity, car_image) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-          [finalCarId, license_plate, brand || null, model || null, sub_model || null, year ? parseInt(year, 10) : null, qtyNum, finalCarImage || null]
+          'INSERT INTO car (car_id, license_plate, brand, model, sub_model, year, quantity, car_image, active, gps) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+          [finalCarId, license_plate, brand || null, model || null, sub_model || null, year ? parseInt(year, 10) : null, qtyNum, finalCarImage || null, active || "active", gps || null]
         );
       } catch (e2) {
         await query(
-          'INSERT INTO car (license_plate, brand, model, sub_model, year, quantity, car_image) VALUES (?, ?, ?, ?, ?, ?, ?)',
-          [license_plate, brand || null, model || null, sub_model || null, year ? parseInt(year, 10) : null, qtyNum, finalCarImage || null]
+          'INSERT INTO car (license_plate, brand, model, sub_model, year, quantity, car_image, active, gps) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+          [license_plate, brand || null, model || null, sub_model || null, year ? parseInt(year, 10) : null, qtyNum, finalCarImage || null, active || "active", gps || null]
         );
       }
     }
@@ -577,7 +551,7 @@ router.post('/vehicles', authenticateToken, async (req, res) => {
 router.put('/vehicles/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
-    const { car_code, license_plate, brand, model, sub_model, year, quantity, car_image } = req.body;
+    const { car_code, license_plate, brand, model, sub_model, year, quantity, car_image, active, gps } = req.body;
     if (!license_plate) {
       return res.status(400).json({ success: false, message: 'กรุณากรอกทะเบียนรถ' });
     }
@@ -592,13 +566,13 @@ router.put('/vehicles/:id', authenticateToken, async (req, res) => {
 
     try {
       await query(
-        'UPDATE car SET car_code = ?, license_plate = ?, brand = ?, model = ?, sub_model = ?, year = ?, quantity = ?, car_image = ? WHERE car_id = ?',
-        [car_code || null, license_plate, brand || null, model || null, sub_model || null, year ? parseInt(year, 10) : null, qtyNum, finalCarImage || null, id]
+        'UPDATE car SET car_code = ?, license_plate = ?, brand = ?, model = ?, sub_model = ?, year = ?, quantity = ?, car_image = ?, active = ?, gps = ? WHERE car_id = ?',
+        [car_code || null, license_plate, brand || null, model || null, sub_model || null, year ? parseInt(year, 10) : null, qtyNum, finalCarImage || null, active || "active", gps || null, id]
       );
     } catch (dbErr) {
       await query(
-        'UPDATE car SET license_plate = ?, brand = ?, model = ?, sub_model = ?, year = ?, quantity = ?, car_image = ? WHERE car_id = ?',
-        [license_plate, brand || null, model || null, sub_model || null, year ? parseInt(year, 10) : null, qtyNum, finalCarImage || null, id]
+        'UPDATE car SET license_plate = ?, brand = ?, model = ?, sub_model = ?, year = ?, quantity = ?, car_image = ?, active = ?, gps = ? WHERE car_id = ?',
+        [license_plate, brand || null, model || null, sub_model || null, year ? parseInt(year, 10) : null, qtyNum, finalCarImage || null, active || "active", gps || null, id]
       );
     }
 

@@ -203,51 +203,8 @@ export const ImageLightboxModal: React.FC<ImageLightboxModalProps> = ({
             <ZoomIn className="w-4 h-4" />
           </button>
 
-          {/* Rotate */}
-          <button
-            type="button"
-            onClick={handleRotate}
-            className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 transition-colors ml-1"
-            title="หมุนรูปภาพ (Rotate: R)"
-          >
-            <RotateCw className="w-4 h-4" />
-          </button>
-
-          {/* Reset Zoom & Rotation */}
-          {(scale !== 1 || rotation !== 0 || position.x !== 0 || position.y !== 0) && (
-            <button
-              type="button"
-              onClick={handleReset}
-              className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-amber-400 transition-colors"
-              title="รีเซ็ตตำแหน่ง/ขนาดย่อขยาย (Reset: 0)"
-            >
-              <RefreshCw className="w-4 h-4" />
-            </button>
-          )}
-
           {/* Separator */}
           <div className="h-4 w-[1px] bg-slate-800 my-auto mx-1" />
-
-          {/* Download */}
-          <button
-            type="button"
-            onClick={handleDownload}
-            className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 transition-colors"
-            title="ดาวน์โหลดรูปภาพ"
-          >
-            <Download className="w-4 h-4" />
-          </button>
-
-          {/* Open in New Tab */}
-          <a
-            href={currentImg?.url}
-            target="_blank"
-            rel="noreferrer"
-            className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 transition-colors"
-            title="เปิดรูปในแท็บใหม่"
-          >
-            <ExternalLink className="w-4 h-4" />
-          </a>
 
           {/* Close */}
           <button

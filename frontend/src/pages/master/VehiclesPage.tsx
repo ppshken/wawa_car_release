@@ -19,6 +19,7 @@ import {
   Camera,
   X,
   ImageIcon,
+  MapIcon,
 } from "lucide-react";
 
 interface CarData {
@@ -32,6 +33,8 @@ interface CarData {
   quantity?: number;
   car_image?: string;
   is_assigned_today?: boolean;
+  gps?: boolean;
+  active?: "active" | "inactive";
 }
 
 const generateUUID = () => {
@@ -76,6 +79,8 @@ export const VehiclesPage: React.FC = () => {
   const [formYear, setFormYear] = useState("");
   const [formQuantity, setFormQuantity] = useState<number>(100);
   const [formCarImage, setFormCarImage] = useState<string>("");
+  const [formActive, setFormActive] = useState<"active" | "inactive" | "">("");
+  const [formGps, setFormGps] = useState<number>(0);
 
   // Delete Modal
   const [vehicleToDelete, setVehicleToDelete] = useState<CarData | null>(null);
@@ -111,9 +116,11 @@ export const VehiclesPage: React.FC = () => {
       formModel !== (editingVehicle.model || "") ||
       formSubModel !== (editingVehicle.sub_model || "") ||
       formQuantity !== (editingVehicle.quantity ?? 100) ||
-      formCarImage !== (editingVehicle.car_image || "")
+      formCarImage !== (editingVehicle.car_image || "") ||
+      formActive !== (editingVehicle.active || "") ||
+      formGps !== (editingVehicle.gps ? 1 : 0)
     );
-  }, [editingVehicle, formLicensePlate, formBrand, formModel, formSubModel, formQuantity, formCarImage]);
+  }, [editingVehicle, formLicensePlate, formBrand, formModel, formSubModel, formQuantity, formCarImage, formActive, formGps]);
 
   const fetchVehicles = useCallback(async (dateStr?: string) => {
     setLoading(true);
@@ -178,6 +185,8 @@ export const VehiclesPage: React.FC = () => {
     setFormYear("");
     setFormQuantity(100);
     setFormCarImage("");
+    setFormActive("");
+    setFormGps(0);
     setIsDrawerOpen(true);
   };
 
@@ -192,6 +201,8 @@ export const VehiclesPage: React.FC = () => {
     setFormYear(v.year ? String(v.year) : "");
     setFormQuantity(v.quantity ?? 100);
     setFormCarImage(v.car_image || "");
+    setFormActive(v.active || "");
+    setFormGps(v.gps ? 1 : 0);
     setIsDrawerOpen(true);
   };
 
@@ -217,6 +228,8 @@ export const VehiclesPage: React.FC = () => {
         year: formYear ? Number(formYear) : null,
         quantity: Number(formQuantity) || 100,
         car_image: formCarImage,
+        active: formActive || "active",
+        gps: formGps || null,
       };
 
       if (editingVehicle) {
@@ -338,6 +351,8 @@ export const VehiclesPage: React.FC = () => {
                 <th className="py-1.5 px-3">รุ่นย่อย / ปีรถ</th>
                 <th className="py-1.5 px-3 text-right">ความจุสินค้า (ลัง)</th>
                 <th className="py-1.5 px-3 text-center">สถานะการใช้รถ</th>
+                <th className="py-1.5 px-3 text-center">GPS</th>
+                <th className="py-1.5 px-3 text-center">สถานะ</th>
                 <th className="py-1.5 px-3 text-center">วันที่สร้าง</th>
                 <th className="py-1.5 px-3 text-right">จัดการ</th>
               </tr>
@@ -392,6 +407,28 @@ export const VehiclesPage: React.FC = () => {
                         title={`ว่าง พร้อมใช้งาน ณ วันที่ ${selectedDate}`}
                       >
                         <CheckCircle2 className="w-3 h-3 text-emerald-600" /> ว่าง (พร้อมใช้งาน)
+                      </span>
+                    )}
+                  </td>
+                  <td className="py-1 px-3 text-center">
+                    {v.gps ? (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.2 rounded-full text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200">
+                        <MapIcon className="w-3 h-3 text-blue-600" /> มี GPS
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.2 rounded-full text-[10px] font-bold bg-slate-50 text-slate-500 border border-slate-200">
+                        <MapIcon className="w-3 h-3 text-slate-400" /> ไม่มี GPS
+                      </span>
+                    )}
+                  </td>
+                  <td className="py-1 px-3 text-center">
+                    {v.active === "active" ? (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.2 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                        <CheckCircle2 className="w-3 h-3 text-emerald-600" /> ใช้งาน
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.2 rounded-full text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
+                        <AlertCircle className="w-3 h-3 text-rose-600" /> ไม่ใช้งาน
                       </span>
                     )}
                   </td>
@@ -534,6 +571,18 @@ export const VehiclesPage: React.FC = () => {
         )}
         {renderField("ปีรถ (Year)", false,
           <input type="number" value={formYear} onChange={(e) => setFormYear(e.target.value)} placeholder="เช่น 2024" className={inputCls} min="1990" max="2100" />
+        )}
+        {renderField("สถานะการใช้งาน (active)", false,
+          <select value={formActive} onChange={(e) => setFormActive(e.target.value as "active" | "inactive")} className={`${inputCls} cursor-pointer`}>
+            <option value="active">ใช้งาน</option>
+            <option value="inactive">ไม่ใช้งาน</option>
+          </select>
+        )}
+        {renderField("GPS", false,
+          <select value={formGps.toString()} onChange={(e) => setFormGps(parseInt(e.target.value, 10))} className={`${inputCls} cursor-pointer`}>
+            <option value="1">มี GPS</option>
+            <option value="0">ไม่มี GPS</option>
+          </select>
         )}
       </AnimatedDrawer>
 
