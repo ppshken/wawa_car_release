@@ -95,7 +95,7 @@ export const ColumnToggleDropdown: React.FC<ColumnToggleDropdownProps> = ({
                     onChange={() => toggleColumn(col.id)}
                     className="w-3.5 h-3.5 rounded text-slate-900 focus:ring-slate-900 border-slate-300 cursor-pointer"
                   />
-                  <span className={isChecked ? 'font-medium text-slate-900' : 'text-slate-400 line-through'}>
+                  <span className={isChecked ? 'font-medium text-slate-900' : 'text-slate-400'}>
                     {col.label}
                   </span>
                 </label>

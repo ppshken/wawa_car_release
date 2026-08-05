@@ -31,6 +31,7 @@ import { AccessPage } from './pages/users/AccessPage';
 import { RoutePage } from './pages/RoutePage';
 import { ImportOptimoPage } from './pages/ImportOptimoPage';
 import { Reports } from './pages/Reports';
+import { AuditLog } from './pages/AuditLog';
 import { ProfilePage } from './pages/ProfilePage';
 import { ApiKeyManagement } from './pages/ApiKeyManagement';
 
@@ -55,7 +56,7 @@ const ProtectedLayout: React.FC<{ children: React.ReactNode }> = ({ children }) 
         <Navbar />
         <div className="flex flex-1 bg-white overflow-hidden">
           <Sidebar />
-          <main className="flex-1 p-3 sm:p-5 w-full max-w-full bg-white overflow-y-auto overflow-x-hidden pb-16 md:pb-5">
+          <main className="flex-1 p-3 sm:p-5 w-full max-w-full bg-white overflow-y-auto overflow-x-hidden pb-24 md:pb-5">
             {children}
           </main>
         </div>
@@ -155,6 +156,14 @@ export const App: React.FC = () => {
             element={
               <ProtectedLayout>
                 <PermissionGuard permKey="reports"><Reports /></PermissionGuard>
+              </ProtectedLayout>
+            }
+          />
+          <Route
+            path="/audit-log"
+            element={
+              <ProtectedLayout>
+                <PermissionGuard permKey="reports"><AuditLog /></PermissionGuard>
               </ProtectedLayout>
             }
           />

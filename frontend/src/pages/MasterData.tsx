@@ -103,9 +103,10 @@ const AnimatedDrawer: React.FC<{
   formId: string;
   onSubmit: (e: React.FormEvent) => void;
   submitLabel: string;
+  isSubmitting?: boolean;
   isDirty?: boolean;
   children: React.ReactNode;
-}> = ({ isOpen, onClose, title, formId, onSubmit, submitLabel, isDirty = false, children }) => {
+}> = ({ isOpen, onClose, title, formId, onSubmit, submitLabel, isSubmitting = false, isDirty = false, children }) => {
   const [visible, setVisible] = useState(false);
   const [closing, setClosing] = useState(false);
   const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
@@ -127,7 +128,7 @@ const AnimatedDrawer: React.FC<{
   }, [isOpen]);
 
   const handleRequestClose = () => {
-    if (closing) return;
+    if (closing || isSubmitting) return;
     if (isDirty) {
       setShowDiscardConfirm(true);
     } else {
@@ -175,15 +176,23 @@ const AnimatedDrawer: React.FC<{
               <button
                 type="button"
                 onClick={handleRequestClose}
-                className="bg-white border border-slate-200 text-slate-700 hover:bg-slate-100 font-medium px-3 py-1.5 rounded-lg text-xs transition-colors"
+                disabled={isSubmitting}
+                className="bg-white border border-slate-200 text-slate-700 hover:bg-slate-100 font-medium px-3 py-1.5 rounded-lg text-xs transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 ยกเลิก
               </button>
               <button
                 type="submit"
                 form={formId}
-                className="bg-slate-900 hover:bg-slate-800 text-white font-semibold px-4 py-1.5 rounded-lg text-xs transition-colors shadow-2xs"
+                disabled={isSubmitting}
+                className="bg-slate-900 hover:bg-slate-800 text-white font-semibold px-4 py-1.5 rounded-lg text-xs transition-colors shadow-2xs inline-flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
               >
+                {isSubmitting && (
+                  <svg className="animate-spin h-3.5 w-3.5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                  </svg>
+                )}
                 {submitLabel}
               </button>
             </div>
@@ -307,6 +316,22 @@ export const MasterData: React.FC = () => {
   const [formAccStatusName, setFormAccStatusName] = useState("");
   const [formAccStatusDesc, setFormAccStatusDesc] = useState("");
   const [accStatusToDelete, setAccStatusToDelete] = useState<AccountingStatusData | null>(null);
+
+  // Loading States for Save/Delete
+  const [isSavingStore, setIsSavingStore] = useState(false);
+  const [isDeletingStore, setIsDeletingStore] = useState(false);
+  const [isSavingKey, setIsSavingKey] = useState(false);
+  const [isDeletingKey, setIsDeletingKey] = useState(false);
+  const [isSavingPda, setIsSavingPda] = useState(false);
+  const [isDeletingPda, setIsDeletingPda] = useState(false);
+  const [isSavingPayment, setIsSavingPayment] = useState(false);
+  const [isDeletingPayment, setIsDeletingPayment] = useState(false);
+  const [isSavingVehicle, setIsSavingVehicle] = useState(false);
+  const [isDeletingVehicle, setIsDeletingVehicle] = useState(false);
+  const [isSavingParking, setIsSavingParking] = useState(false);
+  const [isDeletingParking, setIsDeletingParking] = useState(false);
+  const [isSavingAccStatus, setIsSavingAccStatus] = useState(false);
+  const [isDeletingAccStatus, setIsDeletingAccStatus] = useState(false);
 
   // ──── Dirty Checks ────
   const isStoreDirty = useMemo(() => {
@@ -581,6 +606,8 @@ export const MasterData: React.FC = () => {
   const handleSaveStore = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formStoreName) return showError("กรุณากรอกชื่อร้านค้า");
+    if (isSavingStore) return;
+    setIsSavingStore(true);
     try {
       if (editingStore) {
         await api.put(`/master/stores/${editingStore.store_id}`, {
@@ -611,11 +638,14 @@ export const MasterData: React.FC = () => {
       fetchStores();
     } catch (err: any) {
       showError(err?.response?.data?.message || "เกิดข้อผิดพลาดในการบันทึกร้านค้า");
+    } finally {
+      setIsSavingStore(false);
     }
   };
 
   const handleDeleteStore = async () => {
     if (!storeToDelete) return;
+    setIsDeletingStore(true);
     try {
       await api.delete(`/master/stores/${storeToDelete.store_id}`);
       showSuccess(`ลบร้านค้า "${storeToDelete.store_name}" เรียบร้อย`);
@@ -623,6 +653,7 @@ export const MasterData: React.FC = () => {
     } catch (err: any) {
       showError(err?.response?.data?.message || "ไม่สามารถลบร้านค้าได้");
     } finally {
+      setIsDeletingStore(false);
       setStoreToDelete(null);
     }
   };
@@ -667,6 +698,8 @@ export const MasterData: React.FC = () => {
   const handleSaveKey = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formKeyHolderName) return showError("กรุณากรอกชื่อจุด/ผู้รับฝากกุญแจ");
+    if (isSavingKey) return;
+    setIsSavingKey(true);
     try {
       if (editingKey) {
         await api.put(`/master/keys/${editingKey.key_holder_id}`, {
@@ -683,11 +716,14 @@ export const MasterData: React.FC = () => {
       fetchKeys();
     } catch (err: any) {
       showError(err?.response?.data?.message || "เกิดข้อผิดพลาดในการบันทึกจุดฝากกุญแจ");
+    } finally {
+      setIsSavingKey(false);
     }
   };
 
   const handleDeleteKey = async () => {
     if (!keyToDelete) return;
+    setIsDeletingKey(true);
     try {
       await api.delete(`/master/keys/${keyToDelete.key_holder_id}`);
       showSuccess(`ลบจุดฝากกุญแจ "${keyToDelete.key_holder_name}" เรียบร้อย`);
@@ -695,6 +731,7 @@ export const MasterData: React.FC = () => {
     } catch (err: any) {
       showError(err?.response?.data?.message || "ไม่สามารถลบจุดฝากกุญแจได้");
     } finally {
+      setIsDeletingKey(false);
       setKeyToDelete(null);
     }
   };
@@ -723,6 +760,8 @@ export const MasterData: React.FC = () => {
   const handleSavePda = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formPdaName) return showError("กรุณากรอกชื่อเครื่อง PDA");
+    if (isSavingPda) return;
+    setIsSavingPda(true);
     try {
       if (editingPda) {
         await api.put(`/master/pda/${editingPda.pda_id}`, {
@@ -745,11 +784,14 @@ export const MasterData: React.FC = () => {
       fetchPdas();
     } catch (err: any) {
       showError(err?.response?.data?.message || "เกิดข้อผิดพลาดในการบันทึกเครื่อง PDA");
+    } finally {
+      setIsSavingPda(false);
     }
   };
 
   const handleDeletePda = async () => {
     if (!pdaToDelete) return;
+    setIsDeletingPda(true);
     try {
       await api.delete(`/master/pda/${pdaToDelete.pda_id}`);
       showSuccess(`ลบเครื่อง PDA "${pdaToDelete.device_name}" เรียบร้อย`);
@@ -757,6 +799,7 @@ export const MasterData: React.FC = () => {
     } catch (err: any) {
       showError(err?.response?.data?.message || "ไม่สามารถลบเครื่อง PDA ได้");
     } finally {
+      setIsDeletingPda(false);
       setPdaToDelete(null);
     }
   };
@@ -779,6 +822,8 @@ export const MasterData: React.FC = () => {
   const handleSavePayment = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formPaymentName) return showError("กรุณากรอกชื่อประเภทการชำระเงิน");
+    if (isSavingPayment) return;
+    setIsSavingPayment(true);
     try {
       if (editingPayment) {
         await api.put(`/master/payments/${editingPayment.payment_id}`, {
@@ -795,11 +840,14 @@ export const MasterData: React.FC = () => {
       fetchPayments();
     } catch (err: any) {
       showError(err?.response?.data?.message || "เกิดข้อผิดพลาดในการบันทึกประเภทการชำระเงิน");
+    } finally {
+      setIsSavingPayment(false);
     }
   };
 
   const handleDeletePayment = async () => {
     if (!paymentToDelete) return;
+    setIsDeletingPayment(true);
     try {
       await api.delete(`/master/payments/${paymentToDelete.payment_id}`);
       showSuccess(`ลบประเภทการชำระเงิน "${paymentToDelete.payment_name}" เรียบร้อย`);
@@ -807,6 +855,7 @@ export const MasterData: React.FC = () => {
     } catch (err: any) {
       showError(err?.response?.data?.message || "ไม่สามารถลบประเภทการชำระเงินได้");
     } finally {
+      setIsDeletingPayment(false);
       setPaymentToDelete(null);
     }
   };
@@ -837,6 +886,8 @@ export const MasterData: React.FC = () => {
   const handleSaveVehicle = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formLicensePlate) return showError("กรุณากรอกทะเบียนรถ");
+    if (isSavingVehicle) return;
+    setIsSavingVehicle(true);
     try {
       if (editingVehicle) {
         await api.put(`/master/vehicles/${editingVehicle.car_id}`, {
@@ -861,11 +912,14 @@ export const MasterData: React.FC = () => {
       fetchVehicles();
     } catch (err: any) {
       showError(err?.response?.data?.message || "เกิดข้อผิดพลาดในการบันทึกข้อมูลรถ");
+    } finally {
+      setIsSavingVehicle(false);
     }
   };
 
   const handleDeleteVehicle = async () => {
     if (!vehicleToDelete) return;
+    setIsDeletingVehicle(true);
     try {
       await api.delete(`/master/vehicles/${vehicleToDelete.car_id}`);
       showSuccess(`ลบข้อมูลรถทะเบียน "${vehicleToDelete.license_plate}" เรียบร้อย`);
@@ -873,6 +927,7 @@ export const MasterData: React.FC = () => {
     } catch (err: any) {
       showError(err?.response?.data?.message || "ไม่สามารถลบข้อมูลรถได้");
     } finally {
+      setIsDeletingVehicle(false);
       setVehicleToDelete(null);
     }
   };
@@ -895,6 +950,8 @@ export const MasterData: React.FC = () => {
   const handleSaveParking = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formParkingName) return showError("กรุณากรอกชื่อลาน/จุดจอดรถ");
+    if (isSavingParking) return;
+    setIsSavingParking(true);
     try {
       if (editingParking) {
         await api.put(`/master/parking/${editingParking.parking_id}`, {
@@ -911,11 +968,14 @@ export const MasterData: React.FC = () => {
       fetchParking();
     } catch (err: any) {
       showError(err?.response?.data?.message || "เกิดข้อผิดพลาดในการบันทึกข้อมูลลานจอด");
+    } finally {
+      setIsSavingParking(false);
     }
   };
 
   const handleDeleteParking = async () => {
     if (!parkingToDelete) return;
+    setIsDeletingParking(true);
     try {
       await api.delete(`/master/parking/${parkingToDelete.parking_id}`);
       showSuccess(`ลบข้อมูลลานจอด "${parkingToDelete.parking_name}" เรียบร้อย`);
@@ -923,6 +983,7 @@ export const MasterData: React.FC = () => {
     } catch (err: any) {
       showError(err?.response?.data?.message || "ไม่สามารถลบข้อมูลลานจอดได้");
     } finally {
+      setIsDeletingParking(false);
       setParkingToDelete(null);
     }
   };
@@ -949,6 +1010,8 @@ export const MasterData: React.FC = () => {
   const handleSaveAccStatus = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formAccStatusName) return showError("กรุณากรอกชื่อสถานะทางบัญชี");
+    if (isSavingAccStatus) return;
+    setIsSavingAccStatus(true);
     try {
       if (editingAccStatus) {
         await api.put(`/master/accounting-status/${editingAccStatus.status_id}`, {
@@ -969,6 +1032,8 @@ export const MasterData: React.FC = () => {
       fetchAccStatuses();
     } catch (err: any) {
       showError(err?.response?.data?.message || "เกิดข้อผิดพลาดในการบันทึกสถานะทางบัญชี");
+    } finally {
+      setIsSavingAccStatus(false);
     }
   };
 

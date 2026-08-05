@@ -187,13 +187,10 @@ export const ReleaseChatTab: React.FC<ReleaseChatTabProps> = ({
   ];
 
   return (
-    <div className="flex flex-col h-[720px] max-h-[80vh] bg-slate-50/50 rounded-xl border border-slate-200 overflow-hidden font-sans text-xs relative">
+    <div className="flex flex-col h-[620px] max-h-[80vh] bg-slate-50/50 rounded-xl border border-slate-200 overflow-hidden font-sans text-xs relative">
       {/* Chat Header */}
       <div className="bg-white border-b border-slate-200 px-4 py-2.5 flex items-center justify-between shadow-2xs">
         <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-lg bg-blue-50 border border-blue-200 flex items-center justify-center text-blue-600 font-bold">
-            <MessageSquare className="w-4 h-4" />
-          </div>
           <div>
             <div className="font-bold text-slate-900 flex items-center gap-1.5">
               <span>แชทสื่อสารระหว่างปล่อยรถ</span>
@@ -202,7 +199,6 @@ export const ReleaseChatTab: React.FC<ReleaseChatTabProps> = ({
               </span>
             </div>
             <div className="text-[10px] text-slate-500 flex items-center gap-1">
-              <Truck className="w-3 h-3 text-slate-400" />
               <span>คนขับ: <strong>{driverName || 'ไม่ระบุ'}</strong></span>
             </div>
           </div>

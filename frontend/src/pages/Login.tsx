@@ -59,14 +59,9 @@ export const Login: React.FC = () => {
       {/* Login Card */}
       <div className="w-full max-w-sm relative z-10">
         {/* Brand Header */}
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-14 h-14 rounded-xl bg-slate-900 text-white shadow-sm mb-4">
-            <Truck className="w-7 h-7" />
-          </div>
-          <h1 className="text-xl font-bold text-slate-900 tracking-tight">
-            Car Release
-          </h1>
-          <p className="text-[11px] text-slate-400 mt-1 font-medium">
+        <div className="flex flex-col items-center justify-center gap-2 text-center mb-8">
+          <img src="assets/car_release_logo.jpg" alt="logo" className='w-20 h-20' />
+          <p className="text-[18px] text-slate-800 font-medium">
             ระบบบริหารจัดการรถปล่อยขาย & สายวิ่งส่งสินค้า
           </p>
         </div>
@@ -158,7 +153,7 @@ export const Login: React.FC = () => {
         </div>
 
         {/* Quick Login Section */}
-        <div className="mt-4 bg-white border border-slate-200/70 shadow-[0_1px_3px_0_rgba(0,0,0,0.02)] rounded-xl p-4">
+        {/* <div className="mt-4 bg-white border border-slate-200/70 shadow-[0_1px_3px_0_rgba(0,0,0,0.02)] rounded-xl p-4">
           <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider text-center mb-3">
             เลือกบัญชีทดสอบด่วน
           </p>
@@ -185,7 +180,7 @@ export const Login: React.FC = () => {
               คนขับรถ
             </button>
           </div>
-        </div>
+        </div> */}
 
         {/* Footer */}
         <p className="text-center text-[10px] text-slate-300 mt-6 font-medium">

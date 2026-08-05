@@ -3,7 +3,6 @@ const router = express.Router();
 const { query, hasColumn } = require('../config/db');
 const { authenticateToken } = require('../middleware/auth');
 const { saveBase64Image } = require('../middleware/upload');
-const { logAudit } = require('../utils/auditLogger');
 const { normalizeProductControllerImages } = require('../utils/productControllerHelper');
 const { normalizeReturnDocuments } = require('../utils/returnDocumentHelper');
 
@@ -72,14 +71,12 @@ router.post('/car-release', authenticateToken, async (req, res) => {
     const {
       car_id,
       car_release_type_id,
-      user_id, // driver
+      user_id,
       group_store_id,
       mileage,
       pda_device,
       description,
-      followers = [], // Array of string names
-      stores = [], // Array of { store_id, sum_quantity, row_order, bypass }
-      // Images (Base64 or URLs)
+      followers = [], 
       image_mileage,
       image_front,
       image_around_1,
@@ -91,9 +88,26 @@ router.post('/car-release', authenticateToken, async (req, res) => {
       accounting_status
     } = req.body;
 
+    // เช็คกรุ๊ป และ คนขับ
     if (!car_id || !user_id) {
-      return res.status(400).json({ success: false, message: 'car_id and user_id (driver) are required' });
+      return res.status(400).json({ success: false, message: 'จำเป็นต้องเลือก กรุ๊ปรถ และคนขับ' });
     }
+
+    // เช็คเลขไมล์
+    if(mileage <= 0) {
+      return res.status(400).json({ success: false, message: 'จำเป็นต้องกรอกเลขไมล์' });
+    }
+
+    // เช็คอุปกรณ์
+    if(pda_device === 0) {
+      return res.status(400).json({ success: false, message: 'จำเป็นต้องเลือกอุปกรณ์ PDA' });
+    }
+
+    // เช็คภาพถ่าย
+    if(!image_mileage || !image_front || !image_around_1 || !image_around_2 || !image_around_3 || !image_around_4 || !image_around_5 || !image_pda) {
+      return res.status(400).json({ success: false, message: 'จำเป็นต้องกรอกรูปภาพทั้งหมด' });
+    }
+
 
     // Check duplicate group_store_id on the same day
     if (group_store_id) {
@@ -206,13 +220,6 @@ router.post('/car-release', authenticateToken, async (req, res) => {
         }
       }
     }
-
-    await logAudit(req, {
-      action: 'CREATE_CAR_RELEASE',
-      targetType: 'car_release',
-      targetId: car_release_id,
-      details: { releaseNo, car_id, user_id, mileage, followersCount: followers.length }
-    });
 
     res.json({
       success: true,
@@ -682,13 +689,6 @@ router.post('/car-release/:id/return', authenticateToken, async (req, res) => {
       returnId = result.insertId;
     }
 
-    await logAudit(req, {
-      action: 'RETURN_CAR',
-      targetType: 'car_return',
-      targetId: returnId,
-      details: { car_release_id, mileage, key_holder_id, parking_id, gas_bill }
-    });
-
     res.json({
       success: true,
       message: 'บันทึกใบคืนรถสำเร็จ',
@@ -710,13 +710,6 @@ router.patch('/car-release/:id/accounting', authenticateToken, async (req, res) 
       `UPDATE car_release SET accounting_status = ?, accounting_note = ? WHERE car_release_id = ?`,
       [accounting_status, accounting_note || '', car_release_id]
     );
-
-    await logAudit(req, {
-      action: 'UPDATE_ACCOUNTING_STATUS',
-      targetType: 'car_release',
-      targetId: car_release_id,
-      details: { accounting_status, accounting_note }
-    });
 
     res.json({ success: true, message: 'อัปเดตสถานะบัญชีเรียบร้อยแล้ว' });
   } catch (err) {
@@ -826,13 +819,6 @@ router.put('/car-release/:id', authenticateToken, async (req, res) => {
       }
     }
 
-    await logAudit(req, {
-      action: 'UPDATE_CAR_RELEASE',
-      targetType: 'car_release',
-      targetId: car_release_id,
-      details: { car_id, user_id, mileage, accounting_status }
-    });
-
     res.json({ success: true, message: 'อัปเดตข้อมูลใบปล่อยรถเรียบร้อยแล้ว' });
   } catch (err) {
     console.error('Error updating car release:', err);
@@ -869,13 +855,6 @@ router.delete('/car-release/:id', authenticateToken, async (req, res) => {
     if (group_store_id) {
       await query(`UPDATE group_store SET status = 0 WHERE group_store_id = ?`, [group_store_id]);
     }
-
-    await logAudit(req, {
-      action: 'DELETE_CAR_RELEASE',
-      targetType: 'car_release',
-      targetId: car_release_id,
-      details: { car_release_id, group_store_id }
-    });
 
     res.json({ success: true, message: 'ลบข้อมูลใบปล่อยรถและอัปเดตสถานะกรุ๊ปรถเรียบร้อยแล้ว' });
   } catch (err) {

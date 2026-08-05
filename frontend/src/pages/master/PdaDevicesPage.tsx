@@ -188,8 +188,7 @@ export const PdaDevicesPage: React.FC = () => {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-1">
         <div>
           <h1 className="text-lg font-bold text-slate-900 tracking-tight flex items-center gap-2">
-            <Smartphone className="w-5 h-5 text-slate-800" />
-            จัดการเครื่อง PDA (PDA Device Management)
+            จัดการเครื่อง PDA
           </h1>
           <p className="text-[11px] text-slate-500">
             บริหารจัดการรหัสเครื่อง PDA, Serial Number และกำหนดผู้ดูแลอุปกรณ์

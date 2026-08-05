@@ -55,7 +55,7 @@ export const MasterSubNav: React.FC = () => {
   ].filter((t) => isAllowed(t.key));
 
   return (
-    <div className="flex border-b border-slate-200 bg-slate-100/70 p-1 rounded-lg gap-1 overflow-x-auto custom-scrollbar mb-4">
+    <div className="flex border-b border-slate-200 bg-slate-100/70 p-1 rounded-lg gap-1 overflow-x-auto custom-scrollbar mb-4 flex-wrap">
       {tabs.map((t) => {
         const Icon = t.icon;
         return (

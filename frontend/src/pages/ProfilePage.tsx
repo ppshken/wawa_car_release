@@ -151,7 +151,6 @@ export const ProfilePage: React.FC = () => {
       {/* Header */}
       <div className="pt-1">
         <h1 className="text-lg font-bold text-slate-900 tracking-tight flex items-center gap-2">
-          <Settings className="w-5 h-5 text-slate-800" />
           โปรไฟล์ของฉัน
         </h1>
         <p className="text-[11px] text-slate-500">

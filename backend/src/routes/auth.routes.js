@@ -5,6 +5,39 @@ const jwt = require('jsonwebtoken');
 const { query } = require('../config/db');
 const { authenticateToken } = require('../middleware/auth');
 
+const LOGIN_MAX_ATTEMPTS = 5;
+const LOGIN_LOCK_MINUTES = 15;
+
+async function ensureLoginSecurityColumns() {
+  try {
+    const failedAttemptCol = await query("SHOW COLUMNS FROM user LIKE 'failed_login_attempts'");
+    if (failedAttemptCol.length === 0) {
+      await query("ALTER TABLE user ADD COLUMN failed_login_attempts INT NOT NULL DEFAULT 0 AFTER user_status");
+    }
+
+    const lastFailedAtCol = await query("SHOW COLUMNS FROM user LIKE 'last_failed_login_at'");
+    if (lastFailedAtCol.length === 0) {
+      await query("ALTER TABLE user ADD COLUMN last_failed_login_at DATETIME NULL AFTER failed_login_attempts");
+    }
+
+    const lockedUntilCol = await query("SHOW COLUMNS FROM user LIKE 'locked_until'");
+    if (lockedUntilCol.length === 0) {
+      await query("ALTER TABLE user ADD COLUMN locked_until DATETIME NULL AFTER last_failed_login_at");
+    }
+  } catch (err) {
+    console.error('Error ensuring login security columns:', err.message);
+  }
+}
+
+ensureLoginSecurityColumns();
+
+function formatLockMessage(lockedUntil) {
+  if (!lockedUntil) return 'บัญชีถูกล็อกชั่วคราว';
+  const date = new Date(lockedUntil);
+  if (Number.isNaN(date.getTime())) return 'บัญชีถูกล็อกชั่วคราว';
+  return `บัญชีถูกล็อกชั่วคราว กรุณาลองใหม่อีกครั้งหลัง ${date.toISOString().replace('T', ' ').slice(0, 16)}`;
+}
+
 // POST /api/auth/login
 router.post('/login', async (req, res) => {
   try {
@@ -32,10 +65,44 @@ router.post('/login', async (req, res) => {
       return res.status(403).json({ success: false, message: 'บัญชีถูกปิดการใช้งาน' });
     }
 
+    const now = new Date();
+    const lockedUntil = user.locked_until ? new Date(user.locked_until) : null;
+    if (lockedUntil && lockedUntil > now) {
+      return res.status(403).json({ success: false, message: formatLockMessage(lockedUntil) });
+    }
+
+    if (lockedUntil && lockedUntil <= now) {
+      await query(
+        'UPDATE user SET failed_login_attempts = 0, last_failed_login_at = NULL, locked_until = NULL WHERE user_id = ?',
+        [user.user_id]
+      );
+      user.failed_login_attempts = 0;
+      user.locked_until = null;
+    }
+
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) {
-      return res.status(401).json({ success: false, message: 'ชื่อผู้ใช้งานหรือรหัสผ่านไม่ถูกต้อง' });
+      const attempts = (user.failed_login_attempts || 0) + 1;
+      const updates = ['failed_login_attempts = ?', 'last_failed_login_at = ?'];
+      const params = [attempts, now];
+      let message = `ชื่อผู้ใช้งานหรือรหัสผ่านไม่ถูกต้อง (${attempts}/${LOGIN_MAX_ATTEMPTS})`;
+
+      if (attempts >= LOGIN_MAX_ATTEMPTS) {
+        const lockUntil = new Date(now.getTime() + LOGIN_LOCK_MINUTES * 60000);
+        updates.push('locked_until = ?');
+        params.push(lockUntil);
+        message = formatLockMessage(lockUntil);
+      }
+
+      params.push(user.user_id);
+      await query(`UPDATE user SET ${updates.join(', ')} WHERE user_id = ?`, params);
+      return res.status(401).json({ success: false, message });
     }
+
+    await query(
+      'UPDATE user SET failed_login_attempts = 0, last_failed_login_at = NULL, locked_until = NULL WHERE user_id = ?',
+      [user.user_id]
+    );
 
     const tokenPayload = {
       user_id: user.user_id,

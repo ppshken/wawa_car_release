@@ -265,8 +265,7 @@ export const VehiclesPage: React.FC = () => {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-1">
         <div>
           <h1 className="text-lg font-bold text-slate-900 tracking-tight flex items-center gap-2">
-            <Truck className="w-5 h-5 text-slate-800" />
-            จัดการข้อมูลรถ (Vehicle Management)
+            จัดการข้อมูลรถ
           </h1>
           <p className="text-[11px] text-slate-500">
             บริหารจัดการทะเบียนรถ ยี่ห้อ รุ่น ความจุสินค้า และสถานะพร้อมใช้งานของรถขนส่ง

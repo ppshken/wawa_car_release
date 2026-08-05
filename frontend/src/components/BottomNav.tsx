@@ -60,6 +60,12 @@ export const BottomNav: React.FC = () => {
       key: "route",
     },
     {
+      to: "/profile",
+      label: "โปรไฟล์",
+      icon: User,
+      key: "profile",
+    },
+    {
       to: "/master/operation-menu",
       label: "มาสเตอร์",
       icon: Layers,
@@ -109,28 +115,6 @@ export const BottomNav: React.FC = () => {
           </NavLink>
         );
       })}
-
-      {/* Menu Drawer Toggle Button */}
-      <button
-        type="button"
-        onClick={toggleMobile}
-        className={`flex flex-col items-center justify-center flex-1 py-1 px-1 rounded-xl transition-all duration-200 ${
-          mobileOpen
-            ? "text-slate-900 font-bold scale-105"
-            : "text-slate-500 hover:text-slate-800 font-medium"
-        }`}
-      >
-        <div
-          className={`p-1 rounded-lg transition-colors ${
-            mobileOpen ? "bg-slate-100 text-slate-900" : ""
-          }`}
-        >
-          {mobileOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
-        </div>
-        <span className="text-[10px] tracking-tight mt-0.5 truncate max-w-[64px]">
-          เมนูทั้งหมด
-        </span>
-      </button>
     </nav>
   );
 };

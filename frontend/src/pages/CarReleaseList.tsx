@@ -360,6 +360,7 @@ export const CarReleaseList: React.FC = () => {
     return today;
   });
 
+  // อัปเดตตัวกรองวันที่
   const updateDateFilter = useCallback(
     (dateVal: string, mode?: "today" | "all" | "custom") => {
       setSelectedDate(dateVal);
@@ -384,7 +385,7 @@ export const CarReleaseList: React.FC = () => {
   const [totalItems, setTotalItems] = useState<number>(0);
   const [operationMenus, setOperationMenus] = useState<any[]>([]);
 
-  // 5 Dropdown Filter States & Panel Toggle
+  // ตัวกรอง
   const [showFilterPanel, setShowFilterPanel] = useState<boolean>(false);
   const [filterReleaseStatus, setFilterReleaseStatus] = useState<string>("all");
   const [filterReturnStatus, setFilterReturnStatus] = useState<string>("all");
@@ -410,6 +411,8 @@ export const CarReleaseList: React.FC = () => {
   const [accFormStatusId, setAccFormStatusId] = useState<string | number>("");
   const [accFormNote, setAccFormNote] = useState<string>("");
   const [isSubmittingAcc, setIsSubmittingAcc] = useState<boolean>(false);
+  const [isSubmittingForm, setIsSubmittingForm] = useState<boolean>(false);
+  const [isDeletingRelease, setIsDeletingRelease] = useState<boolean>(false);
 
   // Export Drawer State & Helpers
   const [isExportDrawerOpen, setIsExportDrawerOpen] = useState<boolean>(false);
@@ -423,6 +426,7 @@ export const CarReleaseList: React.FC = () => {
     [],
   );
 
+  // เอารูปแบบการแสดงผลของข้อมูลที่จะส่งออก
   const getExportValue = useCallback(
     (item: any, columnId: string): string | number => {
       switch (columnId) {
@@ -506,7 +510,7 @@ export const CarReleaseList: React.FC = () => {
     [],
   );
 
-  // Filter Options for SearchableSelect
+  // ตัวเลือกการปล่อยรถ
   const releaseStatusOptions = useMemo(
     () => [
       { value: "all", label: "-- ทั้งหมด --" },
@@ -525,6 +529,7 @@ export const CarReleaseList: React.FC = () => {
     [],
   );
 
+  // ดึงวันที่ปล่อยรถ
   const fetchActiveReleaseDates = useCallback(async () => {
     try {
       const res = await api.get("/car-release/active-dates");
@@ -536,7 +541,7 @@ export const CarReleaseList: React.FC = () => {
     }
   }, []);
 
-  // Column Visibility State
+  // ตัวแปรแสดง Column
   const [visibleColumns, setVisibleColumns] = useState<Record<string, boolean>>(
     () => {
       const saved = localStorage.getItem("wawa_car_release_visible_cols");
@@ -570,6 +575,7 @@ export const CarReleaseList: React.FC = () => {
     },
   );
 
+  // เปลี่ยนตัวแปรแสดง Column
   const handleColumnChange = (updated: Record<string, boolean>) => {
     setVisibleColumns(updated);
     localStorage.setItem(
@@ -578,10 +584,10 @@ export const CarReleaseList: React.FC = () => {
     );
   };
 
-  // Delete Modal
+  // ลบรายการปล่อยรถ
   const [releaseToDelete, setReleaseToDelete] = useState<any | null>(null);
 
-  // Database Master Options
+  // ตัวเลือก Database
   const [vehicles, setVehicles] = useState<any[]>([]);
   const [drivers, setDrivers] = useState<any[]>([]);
   const [groupStores, setGroupStores] = useState<any[]>([]);
@@ -616,7 +622,7 @@ export const CarReleaseList: React.FC = () => {
   const [returnImgPda, setReturnImgPda] = useState<string>("");
   const [isSubmittingReturn, setIsSubmittingReturn] = useState(false);
 
-  // Lightbox Image Preview Modal
+  // รูปภาพตัวอย่าง
   const [previewImage, setPreviewImage] = useState<{
     url: string;
     title: string;
@@ -632,11 +638,11 @@ export const CarReleaseList: React.FC = () => {
     setIsLightboxOpen(true);
   }, []);
 
-  // Group Delivery List Preview State
+  // แสดงรายการปล่อยรถแบบกลุ่ม
   const [groupStoresPreview, setGroupStoresPreview] = useState<any[]>([]);
   const [isLoadingPreview, setIsLoadingPreview] = useState<boolean>(false);
 
-  // Form State
+  // ฟอร์มปล่อยรถ
   const [formCarId, setFormCarId] = useState<string | number>("");
   const [formUserId, setFormUserId] = useState<string | number>("");
   const [formGroupStoreId, setFormGroupStoreId] = useState<string | number>("");
@@ -656,7 +662,7 @@ export const CarReleaseList: React.FC = () => {
   >("");
   const [formDescription, setFormDescription] = useState<string>("");
 
-  // Photo States (Base64 / Image URLs)
+  // รูปภาพปล่อยรถ (Base64 / Image URLs)
   const [imgMileage, setImgMileage] = useState<string>("");
   const [imgFront, setImgFront] = useState<string>("");
   const [imgAround1, setImgAround1] = useState<string>("");
@@ -666,6 +672,7 @@ export const CarReleaseList: React.FC = () => {
   const [imgAround5, setImgAround5] = useState<string>("");
   const [imgPda, setImgPda] = useState<string>("");
 
+  // รูปภาพปล่อยรถ
   const handleImageChange = (
     e: React.ChangeEvent<HTMLInputElement>,
     setter: (val: string) => void,
@@ -680,7 +687,7 @@ export const CarReleaseList: React.FC = () => {
     }
   };
 
-  // Product Controller Images Upload Handlers
+  // ฟอร์มปล่อยรถรูปภาพ
   const handleProductControllerImageChange = (
     e: React.ChangeEvent<HTMLInputElement>,
   ) => {
@@ -710,7 +717,7 @@ export const CarReleaseList: React.FC = () => {
     });
   };
 
-  // Product Controller Images Submit Handler
+  // บันทึกภาพสินค้าควบคุม
   const handleProductControllerSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedRelease?.car_release_id || !productControllerImages.length) {
@@ -752,6 +759,7 @@ export const CarReleaseList: React.FC = () => {
     }
   };
 
+  // บันทึกเอกสานคืนของ
   const handleReturnDocumentsFileChange = (
     e: React.ChangeEvent<HTMLInputElement>,
   ) => {
@@ -778,6 +786,7 @@ export const CarReleaseList: React.FC = () => {
     });
   };
 
+  // บันทึกเอกสานคืนของ
   const handleReturnDocumentsSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedRelease?.car_release_id || !returnDocuments.length) {
@@ -818,6 +827,7 @@ export const CarReleaseList: React.FC = () => {
     }
   };
 
+  // การเลือกกลุ่มรถ
   const handleGroupChange = (gid: string) => {
     const group = groupStores.find(
       (g) => String(g.group_store_id) === String(gid),
@@ -861,7 +871,7 @@ export const CarReleaseList: React.FC = () => {
     }
   };
 
-  // Fetch stores in selected group for preview table
+  // แสดงรายการปล่อยรถแบบกลุ่ม
   useEffect(() => {
     if (!formGroupStoreId) {
       setGroupStoresPreview([]);
@@ -896,6 +906,7 @@ export const CarReleaseList: React.FC = () => {
     };
   }, [formGroupStoreId]);
 
+  // ดึงข้อมูลทั้งหมด
   const fetchMasterData = useCallback(async () => {
     try {
       const [
@@ -985,6 +996,7 @@ export const CarReleaseList: React.FC = () => {
     }
   }, []);
 
+  // ตัวเลือกผู้รับกุญแจ
   const keyHolderOptions = useMemo(() => {
     return keyHolders.map((kh) => ({
       value: String(kh.key_holder_id),
@@ -992,6 +1004,7 @@ export const CarReleaseList: React.FC = () => {
     }));
   }, [keyHolders]);
 
+  // ตัวเลือกที่จอดรถ
   const parkingOptions = useMemo(() => {
     return parkings.map((pk) => ({
       value: String(pk.parking_id),
@@ -999,6 +1012,7 @@ export const CarReleaseList: React.FC = () => {
     }));
   }, [parkings]);
 
+  // เมนูการทำงานที่มองเห็น
   const visibleOperationMenus = useMemo(() => {
     const userLevelId = String(
       user?.level_user_id || (user as any)?.level_id || 1,
@@ -1073,6 +1087,7 @@ export const CarReleaseList: React.FC = () => {
     });
   }, [operationMenus, user]);
 
+  // ไอคอนเมนู
   const renderQuickActionIcon = (iconName: string) => {
     const ICON_MAP: Record<string, any> = {
       Key,
@@ -1090,7 +1105,7 @@ export const CarReleaseList: React.FC = () => {
     return <IconComponent className="w-4 h-4 mb-1 shrink-0" />;
   };
 
-  // Default Loading Types fallback if master API returns empty
+  //  ค่าเริ่มต้นประเภทการขนถ่าย
   const DEFAULT_LOADING_TYPES = useMemo(
     () => [
       {
@@ -1132,7 +1147,7 @@ export const CarReleaseList: React.FC = () => {
     [],
   );
 
-  // Active Loading Types
+  //  ประเภทการขนถ่ายที่เปิดใช้งาน
   const activeLoadingTypes = useMemo(() => {
     const list =
       Array.isArray(loadingTypesList) && loadingTypesList.length > 0
@@ -1357,13 +1372,13 @@ export const CarReleaseList: React.FC = () => {
     };
   }, [selectedRelease?.stores, activeLoadingTypes, getStoreLoadQty]);
 
-  // Option lists for SearchableSelect
+  // ตัวเลือกสำหรับ SearchableSelect
   const todayDateStr = useMemo(
     () => new Date().toLocaleDateString("th-TH"),
     [],
   );
 
-  // Today's releases (excluding currently edited release)
+  //  การปล่อยรถในวันนี้ (ไม่รวมการปล่อยรถที่กำลังแก้ไข)
   const todayReleases = useMemo(() => {
     return releases.filter((r) => {
       if (editingId && String(r.car_release_id) === String(editingId))
@@ -1372,7 +1387,7 @@ export const CarReleaseList: React.FC = () => {
     });
   }, [releases, editingId, todayDateStr, selectedDate]);
 
-  // Set of group_store_ids used today
+  //  group_store_id ที่ใช้ไปแล้ว
   const usedGroupIds = useMemo(() => {
     const set = new Set<string>();
     todayReleases.forEach((r) => {
@@ -1381,7 +1396,7 @@ export const CarReleaseList: React.FC = () => {
     return set;
   }, [todayReleases]);
 
-  // Set of driver user_ids used today
+  //  user_id ที่ใช้ไปแล้ว
   const usedDriverIds = useMemo(() => {
     const set = new Set<string>();
     todayReleases.forEach((r) => {
@@ -1390,7 +1405,7 @@ export const CarReleaseList: React.FC = () => {
     return set;
   }, [todayReleases]);
 
-  // Set of follower names used today or driver names used today
+  //  ชื่อผู้ติดตามที่ใช้ไปแล้ว
   const usedFollowerNames = useMemo(() => {
     const set = new Set<string>();
     todayReleases.forEach((r) => {
@@ -1411,6 +1426,7 @@ export const CarReleaseList: React.FC = () => {
     return set;
   }, [todayReleases]);
 
+  // วันที่ปัจจุบัน
   const todayYmd = useMemo(() => {
     const d = new Date();
     const year = d.getFullYear();
@@ -1419,6 +1435,7 @@ export const CarReleaseList: React.FC = () => {
     return `${year}-${month}-${day}`;
   }, []);
 
+  // ตัวเลือกกรุ๊ป
   const groupOptions = useMemo(() => {
     const toLocalDateStr = (val: any) => {
       if (!val) return "";
@@ -1475,6 +1492,7 @@ export const CarReleaseList: React.FC = () => {
     );
   }, [groupStores, formGroupStoreId]);
 
+  // ตัวเลือกคนขับ
   const driverOptions = useMemo(() => {
     return drivers.map((d) => {
       const driverNameLower = (d.name || "").trim().toLowerCase();
@@ -1509,6 +1527,7 @@ export const CarReleaseList: React.FC = () => {
     });
   }, [drivers, usedDriverIds, usedFollowerNames, formFollowers, formUserId]);
 
+  // ตัวเลือกประเภทการปล่อยรถ
   const releaseTypeOptions = useMemo(() => {
     if (releaseTypes.length > 0) {
       return releaseTypes.map((rt) => ({
@@ -1525,6 +1544,7 @@ export const CarReleaseList: React.FC = () => {
     ];
   }, [releaseTypes]);
 
+  // ตัวเลือกเครื่อง PDA
   const pdaOptions = useMemo(() => {
     return pdaDevices.map((p) => ({
       value: p.pda_id,
@@ -1533,9 +1553,9 @@ export const CarReleaseList: React.FC = () => {
     }));
   }, [pdaDevices]);
 
+  // ตัวเลือกสถานะบัญชี
   const accountingOptions = useMemo(() => {
     return [
-      { value: "", label: "-- ไม่ระบุ (ว่าง) --" },
       ...accountingStatuses.map((acc) => ({
         value: acc.status_id,
         label: acc.status_name,
@@ -1543,10 +1563,9 @@ export const CarReleaseList: React.FC = () => {
     ];
   }, [accountingStatuses]);
 
-  // SearchableSelect options for filters
+  // ตัวเลือกสถานะบัญชีสำหรับตัวกรอง
   const accountingStatusFilterOptions = useMemo(() => {
     return [
-      { value: "all", label: "-- ทั้งหมด --" },
       ...accountingStatuses.map((acc) => ({
         value: String(acc.status_id || acc.status_name),
         label: acc.status_name,
@@ -1554,6 +1573,7 @@ export const CarReleaseList: React.FC = () => {
     ];
   }, [accountingStatuses]);
 
+  // ตรวจสอบว่าเป็นผู้ใช้ประเภท Driver
   const isDriverUser = useMemo(() => {
     if (!user) return false;
     const levelId = Number(user.level_user_id || (user as any).level_id);
@@ -1582,6 +1602,7 @@ export const CarReleaseList: React.FC = () => {
     );
   }, [user]);
 
+  // ตัวเลือกคนขับ
   const driverFilterOptions = useMemo(() => {
     if (isDriverUser && user?.user_id) {
       return [
@@ -1600,6 +1621,7 @@ export const CarReleaseList: React.FC = () => {
     ];
   }, [drivers, isDriverUser, user]);
 
+  // ตัวเลือกป้ายทะเบียน
   const licensePlateFilterOptions = useMemo(() => {
     return [
       { value: "all", label: "-- ทั้งหมด --" },
@@ -1610,6 +1632,7 @@ export const CarReleaseList: React.FC = () => {
     ];
   }, [vehicles]);
 
+  //  จำนวนตัวกรองที่ใช้งาน
   const activeFilterCount = useMemo(() => {
     let count = 0;
     if (filterReleaseStatus !== "all") count++;
@@ -1626,6 +1649,7 @@ export const CarReleaseList: React.FC = () => {
     filterLicensePlate,
   ]);
 
+  // ดึงข้อมูลการปล่อยรถ
   const fetchReleases = useCallback(async () => {
     try {
       const res = await api.get("/car-release", {
@@ -1722,25 +1746,21 @@ export const CarReleaseList: React.FC = () => {
     fetchActiveReleaseDates();
   }, [fetchReleases, fetchMasterData, fetchActiveReleaseDates]);
 
+  // เปิดหน้าจอเพิ่มรายการปล่อยรถ
   const handleOpenAdd = () => {
     setEditingId(null);
     setFormGroupStoreId("");
     setFormCarId("");
     setFormPlateText("");
     setFormCarBrandModel("");
-    if (isDriverUser && user?.user_id) {
-      setFormUserId(user.user_id);
-      setFormDriverName(user.name || "");
-    } else {
-      setFormUserId("");
-      setFormDriverName("");
-    }
+    setFormUserId("");
+    setFormDriverName("");
     setFormReleaseTypeId("1");
     setFormFollowers([]);
     setFollowerSearch("");
     setFormMileage(0);
     setFormAllowance("");
-    setFormPda(pdaDevices[0]?.device_name || pdaDevices[0]?.device_code || "");
+    setFormPda(0);
     setFormAccountingStatus("");
     setFormDescription("");
     setGroupStoresPreview([]);
@@ -1757,143 +1777,19 @@ export const CarReleaseList: React.FC = () => {
     setIsDrawerOpen(true);
   };
 
-  const handleOpenEdit = async (rel: any) => {
-    setEditingId(rel.car_release_id);
-    setFormCarId(rel.car_id || "");
-    setFormUserId(rel.user_id || "");
-    setFormGroupStoreId(rel.group_store_id || "");
-    setFormReleaseTypeId(rel.car_release_type_id || 1);
-    setFormPlateText(rel.license_plate || "");
-    setFormCarBrandModel(rel.brand_model || "");
-    setFormDriverName(rel.driver_name || "");
-
-    // Parse Followers
-    let initialFollowers: string[] = [];
-    if (Array.isArray(rel.followers) && rel.followers.length > 0) {
-      initialFollowers = rel.followers
-        .map((f: any) => (typeof f === "string" ? f : f.follower_name))
-        .filter(Boolean);
-    } else if (rel.follower_name && rel.follower_name !== "-") {
-      initialFollowers = rel.follower_name
-        .split(",")
-        .map((s: string) => s.trim())
-        .filter(Boolean);
-    }
-    setFormFollowers(initialFollowers);
-    setFollowerSearch("");
-    setFormMileage(rel.mileage || 0);
-    setFormAllowance(rel.allowance !== "-" ? rel.allowance : "");
-    setFormPda(rel.pda_device || "");
-    setFormAccountingStatus(rel.accounting_status_id || 0);
-    setFormDescription(rel.description || "");
-
-    // Pre-fill images
-    setImgMileage(rel.image_mileage || "");
-    setImgFront(rel.image_front || "");
-    setImgAround1(rel.image_around_1 || "");
-    setImgAround2(rel.image_around_2 || "");
-    setImgAround3(rel.image_around_3 || "");
-    setImgAround4(rel.image_around_4 || "");
-    setImgAround5(rel.image_around_5 || "");
-    setImgPda(rel.image_pda || "");
-
-    setIsDrawerOpen(true);
-  };
-
-  const handleViewDetail = async (rel: any) => {
-    try {
-      const res = await api.get(`/car-release/${rel.car_release_id}`);
-      if (res.data.success && res.data.release) {
-        const d = res.data.release;
-        setSelectedRelease({
-          ...rel,
-          ...d,
-          followers: d.followers || [],
-          follower_phone: d.follower_phone || rel.follower_phone,
-          stores: d.stores || [],
-          car_return: d.car_return || null,
-          driver_phone: d.driver_phone || rel.driver_phone,
-          return_documents: d.return_documents || [],
-        });
-      } else {
-        setSelectedRelease(rel);
-      }
-    } catch (err) {
-      setSelectedRelease(rel);
-    }
-  };
-
-  const handleOpenProductControllerDrawer = (rel: any) => {
-    if (!rel) return;
-    setSelectedRelease(rel);
-    setProductControllerImages([]);
-    setIsProductControllerDrawerOpen(true);
-  };
-
-  const handleOpenReturnDocumentsDrawer = (rel: any) => {
-    if (!rel) return;
-    setSelectedRelease(rel);
-    setReturnDocuments([]);
-    setIsReturnDocumentsDrawerOpen(true);
-  };
-
-  const handleOpenAccountingDrawer = (rel: any) => {
-    if (!rel) return;
-    const currentStatusId =
-      rel.accounting_status_id ||
-      rel.accounting_status ||
-      accountingStatuses[0]?.status_id ||
-      accountingStatuses[0]?.id ||
-      "";
-    const currentNote = rel.accounting_note || rel.description || "";
-    setAccFormStatusId(currentStatusId);
-    setAccFormNote(currentNote);
-    setIsAccountingDrawerOpen(true);
-  };
-
-  const handleUpdateAccountingStatus = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedRelease?.car_release_id) return;
-    setIsSubmittingAcc(true);
-    try {
-      const res = await api.patch(
-        `/car-release/${selectedRelease.car_release_id}/accounting`,
-        {
-          accounting_status: accFormStatusId,
-          accounting_status_id: accFormStatusId,
-          accounting_note: accFormNote,
-          description: accFormNote,
-        },
-      );
-
-      if (res.data.success) {
-        showSuccess("อัปเดตสถานะทางบัญชีและหมายเหตุเรียบร้อยแล้ว");
-        setIsAccountingDrawerOpen(false);
-        handleViewDetail(selectedRelease);
-        fetchReleases();
-      } else {
-        showError(res.data.message || "ไม่สามารถอัปเดตสถานะทางบัญชีได้");
-      }
-    } catch (err: any) {
-      console.error("Update accounting status error:", err);
-      showError(
-        err.response?.data?.message || "เกิดข้อผิดพลาดในการอัปเดตสถานะทางบัญชี",
-      );
-    } finally {
-      setIsSubmittingAcc(false);
-    }
-  };
-
+  // บันทึกรายการปล่อยรถ
   const handleFormSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmittingForm) return;
+    setIsSubmittingForm(true);
     try {
       const payload = {
-        car_id: formCarId || (vehicles[0]?.car_id ?? 1),
+        car_id: formCarId,
         car_release_type_id: Number(formReleaseTypeId) || 1,
-        user_id: formUserId || (drivers[0]?.user_id ?? 1),
-        group_store_id: formGroupStoreId || null,
-        mileage: Number(formMileage) || 0,
-        allowance: formAllowance || null,
+        user_id: formUserId,
+        group_store_id: formGroupStoreId,
+        mileage: Number(formMileage),
+        allowance: formAllowance,
         pda_device: formPda,
         accounting_status: formAccountingStatus,
         description:
@@ -1935,9 +1831,140 @@ export const CarReleaseList: React.FC = () => {
       showError(
         err?.response?.data?.message || "เกิดข้อผิดพลาดในการบันทึกข้อมูล",
       );
+    } finally {
+      setIsSubmittingForm(false);
     }
   };
 
+  // เปิดหน้าจอแก้ไขรายการปล่อยรถ
+  const handleOpenEdit = async (rel: any) => {
+    setEditingId(rel.car_release_id);
+    setFormCarId(rel.car_id || "");
+    setFormUserId(rel.user_id || "");
+    setFormGroupStoreId(rel.group_store_id || "");
+    setFormReleaseTypeId(rel.car_release_type_id || 1);
+    setFormPlateText(rel.license_plate || "");
+    setFormCarBrandModel(rel.brand_model || "");
+    setFormDriverName(rel.driver_name || "");
+
+    // Parse Followers
+    let initialFollowers: string[] = [];
+    if (Array.isArray(rel.followers) && rel.followers.length > 0) {
+      initialFollowers = rel.followers
+        .map((f: any) => (typeof f === "string" ? f : f.follower_name))
+        .filter(Boolean);
+    } else if (rel.follower_name && rel.follower_name !== "-") {
+      initialFollowers = rel.follower_name
+        .split(",")
+        .map((s: string) => s.trim())
+        .filter(Boolean);
+    }
+    setFormFollowers(initialFollowers);
+    setFollowerSearch("");
+    setFormMileage(rel.mileage || 0);
+    setFormAllowance(rel.allowance !== "-" ? rel.allowance : "");
+    setFormPda(rel.pda_device || "");
+    setFormAccountingStatus(rel.accounting_status);
+    setFormDescription(rel.description || "");
+
+    // Pre-fill images
+    setImgMileage(rel.image_mileage || "");
+    setImgFront(rel.image_front || "");
+    setImgAround1(rel.image_around_1 || "");
+    setImgAround2(rel.image_around_2 || "");
+    setImgAround3(rel.image_around_3 || "");
+    setImgAround4(rel.image_around_4 || "");
+    setImgAround5(rel.image_around_5 || "");
+    setImgPda(rel.image_pda || "");
+
+    setIsDrawerOpen(true);
+  };
+
+  // ดูรายละเอียดรายการปล่อยรถ
+  const handleViewDetail = async (rel: any) => {
+    try {
+      const res = await api.get(`/car-release/${rel.car_release_id}`);
+      if (res.data.success && res.data.release) {
+        const d = res.data.release;
+        setSelectedRelease({
+          ...rel,
+          ...d,
+          followers: d.followers || [],
+          follower_phone: d.follower_phone || rel.follower_phone,
+          stores: d.stores || [],
+          car_return: d.car_return || null,
+          driver_phone: d.driver_phone || rel.driver_phone,
+          return_documents: d.return_documents || [],
+        });
+      } else {
+        setSelectedRelease(rel);
+      }
+    } catch (err) {
+      setSelectedRelease(rel);
+    }
+  };
+
+  // เปิดหน้าจอเพิ่มรูปถ่ายอื่นๆ
+  const handleOpenProductControllerDrawer = (rel: any) => {
+    if (!rel) return;
+    setSelectedRelease(rel);
+    setProductControllerImages([]);
+    setIsProductControllerDrawerOpen(true);
+  };
+
+  // เปิดหน้าจอเพิ่มเอกสารการคืนรถ
+  const handleOpenReturnDocumentsDrawer = (rel: any) => {
+    if (!rel) return;
+    setSelectedRelease(rel);
+    setReturnDocuments([]);
+    setIsReturnDocumentsDrawerOpen(true);
+  };
+
+  // เปิดหน้าจอแก้ไขสถานะทางบัญชี
+  const handleOpenAccountingDrawer = (rel: any) => {
+    if (!rel) return;
+    const currentStatusId = rel.accounting_status || null;
+    const currentNote = rel.accounting_note || "";
+    setAccFormStatusId(currentStatusId);
+    setAccFormNote(currentNote);
+    setIsAccountingDrawerOpen(true);
+  };
+
+  // อัปเดตสถานะทางบัญชี
+  const handleUpdateAccountingStatus = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedRelease?.car_release_id) return;
+    setIsSubmittingAcc(true);
+    try {
+      const res = await api.patch(
+        `/car-release/${selectedRelease.car_release_id}/accounting`,
+        {
+          accounting_status: accFormStatusId,
+          accounting_status_id: accFormStatusId,
+          accounting_note: accFormNote,
+          description: accFormNote,
+        },
+      );
+
+      if (res.data.success) {
+        showSuccess("อัปเดตสถานะทางบัญชีและหมายเหตุเรียบร้อยแล้ว");
+        setIsAccountingDrawerOpen(false);
+        handleViewDetail(selectedRelease);
+        fetchReleases();
+      } else {
+        showError(res.data.message || "ไม่สามารถอัปเดตสถานะทางบัญชีได้");
+      }
+    } catch (err: any) {
+      console.error("Update accounting status error:", err);
+      showError(
+        err.response?.data?.message || "เกิดข้อผิดพลาดในการอัปเดตสถานะทางบัญชี",
+      );
+    } finally {
+      setIsSubmittingAcc(false);
+    }
+  };
+
+  // เปิดหน้าจอคืนรถ
   const handleOpenReturnDrawer = (rel: any) => {
     setReturnTargetRelease(rel);
     const existingReturn = rel.car_return || null;
@@ -1964,11 +1991,13 @@ export const CarReleaseList: React.FC = () => {
     setIsReturnDrawerOpen(true);
   };
 
+  // บันทึกรายการคืนรถ
   const handleReturnFormSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     handleSaveCarReturn();
   };
 
+  // บันทึกรายการคืนรถ
   const handleSaveCarReturn = async () => {
     if (!returnTargetRelease) return;
 
@@ -2022,8 +2051,10 @@ export const CarReleaseList: React.FC = () => {
     }
   };
 
+  // ลบรายการปล่อยรถ
   const handleConfirmDelete = async () => {
     if (!releaseToDelete) return;
+    setIsDeletingRelease(true);
     try {
       const res = await api.delete(
         `/car-release/${releaseToDelete.car_release_id}`,
@@ -2041,10 +2072,12 @@ export const CarReleaseList: React.FC = () => {
         err?.response?.data?.message || "เกิดข้อผิดพลาดในการลบใบปล่อยรถ",
       );
     } finally {
+      setIsDeletingRelease(false);
       setReleaseToDelete(null);
     }
   };
 
+  // ฟังก์ชันแสดงรูปภาพ
   const renderImagePicker = (
     label: string,
     value: string,
@@ -2092,6 +2125,7 @@ export const CarReleaseList: React.FC = () => {
     </div>
   );
 
+  // กรองรายการปล่อยรถ
   const filteredReleases = useMemo(() => {
     return releases.filter((r) => {
       // 1. Search Query
@@ -2165,6 +2199,7 @@ export const CarReleaseList: React.FC = () => {
     filterLicensePlate,
   ]);
 
+  // จัดกลุ่มรายการปล่อยรถ
   const groupedReleases = filteredReleases.reduce(
     (acc, rel) => {
       const key = rel.dateGroup || "20/7/2026";
@@ -2268,8 +2303,12 @@ export const CarReleaseList: React.FC = () => {
             )}
           </div>
 
+
+        </div>
+
+        <div className='justify-between flex sm:flex-row sm:items-center gap-3'>
           {/* Text Search Input */}
-          <div className="relative flex-1 w-full lg:max-w-md">
+          <div className="relative w-full lg:max-w-md">
             <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-2" />
             <input
               type="text"
@@ -2279,7 +2318,7 @@ export const CarReleaseList: React.FC = () => {
                 setCurrentPage(1);
               }}
               placeholder="ค้นหา"
-              className="w-full bg-slate-50 border border-slate-200/80 rounded-lg pl-9 pr-3 py-1.5 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:bg-white focus:border-slate-400"
+              className="w-full lg:w-full  bg-slate-50 border border-slate-200/80 rounded-lg pl-9 pr-3 py-1.5 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:bg-white focus:border-slate-400"
             />
           </div>
 
@@ -2315,7 +2354,7 @@ export const CarReleaseList: React.FC = () => {
                 <span>ล้างฟิลเตอร์</span>
               </button>
             )}
-          </div>
+          </div>          
         </div>
 
         {/* Collapsible SearchableSelect Filter Panel (แสดงเมื่อกดปุ่มตัวกรอง) */}
@@ -2471,7 +2510,7 @@ export const CarReleaseList: React.FC = () => {
                   <th className="py-2.5 px-3">หมายเหตุ</th>
                 )}
                 {visibleColumns.actions !== false && (
-                  <th className="py-2.5 px-3 text-right">จัดการ</th>
+                  <th className="py-2.5 px-3 text-right sticky top-0 right-0 bg-slate-50 z-40">จัดการ</th>
                 )}
               </tr>
             </thead>
@@ -2731,7 +2770,7 @@ export const CarReleaseList: React.FC = () => {
 
                           {/* 20. จัดการ */}
                           {visibleColumns.actions !== false && (
-                            <td className="py-1 px-3 text-right space-x-1">
+                            <td className="py-1 px-3 text-right space-x-1 sticky right-0 bg-slate-50 z-40">
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();
@@ -2808,7 +2847,8 @@ export const CarReleaseList: React.FC = () => {
         }
         formId="release-form"
         onSubmit={handleFormSubmit}
-        submitLabel={editingId ? "บันทึกการแก้ไข" : "บันทึกสร้างใบปล่อยรถ"}
+        submitLabel={isSubmittingForm ? "กำลังบันทึก..." : (editingId ? "บันทึกการแก้ไข" : "บันทึกสร้างใบปล่อยรถ")}
+        isSubmitting={isSubmittingForm}
         maxWidthClass="max-w-6xl"
       >
         <form
@@ -3330,6 +3370,7 @@ export const CarReleaseList: React.FC = () => {
         formId="product-controller-form"
         onSubmit={handleProductControllerSubmit}
         submitLabel={productControllerUploading ? "กำลังบันทึก..." : "บันทึกภาพ"}
+        isSubmitting={productControllerUploading}
         maxWidthClass="max-w-xl"
       >
         <div className="space-y-3">
@@ -3411,6 +3452,7 @@ export const CarReleaseList: React.FC = () => {
         formId="return-documents-form"
         onSubmit={handleReturnDocumentsSubmit}
         submitLabel={returnDocumentsUploading ? "กำลังบันทึก..." : "บันทึกเอกสาร"}
+        isSubmitting={returnDocumentsUploading}
         maxWidthClass="max-w-xl"
       >
         <div className="space-y-3">
@@ -3517,7 +3559,7 @@ export const CarReleaseList: React.FC = () => {
         {selectedRelease && (
           <div className="space-y-4">
             {/* DUAL TAB SWITCHER (INFO vs LIVE GPS MAP) */}
-            <div className="flex border-b border-slate-200 bg-slate-50/80 -mt-2 -mx-5 px-5 pt-1 shrink-0">
+            <div className="flex border-b border-slate-200 bg-slate-100 -mx-5 px-5 pt-1 shrink-0 sticky top-0 z-10">
               <button
                 onClick={() => setActiveDetailTab("info")}
                 className={`py-2.5 px-4 font-bold text-xs border-b-2 flex items-center gap-2 transition-colors ${
@@ -3550,7 +3592,7 @@ export const CarReleaseList: React.FC = () => {
                     : "border-transparent text-slate-500 hover:text-slate-800"
                 }`}
               >
-                <MessageSquare className="w-4 h-4 text-blue-600" />
+                <MessageSquare className="w-4 h-4 text-yellow-600" />
                 <span>แชทสื่อสาร (Chat)</span>
               </button>
             </div>
@@ -3687,7 +3729,7 @@ export const CarReleaseList: React.FC = () => {
 
                     <div>
                       <span className="text-slate-400 block text-[11px]">
-                        เบอร์โทรศัพท์
+                        เบอร์โทรคนขับ
                       </span>
                       <span className="font-medium text-slate-800 font-mono">
                         {selectedRelease.driver_phone || "-"}
@@ -3777,6 +3819,24 @@ export const CarReleaseList: React.FC = () => {
 
                     <div>
                       <span className="text-slate-400 block text-[11px]">
+                        หมายเหตุสถานะทางบัญชี
+                      </span>
+                      <span className="font-semibold text-slate-800">
+                        {selectedRelease.accounting_note || "-"}
+                      </span>
+                    </div>
+
+                    <div>
+                      <span className="text-slate-400 block text-[11px]">
+                        หมายเหตุ
+                      </span>
+                      <span className="font-semibold text-slate-800">
+                        {selectedRelease.description || "-"}
+                      </span>
+                    </div>
+
+                    <div>
+                      <span className="text-slate-400 block text-[11px]">
                         วันที่ออกรถ
                       </span>
                       <span className="font-medium text-slate-800 font-mono">
@@ -3794,13 +3854,6 @@ export const CarReleaseList: React.FC = () => {
                 <div className="bg-white space-y-2 shadow-2xs">
                   <h4 className="font-bold text-slate-900 text-xs border-b border-slate-100 pb-2 flex items-center justify-between">
                     <span>ภาพสินค้าควบคุม</span>
-                    <button
-                      type="button"
-                      onClick={() => handleOpenProductControllerDrawer(selectedRelease)}
-                      className="text-[10px] text-blue-600 font-semibold"
-                    >
-                      เพิ่มภาพ
-                    </button>
                   </h4>
 
                   {Array.isArray(selectedRelease.product_controller_images) &&
@@ -3832,13 +3885,6 @@ export const CarReleaseList: React.FC = () => {
                 <div className="bg-white space-y-2 shadow-2xs">
                   <h4 className="font-bold text-slate-900 text-xs border-b border-slate-100 pb-2 flex items-center justify-between">
                     <span>เอกสารคืนของ</span>
-                    <button
-                      type="button"
-                      onClick={() => handleOpenReturnDocumentsDrawer(selectedRelease)}
-                      className="text-[10px] text-blue-600 font-semibold"
-                    >
-                      เพิ่มไฟล์
-                    </button>
                   </h4>
 
                   {Array.isArray(selectedRelease.return_documents) &&
@@ -4503,7 +4549,7 @@ export const CarReleaseList: React.FC = () => {
                       </div>
                       <div>
                         <span className="text-slate-500 block text-[10px]">
-                          ผู้ถือกุญแจ
+                          จุดคืนกุญแจ
                         </span>
                         <span className="font-semibold text-slate-900">
                           {selectedRelease.car_return.key_holder_name || "-"}
@@ -4654,12 +4700,13 @@ export const CarReleaseList: React.FC = () => {
         formId="car-return-form"
         onSubmit={handleReturnFormSubmit}
         submitLabel={isSubmittingReturn ? "กำลังบันทึก..." : "บันทึกการคืนรถ"}
+        isSubmitting={isSubmittingReturn}
         maxWidthClass="max-w-6xl"
       >
         {returnTargetRelease && (
           <div className="space-y-5 pb-8 text-xs text-slate-800">
             {/* Target Summary Header */}
-            <div className="bg-slate-50/80 border border-slate-200/80 rounded-xl p-3.5 flex flex-wrap items-center justify-between gap-3">
+            {/* <div className="bg-slate-50/80 border border-slate-200/80 rounded-xl p-3.5 flex flex-wrap items-center justify-between gap-3">
               <div>
                 <span className="text-[10px] text-slate-500 block font-semibold">
                   เลขที่ปล่อยรถ
@@ -4696,7 +4743,7 @@ export const CarReleaseList: React.FC = () => {
                   กม.
                 </span>
               </div>
-            </div>
+            </div> */}
 
             {/* Form Section 1: Information */}
             <div className=" bg-white space-y-3.5 shadow-2xs">
@@ -4732,13 +4779,13 @@ export const CarReleaseList: React.FC = () => {
                 {/* Key Holder */}
                 <div>
                   <label className="text-[11px] font-semibold text-slate-700 block mb-1">
-                    ผู้ถือกุญแจ / จุดฝากกุญแจ
+                    จุดคืนกุญแจ
                   </label>
                   <SearchableSelect
                     options={keyHolderOptions}
                     value={String(returnKeyHolderId)}
                     onChange={(val) => setReturnKeyHolderId(val)}
-                    placeholder="-- เลือกผู้ถือกุญแจ --"
+                    placeholder="-- เลือกจุดคืนกุญแจ --"
                   />
                 </div>
 
@@ -4861,6 +4908,7 @@ export const CarReleaseList: React.FC = () => {
         cancelText="ยกเลิก"
         onConfirm={handleConfirmDelete}
         onCancel={() => setReleaseToDelete(null)}
+        isLoading={isDeletingRelease}
       />
 
       {/* AnimatedDrawer for Accounting Status & Remarks Update */}
@@ -4872,6 +4920,7 @@ export const CarReleaseList: React.FC = () => {
         formId="accounting-status-form"
         onSubmit={handleUpdateAccountingStatus}
         submitLabel={isSubmittingAcc ? "กำลังบันทึก..." : "บันทึกสถานะทางบัญชี"}
+        isSubmitting={isSubmittingAcc}
       >
         <form
           id="accounting-status-form"

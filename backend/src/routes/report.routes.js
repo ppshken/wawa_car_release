@@ -408,14 +408,26 @@ router.get('/reports/off-site-checks', authenticateToken, async (req, res) => {
 // GET /api/reports/audit-logs (ดึงประวัติการใช้งานและกิจกรรมในระบบ Audit Log)
 router.get('/reports/audit-logs', authenticateToken, async (req, res) => {
   try {
-    const { page, limit, search, action } = req.query;
+    const { page, limit, search, action, user } = req.query;
 
     let whereClause = ' WHERE 1=1';
     const params = [];
 
     if (action && action.trim()) {
-      whereClause += ` AND action = ?`;
-      params.push(action.trim());
+      const actionTrimmed = action.trim().toUpperCase();
+      if (['CREATE', 'UPDATE', 'DELETE'].includes(actionTrimmed)) {
+        whereClause += ` AND action LIKE ?`;
+        params.push(`${actionTrimmed}%`);
+      } else {
+        whereClause += ` AND action = ?`;
+        params.push(actionTrimmed);
+      }
+    }
+
+    if (user && user.trim()) {
+      const u = `%${user.trim()}%`;
+      whereClause += ` AND (user_name LIKE ? OR username LIKE ?)`;
+      params.push(u, u);
     }
 
     if (search && search.trim()) {

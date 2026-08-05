@@ -34,6 +34,7 @@ import {
   BarChart3,
   ListChecks,
   AlertTriangle,
+  History,
 } from "lucide-react";
 
 export const Sidebar: React.FC = () => {
@@ -162,6 +163,7 @@ export const Sidebar: React.FC = () => {
 
   const settingNavItems = [
     { to: "/reports", label: "รายงานระบบ", icon: BarChart3, key: "reports" },
+    { to: "/audit-log", label: "Audit Log", icon: History, key: "reports" },
     { to: "/api-keys", label: "จัดการ API Key", icon: Key, key: "api-key" },
   ].filter((item) => isMenuAllowed(item.key));
 

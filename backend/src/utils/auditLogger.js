@@ -45,6 +45,103 @@ async function logAudit(req, { action, targetType, targetId, details }) {
   }
 }
 
+function sanitizeAuditBody(body) {
+  if (!body || typeof body !== 'object') return body;
+  const sanitized = {};
+  for (const [key, value] of Object.entries(body)) {
+    const lowerKey = key.toLowerCase();
+    if (lowerKey.includes('password') || lowerKey.includes('token') || lowerKey.includes('key_value')) {
+      sanitized[key] = '***';
+    } else {
+      sanitized[key] = value;
+    }
+  }
+  return sanitized;
+}
+
+function getAuditTargetType(originalUrl) {
+  const path = originalUrl.split('?')[0];
+  const segments = path.split('/').filter(Boolean);
+  const apiIndex = segments.indexOf('api');
+  if (apiIndex === -1) return '';
+  const afterApi = segments.slice(apiIndex + 1);
+  if (afterApi.length === 0) return 'API';
+  const first = afterApi[0];
+  if (['manage', 'master', 'optimoroute'].includes(first) && afterApi[1]) {
+    return `${first}_${afterApi[1]}`.toUpperCase();
+  }
+  return first.toUpperCase();
+}
+
+function getAuditTargetId(req) {
+  const candidates = [
+    req.params?.id,
+    req.params?.listId,
+    req.params?.userId,
+    req.params?.carReleaseId,
+    req.params?.groupStoreId,
+    req.body?.id,
+    req.body?.user_id,
+    req.body?.username,
+    req.body?.store_id,
+    req.body?.group_store_id,
+    req.body?.level_user_id,
+    req.body?.permission_id,
+    req.query?.id
+  ];
+  const target = candidates.find((value) => value !== undefined && value !== null && String(value).trim() !== '');
+  return target !== undefined ? String(target) : '';
+}
+
+function getAuditAction(req) {
+  const path = req.originalUrl.split('?')[0];
+  if (req.method === 'POST' && path.includes('/auth/login')) {
+    return 'LOGIN';
+  }
+  if (req.method === 'POST') {
+    return 'CREATE';
+  }
+  if (req.method === 'PUT' || req.method === 'PATCH') {
+    return 'UPDATE';
+  }
+  if (req.method === 'DELETE') {
+    return 'DELETE';
+  }
+  return req.method;
+}
+
+function auditRequestLogger(req, res, next) {
+  const methodsToAudit = ['POST', 'PUT', 'PATCH', 'DELETE'];
+  if (!methodsToAudit.includes(req.method)) {
+    return next();
+  }
+
+  const startTime = Date.now();
+  res.on('finish', async () => {
+    try {
+      const action = getAuditAction(req);
+      const targetType = getAuditTargetType(req.originalUrl || req.url || '');
+      const targetId = getAuditTargetId(req);
+      const details = {
+        path: req.originalUrl || req.url,
+        method: req.method,
+        status: res.statusCode,
+        duration_ms: Date.now() - startTime,
+        params: req.params || {},
+        query: req.query || {},
+        body: sanitizeAuditBody(req.body)
+      };
+
+      await logAudit(req, { action, targetType, targetId, details });
+    } catch (err) {
+      console.error('Error writing request audit log:', err);
+    }
+  });
+
+  next();
+}
+
 module.exports = {
-  logAudit
+  logAudit,
+  auditRequestLogger
 };

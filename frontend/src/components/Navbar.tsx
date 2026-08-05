@@ -1,9 +1,18 @@
-import React, { useState, useEffect } from 'react';
-import { useAuth } from '../context/AuthContext';
-import { useSidebar } from '../context/SidebarContext';
-import { Truck, LogOut, Bell, Menu, PanelLeftClose, PanelLeft, Clock } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
-import { getImageUrl } from '../services/api';
+import React, { useState, useEffect } from "react";
+import { useAuth } from "../context/AuthContext";
+import { useSidebar } from "../context/SidebarContext";
+import {
+  Truck,
+  LogOut,
+  Bell,
+  Menu,
+  PanelLeftClose,
+  PanelLeft,
+  Clock,
+} from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { getImageUrl } from "../services/api";
+import { ConfirmLogout } from "./ConfirmLogout";
 
 export const Navbar: React.FC = () => {
   const { user, logout } = useAuth();
@@ -12,6 +21,8 @@ export const Navbar: React.FC = () => {
 
   // Real-time Clock State
   const [currentTime, setCurrentTime] = useState<Date>(new Date());
+
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -37,7 +48,7 @@ export const Navbar: React.FC = () => {
         <button
           onClick={toggleCollapsed}
           className="hidden lg:flex p-1.5 -ml-1 rounded-md text-slate-400 hover:text-slate-900 hover:bg-slate-100 transition-colors"
-          title={collapsed ? 'ขยายแถบเมนู' : 'ย่อแถบเมนู'}
+          title={collapsed ? "ขยายแถบเมนู" : "ย่อแถบเมนู"}
         >
           {collapsed ? (
             <PanelLeft className="w-4 h-4" />
@@ -47,13 +58,22 @@ export const Navbar: React.FC = () => {
         </button>
 
         {/* Brand Logo */}
-        <div className="flex items-center gap-3 cursor-pointer" onClick={() => navigate('/')}>
-          <img src="assets/car_release_logo.jpg" alt="Wawa Icon" className="w-8 h-8" />
+        <div
+          className="flex items-center gap-3 cursor-pointer"
+          onClick={() => navigate("/")}
+        >
+          <img
+            src="assets/car_release_logo.jpg"
+            alt="Wawa Icon"
+            className="w-8 h-8"
+          />
           <div className="flex flex-col">
             <span className="font-semibold text-sm text-slate-900 tracking-tight leading-tight">
               Car Release
             </span>
-            <span className="text-[10px] text-slate-400 font-medium hidden sm:block">Fleet Management</span>
+            <span className="text-[10px] text-slate-400 font-medium hidden sm:block">
+              Fleet Management
+            </span>
           </div>
         </div>
       </div>
@@ -64,16 +84,19 @@ export const Navbar: React.FC = () => {
         <div className="hidden sm:flex items-center gap-1.5 text-xs font-mono font-bold text-slate-700 bg-slate-50 px-2.5 py-1 rounded-lg border border-slate-200 shadow-2xs">
           <Clock className="w-3.5 h-3.5 text-emerald-600 animate-pulse shrink-0" />
           <span>
-            {currentTime.toLocaleTimeString('th-TH', {
-              hour: '2-digit',
-              minute: '2-digit',
-              second: '2-digit',
-            })}{' '}
+            {currentTime.toLocaleTimeString("th-TH", {
+              hour: "2-digit",
+              minute: "2-digit",
+              second: "2-digit",
+            })}{" "}
             น.
           </span>
         </div>
 
-        <button className="p-1.5 rounded-md text-slate-500 hover:bg-slate-100 relative transition-colors" title="แจ้งเตือน">
+        <button
+          className="p-1.5 rounded-md text-slate-500 hover:bg-slate-100 relative transition-colors"
+          title="แจ้งเตือน"
+        >
           <Bell className="w-4 h-4" />
           <span className="absolute top-1 right-1 w-1.5 h-1.5 bg-slate-900 rounded-full"></span>
         </button>
@@ -86,20 +109,24 @@ export const Navbar: React.FC = () => {
                 alt={user.name}
                 className="w-7 h-7 rounded-md object-cover border border-slate-200/80 shadow-2xs"
                 onError={(e) => {
-                  (e.target as HTMLElement).style.display = 'none';
+                  (e.target as HTMLElement).style.display = "none";
                 }}
               />
             ) : (
               <div className="w-7 h-7 rounded-md bg-slate-100 text-slate-700 font-semibold border border-slate-200/70 flex items-center justify-center text-xs">
-                {user.name ? user.name.charAt(0).toUpperCase() : 'U'}
+                {user.name ? user.name.charAt(0).toUpperCase() : "U"}
               </div>
             )}
             <div className="text-left hidden lg:block">
-              <div className="text-xs font-semibold text-slate-800 leading-tight">{user.name}</div>
-              <div className="text-[10px] text-slate-400">{user.level_user_name || 'ผู้ใช้งาน'}</div>
+              <div className="text-xs font-semibold text-slate-800 leading-tight">
+                {user.name}
+              </div>
+              <div className="text-[10px] text-slate-400">
+                {user.level_user_name || "ผู้ใช้งาน"}
+              </div>
             </div>
             <button
-              onClick={logout}
+              onClick={() => setShowLogoutConfirm(true)}
               className="p-1.5 rounded-md text-slate-400 hover:text-slate-900 hover:bg-slate-100 transition-colors"
               title="ออกจากระบบ"
             >
@@ -107,6 +134,15 @@ export const Navbar: React.FC = () => {
             </button>
           </div>
         )}
+        <ConfirmLogout
+          isOpen={showLogoutConfirm}
+          title="ยืนยันการออกจากระบบ"
+          message="คุณต้องการออกจากระบบหรือไม่?"
+          confirmText="ออกจากระบบ"
+          cancelText="ยกเลิก"
+          onConfirm={logout}
+          onCancel={() => setShowLogoutConfirm(false)}
+        />
       </div>
     </header>
   );

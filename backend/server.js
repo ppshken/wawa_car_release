@@ -12,6 +12,7 @@ const userManagementRoutes = require('./src/routes/userManagement.routes');
 const masterDataRoutes = require('./src/routes/masterData.routes');
 const optimoRouteRoutes = require('./src/routes/optimoRoute.routes');
 const apiKeyRoutes = require('./src/routes/apiKey.routes');
+const { auditRequestLogger } = require('./src/utils/auditLogger');
 
 const app = express();
 const PORT = process.env.PORT;
@@ -20,6 +21,7 @@ const PORT = process.env.PORT;
 app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+app.use(auditRequestLogger);
 
 // Serve static uploads
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));

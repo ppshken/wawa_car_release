@@ -1,7 +1,9 @@
 import axios from 'axios';
 
+const BASE_URL = `${import.meta.env.VITE_BASE_URL}/api`;
+
 const api = axios.create({
-  baseURL: 'http://187.127.216.219/api',
+  baseURL: BASE_URL,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -36,12 +38,21 @@ api.interceptors.response.use(
 
 export const getImageUrl = (path?: string) => {
   if (!path) return "";
-  if (path.startsWith("data:") || path.startsWith("blob:")) return path;
-  if (path.startsWith("http://") || path.startsWith("https://")) {
-    return path.replace("http://187.127.216.219", "http://187.127.216.219");
+
+  if (path.startsWith("data:") || path.startsWith("blob:")) {
+    return path;
   }
+
+  if (path.startsWith("http://") || path.startsWith("https://")) {
+    return path
+      .replace("http://187.127.216.219", "https://www.wawa-car-release.cloud")
+      .replace("http://localhost:5000", "https://www.wawa-car-release.cloud")
+      .replace("http://localhost:5001", "https://www.wawa-car-release.cloud");
+  }
+
   const cleanPath = path.startsWith("/") ? path : `/${path}`;
-  return `http://187.127.216.219${cleanPath}`;
+
+  return cleanPath;
 };
 
 export default api;
