@@ -232,7 +232,7 @@ const SignaturePad: React.FC<{
         <canvas
           ref={canvasRef}
           width={450}
-          height={130}
+          height={200}
           onMouseDown={startDrawing}
           onMouseMove={draw}
           onMouseUp={stopDrawing}
@@ -240,7 +240,7 @@ const SignaturePad: React.FC<{
           onTouchStart={startDrawing}
           onTouchMove={draw}
           onTouchEnd={stopDrawing}
-          className="w-full h-32 touch-none cursor-crosshair bg-white"
+          className="w-full h-42 touch-none cursor-crosshair bg-white"
         />
         {!hasSigned && (
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none text-slate-300 text-xs font-semibold">
@@ -878,6 +878,13 @@ export const DeliveryCheckInOutDrawer: React.FC<
     storeItem.date_time_check_out ||
     storeItem.check_out_time;
 
+  const check =
+    (distanceMeters !== null &&
+      maxDistanceMeters > 0 &&
+      distanceMeters > maxDistanceMeters) ||
+    isLocating ||
+    distanceMeters === null;
+
   return (
     <>
       <AnimatedDrawer
@@ -1043,19 +1050,9 @@ export const DeliveryCheckInOutDrawer: React.FC<
               {!hasCheckedIn && !isCompleted && !isProblem ? (
                 <div className="space-y-1.5">
                   <SlideToCheckInButton
-                    disabled={
-                      (distanceMeters !== null &&
-                        maxDistanceMeters > 0 &&
-                        distanceMeters > maxDistanceMeters) ||
-                      isLocating || distanceMeters === null
-                    }
+                    disabled={check}
                     onSlideComplete={() => {
-                      if (
-                        (distanceMeters !== null &&
-                          maxDistanceMeters > 0 &&
-                          distanceMeters > maxDistanceMeters) ||
-                        isLocating || distanceMeters === null
-                      ) {
+                      if (check) {
                         showError(
                           `ไม่สามารถเช็คอินได้: ตำแหน่งของคุณ (${distanceMeters} ม.) เกินกว่าระยะทางที่กำหนด (≤ ${maxDistanceMeters} ม.)`,
                         );
@@ -1081,14 +1078,16 @@ export const DeliveryCheckInOutDrawer: React.FC<
                 <div className="grid grid-cols-2 gap-2">
                   <button
                     onClick={() => setActiveStep("checkout")}
-                    className="py-3 px-3 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-2xs transition-all"
+                    disabled={check}
+                    className={` ${check ? "opacity-50 cursor-not-allowed" : "opacity-100"} py-3 px-3 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-2xs transition-all`}
                   >
                     <CheckCircle2 className="w-4 h-4" />
                     <span>1. เช็คเอาท์</span>
                   </button>
                   <button
                     onClick={() => setActiveStep("problem")}
-                    className="py-3 px-3 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-2xs transition-all"
+                    disabled={check}
+                    className={` ${check ? "opacity-50 cursor-not-allowed" : "opacity-100"} py-3 px-3 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-2xs transition-all`}
                   >
                     <AlertTriangle className="w-4 h-4" />
                     <span>2. ระบุ ติดปัญหา</span>
