@@ -221,7 +221,7 @@ export const CustomDatePicker: React.FC<CustomDatePickerProps> = ({
   }, []);
 
   return (
-    <div className={`relative inline-flex items-center gap-2 ${isOpen ? "z-[99999]" : "z-10"} ${className}`} ref={containerRef}>
+    <div className={`relative ${className?.includes("w-full") ? "flex" : "inline-flex"} items-center gap-2 ${isOpen ? "z-[99999]" : "z-10"} ${className}`} ref={containerRef}>
       {label && (
         <label className="text-xs font-semibold text-slate-700 whitespace-nowrap cursor-pointer select-none" onClick={() => setIsOpen(!isOpen)}>
           {label}
@@ -229,10 +229,10 @@ export const CustomDatePicker: React.FC<CustomDatePickerProps> = ({
       )}
 
       {/* Input Display Box */}
-      <div className="relative">
+      <div className={`relative ${className?.includes("w-full") ? "flex-1" : ""}`}>
         <div
           onClick={() => setIsOpen(!isOpen)}
-          className={`flex items-center justify-between gap-2 bg-white border border-slate-300 rounded-md px-2.5 py-1 text-xs text-slate-800 cursor-pointer shadow-2xs hover:border-slate-400 transition-colors select-none ${
+          className={`flex items-center justify-between gap-2 bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-800 cursor-pointer shadow-2xs hover:border-slate-400 transition-colors select-none ${
             isOpen ? "ring-2 ring-blue-500/20 border-blue-500" : ""
           }`}
         >

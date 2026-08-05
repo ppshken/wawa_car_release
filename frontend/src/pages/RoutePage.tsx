@@ -689,6 +689,7 @@ export const RoutePage: React.FC = () => {
   // Create Unassigned Stop Modal State
   const [isCreateUnassignedModalOpen, setIsCreateUnassignedModalOpen] =
     useState(false);
+  const [unassignedCreatedDate, setUnassignedCreatedDate] = useState("");
   const [unassignedStoreId, setUnassignedStoreId] = useState("");
   const [unassignedStoreName, setUnassignedStoreName] = useState("");
   const [unassignedAddress, setUnassignedAddress] = useState("");
@@ -1906,6 +1907,7 @@ export const RoutePage: React.FC = () => {
     return prev || null;
   }, [routes, formStopGroupId, formStopRowOrder]);
 
+  // todo: เพิ่มรายการจุดจัดส่งสินค้าใหม่
   const handleCreateStop = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formStopGroupId) {
@@ -2434,6 +2436,7 @@ export const RoutePage: React.FC = () => {
       if (res.data.success) {
         showSuccess(res.data.message || "ลบกลุ่มสายจัดส่งเรียบร้อยแล้ว");
         fetchRoutes(selectedDate);
+        fetchUnassignedStops(selectedDate);
       } else {
         showError(res.data.message || "ลบกลุ่มสายจัดส่งไม่สำเร็จ");
       }
@@ -3494,6 +3497,85 @@ export const RoutePage: React.FC = () => {
                   </React.Fragment>
                 );
               })}
+
+              {/* Unassigned Stops (สีเทา) */}
+              {unassignedStops
+                .filter((stop) => stop.lat && stop.lng)
+                .map((stop, idx) => (
+                  <Marker
+                    key={`unassigned-${stop.list_id || idx}`}
+                    position={[stop.lat, stop.lng]}
+                    icon={createStopMarker(idx + 1, "#9ca3af", false, "unassigned")}
+                  >
+                    <Popup maxWidth={300} autoPan={false}>
+                      <div
+                        style={{
+                          fontFamily: "system-ui, sans-serif",
+                          fontSize: 12,
+                          lineHeight: 1.5,
+                        }}
+                      >
+                        <div
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 8,
+                            marginBottom: 6,
+                          }}
+                        >
+                          <div
+                            style={{
+                              width: 12,
+                              height: 12,
+                              borderRadius: "50%",
+                              background: "#9ca3af",
+                              flexShrink: 0,
+                            }}
+                          />
+                          <strong style={{ fontSize: 13 }}>
+                            {stop.storeName}
+                          </strong>
+                        </div>
+                        {stop.address && (
+                          <div
+                            style={{ color: "#64748b", marginBottom: 4 }}
+                          >
+                            {stop.address}
+                          </div>
+                        )}
+                        <div
+                          style={{
+                            display: "flex",
+                            gap: 12,
+                            alignItems: "center",
+                            marginBottom: 4,
+                          }}
+                        >
+                          <span
+                            style={{
+                              fontSize: 10,
+                              fontWeight: 700,
+                              padding: "2px 8px",
+                              borderRadius: 20,
+                              background: "#f1f5f9",
+                              color: "#475569",
+                            }}
+                          >
+                            ยังไม่จัดสาย
+                          </span>
+                          {stop.quantity > 0 && (
+                            <span style={{ color: "#64748b", fontSize: 11 }}>
+                              จำนวน: {stop.quantity}
+                            </span>
+                          )}
+                        </div>
+                        <div style={{ color: "#94a3b8", fontSize: 10 }}>
+                          เลขที่: {stop.orderNo || "-"}
+                        </div>
+                      </div>
+                    </Popup>
+                  </Marker>
+                ))}
 
               {/* Standalone Active Leaflet Popup on Pin Marker */}
               {activeStop && (
@@ -5702,6 +5784,23 @@ export const RoutePage: React.FC = () => {
         isSubmitting={creatingUnassigned}
       >
         <div className="space-y-4 text-xs">
+          
+          <div className="space-y-1">
+              <label className="block text-slate-700 font-semibold mb-1">
+                เลือกวันที่ต้องการจัดส่ง <span className="text-rose-500">*</span>
+              </label>
+              <CustomDatePicker
+                value={unassignedCreatedDate}
+                onChange={(val) => setUnassignedCreatedDate(val)}
+                label=""
+                showActiveOrdersToggle={false}
+                className="w-full "
+              />
+            <p className="text-[11px] text-slate-500 mt-1">
+              วันที่กำหนดให้รถขนส่งวิ่ง ไม่เกี่ยวกับวันที่สั่งสินค้า
+            </p>
+          </div>
+
           <SearchableSelect
             label="ลำดับความสำคัญ"
             value={unassignedPriority}

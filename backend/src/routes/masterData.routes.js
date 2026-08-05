@@ -727,6 +727,13 @@ router.put('/groups/:id', authenticateToken, async (req, res) => {
 router.delete('/groups/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
+    
+    // อัพเดท list_store ที่อยู่ในกลุ่มนี้ให้เป็น unassigned ก่อนลบ
+    await query(
+      "UPDATE list_store SET group_store_id = NULL, row_order = NULL, status = 'unassigned' WHERE group_store_id = ?",
+      [id]
+    );
+
     await query('DELETE FROM group_store WHERE group_store_id = ?', [id]);
     res.json({ success: true, message: 'ลบกลุ่มสายจัดส่งเรียบร้อยแล้ว' });
   } catch (err) {
