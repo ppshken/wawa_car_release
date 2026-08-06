@@ -278,6 +278,171 @@ router.get('/stores/export', authenticateToken, async (req, res) => {
 });
 
 
+// Auto-migration & Auto-seeder for store_business_hours table
+(async () => {
+  try {
+    await query(`
+      CREATE TABLE IF NOT EXISTS store_business_hours (
+        id INT(10) UNSIGNED NOT NULL AUTO_INCREMENT,
+        store_id VARCHAR(10) NOT NULL,
+        day_of_week ENUM('monday','tuesday','wednesday','thursday','friday','saturday','sunday') NOT NULL,
+        is_open TINYINT(1) NOT NULL DEFAULT 1 COMMENT '1=เปิด, 0=ปิด',
+        open_time VARCHAR(10) DEFAULT '08:30',
+        close_time VARCHAR(10) DEFAULT '17:30',
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        PRIMARY KEY (id),
+        UNIQUE KEY uq_store_day (store_id, day_of_week),
+        KEY fk_bh_store (store_id),
+        CONSTRAINT fk_bh_store FOREIGN KEY (store_id) REFERENCES store (store_id) ON DELETE CASCADE ON UPDATE CASCADE
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+    `);
+
+    // Auto-seed business hours for all stores in table 'store' if not exists
+    await query(`
+      INSERT IGNORE INTO store_business_hours (store_id, day_of_week, is_open, open_time, close_time)
+      SELECT 
+        s.store_id, 
+        d.day_of_week, 
+        1 AS is_open, 
+        '08:30' AS open_time, 
+        '17:30' AS close_time
+      FROM store s
+      CROSS JOIN (
+        SELECT 'monday' AS day_of_week UNION ALL
+        SELECT 'tuesday' UNION ALL
+        SELECT 'wednesday' UNION ALL
+        SELECT 'thursday' UNION ALL
+        SELECT 'friday' UNION ALL
+        SELECT 'saturday' UNION ALL
+        SELECT 'sunday'
+      ) d
+    `);
+  } catch (err) {
+    console.error('Error creating/seeding store_business_hours table:', err);
+  }
+})();
+
+// POST /api/master/stores/seed-business-hours
+// สคริปต์สร้างข้อมูลวันทำการวันจันทร์ - อาทิตย์ (08:30 - 17:30) ให้กับร้านค้าทั้งหมดในตาราง store
+router.post('/stores/seed-business-hours', authenticateToken, async (req, res) => {
+  try {
+    const result = await query(`
+      INSERT IGNORE INTO store_business_hours (store_id, day_of_week, is_open, open_time, close_time)
+      SELECT 
+        s.store_id, 
+        d.day_of_week, 
+        1 AS is_open, 
+        '08:30' AS open_time, 
+        '17:30' AS close_time
+      FROM store s
+      CROSS JOIN (
+        SELECT 'monday' AS day_of_week UNION ALL
+        SELECT 'tuesday' UNION ALL
+        SELECT 'wednesday' UNION ALL
+        SELECT 'thursday' UNION ALL
+        SELECT 'friday' UNION ALL
+        SELECT 'saturday' UNION ALL
+        SELECT 'sunday'
+      ) d
+    `);
+    res.json({
+      success: true,
+      message: 'รันสคริปต์เพิ่มข้อมูลวันทำการให้กับร้านค้าทั้งหมดสำเร็จ!',
+      affectedRows: result.affectedRows || 0
+    });
+  } catch (err) {
+    console.error('Seed store business hours error:', err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+const DAYS_OF_WEEK = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+
+const DEFAULT_BUSINESS_HOURS = DAYS_OF_WEEK.map(day => ({
+  day_of_week: day,
+  is_open: ['saturday', 'sunday'].includes(day) ? 0 : 1,
+  open_time: '08:00',
+  close_time: '17:00'
+}));
+
+// GET /api/master/stores/:id/business-hours
+router.get('/stores/:id/business-hours', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const rows = await query(
+      'SELECT id, store_id, day_of_week, is_open, open_time, close_time FROM store_business_hours WHERE store_id = ? ORDER BY FIELD(day_of_week, "monday","tuesday","wednesday","thursday","friday","saturday","sunday")',
+      [id]
+    );
+
+    if (rows.length === 0) {
+      return res.json({
+        success: true,
+        store_id: id,
+        business_hours: [],
+        has_data: false,
+        is_default: true
+      });
+    }
+
+    const business_hours = rows.map(r => ({
+      day_of_week: r.day_of_week,
+      is_open: r.is_open,
+      open_time: r.open_time || '08:00',
+      close_time: r.close_time || '17:00'
+    }));
+
+    res.json({ success: true, store_id: id, business_hours, has_data: true, is_default: false });
+  } catch (err) {
+    console.error('GET /stores/:id/business-hours error:', err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// PUT /api/master/stores/:id/business-hours
+router.put('/stores/:id/business-hours', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { business_hours } = req.body;
+
+    if (!Array.isArray(business_hours) || business_hours.length === 0) {
+      return res.status(400).json({ success: false, message: 'กรุณาส่งข้อมูลวันทำการ (business_hours array)' });
+    }
+
+    // Validate each item
+    for (const bh of business_hours) {
+      if (!DAYS_OF_WEEK.includes(bh.day_of_week)) {
+        return res.status(400).json({ success: false, message: `วันไม่ถูกต้อง: ${bh.day_of_week}` });
+      }
+    }
+
+    // Upsert each day using INSERT ... ON DUPLICATE KEY UPDATE
+    for (const bh of business_hours) {
+      await query(
+        `INSERT INTO store_business_hours (store_id, day_of_week, is_open, open_time, close_time)
+         VALUES (?, ?, ?, ?, ?)
+         ON DUPLICATE KEY UPDATE
+           is_open = VALUES(is_open),
+           open_time = VALUES(open_time),
+           close_time = VALUES(close_time),
+           updated_at = NOW()`,
+        [
+          id,
+          bh.day_of_week,
+          bh.is_open ? 1 : 0,
+          bh.open_time || '08:00',
+          bh.close_time || '17:00'
+        ]
+      );
+    }
+
+    res.json({ success: true, message: 'บันทึกวันทำการเรียบร้อยแล้ว' });
+  } catch (err) {
+    console.error('PUT /stores/:id/business-hours error:', err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
 // =========================================================
 // 2. KEY STORAGE / KEY HOLDERS (ตาราง: key_holder)
 // =========================================================

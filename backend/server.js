@@ -12,6 +12,7 @@ const userManagementRoutes = require('./src/routes/userManagement.routes');
 const masterDataRoutes = require('./src/routes/masterData.routes');
 const optimoRouteRoutes = require('./src/routes/optimoRoute.routes');
 const apiKeyRoutes = require('./src/routes/apiKey.routes');
+const avoidZoneRoutes = require('./src/routes/avoidZone.routes');
 const { auditRequestLogger } = require('./src/utils/auditLogger');
 
 const app = express();
@@ -42,6 +43,7 @@ app.use('/api', reportRoutes);
 app.use('/api/manage', userManagementRoutes);
 app.use('/api/master', masterDataRoutes);
 app.use('/api', masterDataRoutes);
+app.use('/api/master', avoidZoneRoutes);
 app.use('/api/optimoroute', optimoRouteRoutes);
 app.use('/api', optimoRouteRoutes);
 app.use('/api', apiKeyRoutes);

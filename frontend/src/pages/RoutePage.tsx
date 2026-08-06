@@ -10,8 +10,10 @@ import {
   TileLayer,
   Marker,
   Polyline,
+  Polygon,
   Popup,
   useMap,
+  useMapEvents,
 } from "react-leaflet";
 import L from "leaflet";
 import api from "../services/api";
@@ -25,6 +27,7 @@ import {
   ColumnItem,
 } from "../components/ColumnToggleDropdown";
 import { ExportDrawer } from "../components/ExportDrawer";
+import { AvoidZoneDrawer, AvoidZone } from "../components/AvoidZoneDrawer";
 import * as XLSX from "xlsx";
 import {
   Map as MapIcon,
@@ -37,6 +40,7 @@ import {
   CheckCircle2,
   Circle,
   AlertCircle,
+  AlertTriangle,
   ChevronDown,
   ChevronUp,
   Eye,
@@ -70,8 +74,10 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   Calculator,
-  AlertTriangle,
   ListPlus,
+  ShieldAlert,
+  Pentagon,
+  Undo2,
 } from "lucide-react";
 
 interface DeliverySettings {
@@ -90,6 +96,49 @@ const DEFAULT_DELIVERY_SETTINGS: DeliverySettings = {
   priorityStrategy: "fastest_time",
   depotStartTime: "08:00",
   bufferTimePerRoute: 15,
+};
+
+function MapDrawingEvents({
+  isDrawing,
+  onAddPoint,
+}: {
+  isDrawing: boolean;
+  onAddPoint: (lat: number, lng: number) => void;
+}) {
+  useMapEvents({
+    click(e) {
+      if (isDrawing) {
+        onAddPoint(e.latlng.lat, e.latlng.lng);
+      }
+    },
+  });
+  return null;
+}
+
+const isTaxActive = (val: any): boolean => {
+  if (val === 1 || val === "1" || val === true || val === "true") return true;
+  if (typeof val === "string") {
+    const s = val.trim().toLowerCase();
+    return s === "y" || s === "yes" || s === "มี" || s === "✓" || s === "x";
+  }
+  return false;
+};
+
+const formatDateString = (d: any, fallbackDate: string = ""): string => {
+  if (!d) return fallbackDate;
+  if (typeof d === "string") {
+    if (d.includes("T")) {
+      const dateObj = new Date(d);
+      if (!isNaN(dateObj.getTime())) {
+        const year = dateObj.getFullYear();
+        const month = String(dateObj.getMonth() + 1).padStart(2, "0");
+        const day = String(dateObj.getDate()).padStart(2, "0");
+        return `${year}-${month}-${day}`;
+      }
+    }
+    return d.slice(0, 10);
+  }
+  return fallbackDate;
 };
 
 // ─── Types ───
@@ -119,6 +168,12 @@ interface StopData {
   position_product_id?: number | string;
   position_production_order?: number;
   position_product_name?: string;
+  tax?: number;
+  note?: string;
+  is_store_closed?: boolean;
+  is_closed_today?: boolean;
+  store_open_time?: string;
+  store_close_time?: string;
   loads?: Array<{
     loading_type_id: number;
     type_name: string;
@@ -618,7 +673,8 @@ export const RoutePage: React.FC = () => {
       { id: "start_service", label: "เริ่มบริการ" },
       { id: "end_service", label: "สิ้นสุดบริการ" },
       { id: "actual_duration", label: "ระยะเวลาจริง" },
-      { id: "proof_of_delivery", label: "หลักฐานการส่ง" },
+      { id: "tax", label: "ใบกำกับภาษี" },
+      { id: "note", label: "หมายเหตุ" },
       ...dynamicCols,
       { id: "total_quantity", label: "จำนวนทั้งหมด" },
       { id: "actions", label: "จัดการ" },
@@ -644,7 +700,8 @@ export const RoutePage: React.FC = () => {
         start_service: true,
         end_service: true,
         actual_duration: true,
-        proof_of_delivery: true,
+        tax: true,
+        note: true,
         total_quantity: true,
         actions: true,
       };
@@ -698,6 +755,8 @@ export const RoutePage: React.FC = () => {
   const [unassignedOrderNo, setUnassignedOrderNo] = useState("");
   const [unassignedPriority, setUnassignedPriority] =
     useState<string>("medium");
+  const [unassignedTax, setUnassignedTax] = useState(false);
+  const [unassignedNote, setUnassignedNote] = useState("");
   const [unassignedPositionProductId, setUnassignedPositionProductId] =
     useState<string | number>("");
   const [unassignedPositionOrder, setUnassignedPositionOrder] =
@@ -718,6 +777,10 @@ export const RoutePage: React.FC = () => {
   const [unassignedEditOrderNo, setUnassignedEditOrderNo] = useState("");
   const [unassignedEditPriority, setUnassignedEditPriority] =
     useState<string>("medium");
+  const [unassignedEditCreatedDate, setUnassignedEditCreatedDate] =
+    useState("");
+  const [unassignedEditTax, setUnassignedEditTax] = useState(false);
+  const [unassignedEditNote, setUnassignedEditNote] = useState("");
   const [unassignedEditPositionProductId, setUnassignedEditPositionProductId] =
     useState<string | number>("");
   const [unassignedEditPositionOrder, setUnassignedEditPositionOrder] =
@@ -782,6 +845,50 @@ export const RoutePage: React.FC = () => {
     setIsConfirmClearUnassignedModalOpen,
   ] = useState(false);
   const [clearingUnassigned, setClearingUnassigned] = useState(false);
+
+  // Avoid Zones (พื้นที่ห้ามผ่าน) State
+  const [avoidZones, setAvoidZones] = useState<AvoidZone[]>([]);
+  const [isAvoidZoneDrawerOpen, setIsAvoidZoneDrawerOpen] = useState(false);
+  const [isDrawingAvoidZone, setIsDrawingAvoidZone] = useState(false);
+  const [drawingPoints, setDrawingPoints] = useState<[number, number][]>([]);
+  const [isSaveZoneModalOpen, setIsSaveZoneModalOpen] = useState(false);
+  const [newZoneName, setNewZoneName] = useState("");
+  const [newZoneType, setNewZoneType] = useState<
+    "unpaved" | "height_limit" | "truck_prohibited" | "custom"
+  >("unpaved");
+  const [newZoneDescription, setNewZoneDescription] = useState("");
+  const [savingAvoidZone, setSavingAvoidZone] = useState(false);
+
+  // Store business hours cache for drawer alerts
+  const [storeHoursCache, setStoreHoursCache] = useState<Record<string, any[]>>(
+    {},
+  );
+
+  const fetchStoreBusinessHours = useCallback(
+    async (storeId: string) => {
+      if (!storeId || storeHoursCache[storeId]) return;
+      try {
+        const res = await api.get(`/master/stores/${storeId}/business-hours`);
+        if (res.data && res.data.success) {
+          setStoreHoursCache((prev) => ({
+            ...prev,
+            [storeId]: res.data.businessHours || [],
+          }));
+        }
+      } catch (err) {
+        console.warn("Fetch store business hours warning:", err);
+      }
+    },
+    [storeHoursCache],
+  );
+
+  useEffect(() => {
+    if (unassignedStoreId) fetchStoreBusinessHours(unassignedStoreId);
+  }, [unassignedStoreId, fetchStoreBusinessHours]);
+
+  useEffect(() => {
+    if (unassignedEditStoreId) fetchStoreBusinessHours(unassignedEditStoreId);
+  }, [unassignedEditStoreId, fetchStoreBusinessHours]);
 
   // Resizable Bottom Panel State
   const [panelHeight, setPanelHeight] = useState<number>(260);
@@ -900,12 +1007,22 @@ export const RoutePage: React.FC = () => {
     );
   }, [unassignedStops]);
 
+  const [customVehicleCapacities, setCustomVehicleCapacities] = useState<
+    Record<string, number>
+  >({});
+
   const totalSelectedCapacity = useMemo(() => {
     return autoRouteSelectedVehicles.reduce((sum, vId) => {
       const found = vehiclesList.find((v) => String(v.car_id) === String(vId));
-      return sum + (found?.quantity || 100);
+      if (!found) return sum;
+      const customCap = customVehicleCapacities[String(vId)];
+      const cap =
+        customCap !== undefined && !isNaN(customCap)
+          ? customCap
+          : found.quantity || 100;
+      return sum + cap;
     }, 0);
-  }, [autoRouteSelectedVehicles, vehiclesList]);
+  }, [autoRouteSelectedVehicles, vehiclesList, customVehicleCapacities]);
 
   // Create Group Modal State
   const [isCreateGroupModalOpen, setIsCreateGroupModalOpen] = useState(false);
@@ -952,10 +1069,114 @@ export const RoutePage: React.FC = () => {
     }
   }, []);
 
+  const fetchAvoidZones = useCallback(async () => {
+    try {
+      const res = await api.get("/master/avoid-zones");
+      if (res.data && res.data.success) {
+        setAvoidZones(res.data.zones || []);
+      }
+    } catch (err) {
+      console.warn("Fetch avoid zones error:", err);
+    }
+  }, []);
+
   useEffect(() => {
-    fetchVehiclesList();
+    fetchVehiclesList(selectedDate);
     fetchStoresList();
-  }, [fetchVehiclesList, fetchStoresList]);
+    fetchAvoidZones();
+  }, [selectedDate, fetchVehiclesList, fetchStoresList, fetchAvoidZones]);
+
+  // Avoid Zone Handlers
+  const handleAddDrawingPoint = (lat: number, lng: number) => {
+    setDrawingPoints((prev) => [...prev, [lat, lng]]);
+  };
+
+  const handleUndoLastPoint = () => {
+    setDrawingPoints((prev) => prev.slice(0, -1));
+  };
+
+  const handleCancelDrawing = () => {
+    setIsDrawingAvoidZone(false);
+    setDrawingPoints([]);
+  };
+
+  const handleFinishDrawing = () => {
+    if (drawingPoints.length < 3) {
+      showError("กรุณาปักจุดบนแผนที่อย่างน้อย 3 จุดเพื่อสร้างพื้นที่ห้ามผ่าน");
+      return;
+    }
+    setNewZoneName("");
+    setNewZoneType("unpaved");
+    setNewZoneDescription("");
+    setIsSaveZoneModalOpen(true);
+  };
+
+  const handleSaveAvoidZoneSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newZoneName.trim()) {
+      showError("กรุณากรอกชื่อพื้นที่ห้ามผ่าน");
+      return;
+    }
+    if (drawingPoints.length < 3) {
+      showError("พิกัด Polygon ไม่สมบูรณ์");
+      return;
+    }
+
+    setSavingAvoidZone(true);
+    try {
+      const res = await api.post("/master/avoid-zones", {
+        zone_name: newZoneName.trim(),
+        zone_type: newZoneType,
+        coordinates: drawingPoints,
+        description: newZoneDescription.trim() || undefined,
+        is_active: true,
+      });
+
+      if (res.data.success) {
+        showSuccess(res.data.message || "บันทึกพื้นที่ห้ามผ่านสำเร็จ!");
+        setIsSaveZoneModalOpen(false);
+        setIsDrawingAvoidZone(false);
+        setDrawingPoints([]);
+        fetchAvoidZones();
+      } else {
+        showError(res.data.message || "บันทึกไม่สำเร็จ");
+      }
+    } catch (err: any) {
+      showError(
+        err?.response?.data?.message ||
+          "เกิดข้อผิดพลาดในการบันทึกพื้นที่ห้ามผ่าน",
+      );
+    } finally {
+      setSavingAvoidZone(false);
+    }
+  };
+
+  const handleToggleAvoidZoneActive = async (zone: AvoidZone) => {
+    try {
+      const res = await api.put(`/master/avoid-zones/${zone.zone_id}`, {
+        is_active: !zone.is_active,
+      });
+      if (res.data.success) {
+        showSuccess(res.data.message);
+        fetchAvoidZones();
+      }
+    } catch (err: any) {
+      showError("เกิดข้อผิดพลาดในการสลับสถานะพื้นที่");
+    }
+  };
+
+  const handleDeleteAvoidZone = async (zoneId: number) => {
+    if (!window.confirm("คุณต้องการลบพื้นที่ห้ามผ่านนี้ใช่หรือไม่?")) return;
+    try {
+      const res = await api.delete(`/master/avoid-zones/${zoneId}`);
+      if (res.data.success) {
+        showSuccess("ลบพื้นที่ห้ามผ่านเรียบร้อยแล้ว");
+        fetchAvoidZones();
+      }
+    } catch (err: any) {
+      showError("เกิดข้อผิดพลาดในการลบพื้นที่");
+    }
+  };
 
   // ระบบดึงรายการยังไม่จัดสาย
   const fetchUnassignedStops = useCallback(async (date: string) => {
@@ -1014,63 +1235,36 @@ export const RoutePage: React.FC = () => {
   // ระบบดาวน์โหลดไฟล์ Excel
   const handleDownloadSampleExcel = () => {
     try {
-      const sampleData = [
-        {
-          รหัสร้านค้า: "ST-001",
-          จำนวนลัง: 50,
-          จำนวนกะบะ: 2,
-          จำนวนพาเลท: 3,
-          จำนวนกล่อง: 0,
-          จำนวนกรงเหล็ก: 2,
-          ตำแหน่งวางสินค้า: "E",
-          แถว: 1,
-          รหัสออเดอร์: "ORD-2026-001",
-        },
-        {
-          รหัสร้านค้า: "ST-002",
-          จำนวนลัง: 50,
-          จำนวนกะบะ: 2,
-          จำนวนพาเลท: 3,
-          จำนวนกล่อง: 0,
-          จำนวนกรงเหล็ก: 2,
-          ตำแหน่งวางสินค้า: "A",
-          แถว: 2,
-          รหัสออเดอร์: "ORD-2026-002",
-        },
-        {
-          รหัสร้านค้า: "ST-003",
-          จำนวนลัง: 50,
-          จำนวนกะบะ: 2,
-          จำนวนพาเลท: 3,
-          จำนวนกล่อง: 0,
-          จำนวนกรงเหล็ก: 2,
-          ตำแหน่งวางสินค้า: "R",
-          แถว: 4,
-          รหัสออเดอร์: "ORD-2026-003",
-        },
-        {
-          รหัสร้านค้า: "ST-004",
-          จำนวนลัง: 50,
-          จำนวนกะบะ: 2,
-          จำนวนพาเลท: 3,
-          จำนวนกล่อง: 0,
-          จำนวนกรงเหล็ก: 2,
-          ตำแหน่งวางสินค้า: "B",
-          แถว: 8,
-          รหัสออเดอร์: "ORD-2026-004",
-        },
-        {
-          รหัสร้านค้า: "ST-005",
-          จำนวนลัง: 50,
-          จำนวนกะบะ: 2,
-          จำนวนพาเลท: 3,
-          จำนวนกล่อง: 0,
-          จำนวนกรงเหล็ก: 2,
-          ตำแหน่งวางสินค้า: "C",
-          แถว: 7,
-          รหัสออเดอร์: "ORD-2026-005",
-        },
-      ];
+      const sampleData = [1, 2].map((idx) => {
+        const rowObj: Record<string, any> = {
+          วันที่: selectedDate || new Date().toISOString().slice(0, 10),
+          รหัสร้านค้า: `ST-00${idx}`,
+          รหัสออเดอร์: `ORD-2026-00${idx}`,
+        };
+
+        if (loadingTypesList.length > 0) {
+          loadingTypesList.forEach((lt, ltIdx) => {
+            const keyName = `จำนวน (${lt.type_name})`;
+            rowObj[keyName] =
+              idx === 1
+                ? ltIdx === 0
+                  ? 50
+                  : (ltIdx + 1) * 2
+                : ltIdx === 0
+                  ? 30
+                  : ltIdx + 1;
+          });
+        } else {
+          rowObj["จำนวน (ลัง)"] = 50;
+        }
+
+        rowObj["ตำแหน่งวางสินค้า"] = idx === 1 ? "E" : "A";
+        rowObj["แถว"] = idx;
+        rowObj["ใบกำกับภาษี"] = idx === 1 ? "มี" : "ไม่มี";
+        rowObj["หมายเหตุ"] = idx === 1 ? "ส่งก่อนเที่ยง" : "";
+
+        return rowObj;
+      });
 
       const worksheet = XLSX.utils.json_to_sheet(sampleData);
       const workbook = XLSX.utils.book_new();
@@ -1223,11 +1417,39 @@ export const RoutePage: React.FC = () => {
               (foundMaster ? foundMaster.store_location || "" : ""),
           ).trim();
 
+          const taxVal =
+            row["ใบกำกับภาษี"] ||
+            row["ใบกำกับ"] ||
+            row["tax"] ||
+            row["Tax"] ||
+            row["TAX"] ||
+            row["Tax Invoice"] ||
+            row["TaxInvoice"] ||
+            row["มีใบกำกับภาษี"] ||
+            row["ขอใบกำกับภาษี"] ||
+            "";
+          const isTax = isTaxActive(taxVal);
+
+          const noteVal = String(
+            row["หมายเหตุ"] ||
+              row["note"] ||
+              row["Note"] ||
+              row["Remark"] ||
+              "",
+          ).trim();
+
+          const dateVal = String(
+            row["วันที่"] ||
+              row["วันที่จัดส่ง"] ||
+              row["date"] ||
+              row["Date"] ||
+              selectedDate,
+          ).trim();
+
           return {
             id: `preview-${idx}-${Date.now()}`,
             store_id: storeId,
             store_name: storeName,
-            address: address,
             data_store_no: orderNo,
             sum_quantity: quantity,
             loads: loadsMap,
@@ -1237,6 +1459,9 @@ export const RoutePage: React.FC = () => {
               matchedPosition?.position_product_name || positionValue,
             position_production_order: positionOrder,
             is_mapped_master: !!foundMaster,
+            date: dateVal || selectedDate,
+            tax: isTax,
+            note: noteVal,
           };
         });
 
@@ -1265,13 +1490,15 @@ export const RoutePage: React.FC = () => {
       id: `preview-manual-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
       store_id: "",
       store_name: "",
-      address: "",
       data_store_no: "",
       sum_quantity: 1,
       lat_long: "",
       position_product_id: "",
       position_product_name: "",
       position_production_order: 1,
+      date: selectedDate,
+      tax: false,
+      note: "",
       is_mapped_master: false,
     };
     setExcelPreviewStops((prev) => [...prev, newRow]);
@@ -1283,13 +1510,15 @@ export const RoutePage: React.FC = () => {
       id: `multi-${Date.now()}-${i}-${Math.random().toString(36).slice(2, 6)}`,
       store_id: "",
       store_name: "",
-      address: "",
       data_store_no: "",
       sum_quantity: 1,
       lat_long: "",
       position_product_id: "",
       position_product_name: "",
       position_production_order: 1,
+      date: selectedDate,
+      tax: false,
+      note: "",
       is_mapped_master: false,
     }));
     setMultiAddStops(initialRows);
@@ -1302,13 +1531,15 @@ export const RoutePage: React.FC = () => {
       id: `multi-manual-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
       store_id: "",
       store_name: "",
-      address: "",
       data_store_no: "",
       sum_quantity: 1,
       lat_long: "",
       position_product_id: "",
       position_product_name: "",
       position_production_order: 1,
+      date: selectedDate,
+      tax: false,
+      note: "",
       is_mapped_master: false,
     };
     setMultiAddStops((prev) => [...prev, newRow]);
@@ -1484,6 +1715,7 @@ export const RoutePage: React.FC = () => {
         depotStartTime: deliverySettings.depotStartTime,
         bufferTimePerRoute: deliverySettings.bufferTimePerRoute,
         selectedVehicleIds: autoRouteSelectedVehicles,
+        customCapacities: customVehicleCapacities,
       });
 
       if (res.data.success) {
@@ -1509,10 +1741,18 @@ export const RoutePage: React.FC = () => {
   const handleAutoSelectVehicles = () => {
     const availableVehicles = vehiclesList
       .filter((v) => !v.is_assigned_today)
-      .map((v) => ({
-        car_id: String(v.car_id),
-        capacity: v.quantity ?? 100,
-      }))
+      .map((v) => {
+        const vId = String(v.car_id);
+        const customCap = customVehicleCapacities[vId];
+        const cap =
+          customCap !== undefined && !isNaN(customCap)
+            ? customCap
+            : (v.quantity ?? 100);
+        return {
+          car_id: vId,
+          capacity: cap,
+        };
+      })
       .sort((a, b) => b.capacity - a.capacity);
 
     if (availableVehicles.length === 0) {
@@ -1702,6 +1942,8 @@ export const RoutePage: React.FC = () => {
   const [formStopLoads, setFormStopLoads] = useState<Record<string, number>>(
     {},
   );
+  const [formStopTax, setFormStopTax] = useState(false);
+  const [formStopNote, setFormStopNote] = useState("");
   const [creatingStop, setCreatingStop] = useState(false);
 
   // Export Drawer State & Helpers for RoutePage
@@ -1776,19 +2018,20 @@ export const RoutePage: React.FC = () => {
 
   const routeExportColumns = useMemo(
     () => [
+      { id: "date", label: "วันที่จัดส่ง" },
       { id: "driver_name", label: "สายรถ / พนักงานขับรถ" },
       { id: "vehicle_plate", label: "ทะเบียนรถ" },
       { id: "row_order", label: "ลำดับจัดส่ง" },
       { id: "store_id", label: "รหัสร้านค้า" },
       { id: "store_name", label: "ชื่อร้านค้า" },
+      { id: "tax", label: "ใบกำกับภาษี" },
+      { id: "note", label: "หมายเหตุ" },
       { id: "address", label: "ที่อยู่" },
       { id: "order_no", label: "รหัสออเดอร์" },
-      { id: "load_crate", label: "ลัง" },
-      { id: "load_pickup", label: "กระบะ" },
-      { id: "load_pallet", label: "พาเลท" },
-      { id: "load_cage", label: "กรงเหล็ก" },
-      { id: "load_cart", label: "รถเข็น" },
-      { id: "load_box", label: "กล่อง" },
+      ...loadingTypesList.map((lt) => ({
+        id: `loading_type_${lt.loading_type_id}`,
+        label: lt.type_name,
+      })),
       { id: "sum_quantity", label: "จำนวนสินค้า" },
       { id: "status", label: "สถานะการจัดส่ง" },
       { id: "scheduled_time", label: "เวลาจัดส่งที่กำหนด" },
@@ -1796,13 +2039,21 @@ export const RoutePage: React.FC = () => {
       { id: "position_product_name", label: "ตำแหน่งวางสินค้า" },
       { id: "position_production_order", label: "แถว" },
     ],
-    [],
+    [loadingTypesList],
   );
 
   // todo: ส่งออกข้อมูลเส้นทางการจัดส่ง
   const getRouteExportValue = useCallback(
     (item: any, columnId: string): string | number => {
       switch (columnId) {
+        case "date":
+          return item.created_at
+            ? String(item.created_at).slice(0, 10)
+            : item.date || selectedDate;
+        case "tax":
+          return isTaxActive(item.tax) ? "มี" : "ไม่มี";
+        case "note":
+          return item.note || "-";
         case "driver_name":
           return item.driver_name || item.driverName || "-";
         case "vehicle_plate":
@@ -1827,22 +2078,6 @@ export const RoutePage: React.FC = () => {
           );
         case "sum_quantity":
           return item.sum_quantity ?? item.sumQuantity ?? item.quantity ?? 0;
-        case "load_crate":
-        case "load_pickup":
-        case "load_pallet":
-        case "load_cage":
-        case "load_cart":
-        case "load_box": {
-          const labelMap: Record<string, string> = {
-            load_crate: "ลัง",
-            load_pickup: "กระบะ",
-            load_pallet: "พาเลท",
-            load_cage: "กรงเหล็ก",
-            load_cart: "รถเข็น",
-            load_box: "กล่อง",
-          };
-          return getLoadValueByType(item, labelMap[columnId]);
-        }
         case "status":
           return item.status === "completed"
             ? "ส่งสำเร็จ"
@@ -1859,11 +2094,31 @@ export const RoutePage: React.FC = () => {
             : item.priority === "low"
               ? "ต่ำ"
               : "ปกติ";
-        default:
+        default: {
+          if (columnId.startsWith("loading_type_")) {
+            const ltId = parseInt(columnId.replace("loading_type_", ""), 10);
+            if (Array.isArray(item.loads)) {
+              const found = item.loads.find(
+                (l: any) => Number(l.loading_type_id) === ltId,
+              );
+              return found ? found.quantity || 0 : 0;
+            }
+            if (item.loads && typeof item.loads === "object") {
+              return item.loads[ltId] || 0;
+            }
+            const foundLt = loadingTypesList.find(
+              (lt) => lt.loading_type_id === ltId,
+            );
+            if (foundLt) {
+              return getLoadValueByType(item, foundLt.type_name);
+            }
+            return 0;
+          }
           return item[columnId] ?? "-";
+        }
       }
     },
-    [getLoadValueByType],
+    [getLoadValueByType, loadingTypesList, selectedDate],
   );
 
   // todo: ส่งออกข้อมูลเส้นทางการจัดส่ง
@@ -1976,6 +2231,8 @@ export const RoutePage: React.FC = () => {
         lat_long: formStopLatLong.trim(),
         scheduled_time: formStopScheduledTime || undefined,
         priority: formStopPriority,
+        tax: formStopTax ? 1 : 0,
+        note: formStopNote.trim() || undefined,
         status: "in_progress",
         date: selectedDate,
         position_product_id: formStopPositionProductId || undefined,
@@ -1994,6 +2251,8 @@ export const RoutePage: React.FC = () => {
         setFormStopStoreName("");
         setFormStopAddress("");
         setFormStopLatLong("");
+        setFormStopTax(false);
+        setFormStopNote("");
         setFormStopLoads({});
         setFormStopPositionProductId("");
         setFormStopPositionOrder(1);
@@ -2028,6 +2287,8 @@ export const RoutePage: React.FC = () => {
   const [editFormStopScheduledTime, setEditFormStopScheduledTime] =
     useState("00:00");
   const [editFormStopPriority, setEditFormStopPriority] = useState("");
+  const [editFormStopTax, setEditFormStopTax] = useState(false);
+  const [editFormStopNote, setEditFormStopNote] = useState("");
   const [updatingStop, setUpdatingStop] = useState(false);
 
   // Delete Stop Confirm Modal State
@@ -2065,6 +2326,8 @@ export const RoutePage: React.FC = () => {
       stop.scheduledTime || stop.scheduled_time || "00:00",
     );
     setEditFormStopPriority(stop.priority || "");
+    setEditFormStopTax(isTaxActive(stop.tax));
+    setEditFormStopNote(stop.note || "");
     const initLoads: Record<number, number> = {};
     if (Array.isArray(stop.loads)) {
       stop.loads.forEach((l: any) => {
@@ -2132,6 +2395,8 @@ export const RoutePage: React.FC = () => {
         loads: loadsPayload,
         scheduled_time: editFormStopScheduledTime,
         priority: editFormStopPriority,
+        tax: editFormStopTax ? 1 : 0,
+        note: editFormStopNote.trim(),
       });
 
       if (res.data.success) {
@@ -2166,6 +2431,11 @@ export const RoutePage: React.FC = () => {
       stop.lat_long || (stop.lat && stop.lng ? `${stop.lat},${stop.lng}` : ""),
     );
     setUnassignedEditPriority(stop.priority || "medium");
+    setUnassignedEditCreatedDate(
+      formatDateString(stop.date || stop.created_at, selectedDate),
+    );
+    setUnassignedEditTax(isTaxActive(stop.tax));
+    setUnassignedEditNote(stop.note || "");
     setUnassignedEditPositionProductId(
       stop.position_product_id || stop.positionProductId || "",
     );
@@ -2221,6 +2491,9 @@ export const RoutePage: React.FC = () => {
         sum_quantity: finalQuantity,
         lat_long: unassignedEditLatLong.trim(),
         priority: unassignedEditPriority,
+        date: unassignedEditCreatedDate || selectedDate,
+        tax: unassignedEditTax ? 1 : 0,
+        note: unassignedEditNote.trim(),
         status: "unassigned",
         position_product_id: unassignedEditPositionProductId || null,
         position_production_order: unassignedEditPositionOrder || 1,
@@ -3313,8 +3586,77 @@ export const RoutePage: React.FC = () => {
           )}
         </div>
 
-        {/* ─── MAP + BOTTOM PANEL ─── */}
         <div className="flex-1 flex flex-col overflow-hidden relative">
+          {/* Floating Avoid Zone Toolbar Overlay on Map */}
+          <div className="absolute top-3 right-3 z-[1000] flex items-center gap-2 bg-white/95 backdrop-blur-xs p-1.5 rounded-xl border border-slate-200 shadow-md">
+            {!isDrawingAvoidZone ? (
+              <>
+                <button
+                  type="button"
+                  onClick={() => setIsDrawingAvoidZone(true)}
+                  className="px-2.5 py-1.5 rounded-lg text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white flex items-center gap-1.5 transition-colors shadow-2xs cursor-pointer"
+                  title="วาดเส้นกรอบ Polygon บล็อกทางดินเลน/สะพานจำกัดความสูง บนแผนที่"
+                >
+                  <Pentagon className="w-4 h-4" />
+                  <span>วาดพื้นที่ห้ามผ่าน</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setIsAvoidZoneDrawerOpen(true)}
+                  className="px-2.5 py-1.5 rounded-lg text-xs font-bold bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 flex items-center gap-1.5 transition-colors cursor-pointer"
+                  title="ดูและจัดการพื้นที่ห้ามผ่านทั้งหมด"
+                >
+                  <ShieldAlert className="w-4 h-4 text-rose-600" />
+                  <span>
+                    พื้นที่ห้ามผ่าน (
+                    {avoidZones.filter((z) => z.is_active).length})
+                  </span>
+                </button>
+              </>
+            ) : (
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold text-rose-700 px-2.5 py-1 bg-rose-50 rounded-lg border border-rose-200 animate-pulse">
+                  📍 กำลังวาด ({drawingPoints.length} จุด) - คลิกปักจุดบนแผนที่
+                </span>
+
+                {drawingPoints.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={handleUndoLastPoint}
+                    className="px-2 py-1 rounded-lg text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 flex items-center gap-1 cursor-pointer"
+                  >
+                    <Undo2 className="w-3.5 h-3.5" />
+                    <span>ยกเลิกจุดล่าสุด</span>
+                  </button>
+                )}
+
+                <button
+                  type="button"
+                  onClick={handleFinishDrawing}
+                  disabled={drawingPoints.length < 3}
+                  className={`px-2.5 py-1.5 rounded-lg text-xs font-bold text-white flex items-center gap-1 shadow-2xs ${
+                    drawingPoints.length >= 3
+                      ? "bg-emerald-600 hover:bg-emerald-700 cursor-pointer"
+                      : "bg-slate-300 cursor-not-allowed"
+                  }`}
+                >
+                  <Check className="w-4 h-4" />
+                  <span>เสร็จสิ้น & บันทึก</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleCancelDrawing}
+                  className="px-2 py-1.5 rounded-lg text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-600 flex items-center gap-1 cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                  <span>ยกเลิก</span>
+                </button>
+              </div>
+            )}
+          </div>
+
           {/* MAP */}
           <div className="flex-1 relative z-0">
             <MapContainer
@@ -3335,6 +3677,121 @@ export const RoutePage: React.FC = () => {
                     ? { lat: activeStop.lat, lng: activeStop.lng }
                     : activeGpsTarget
                 }
+              />
+
+              {/* Avoid Zone Polygons */}
+              {avoidZones.map((zone) => {
+                if (!zone.coordinates || zone.coordinates.length < 3)
+                  return null;
+                const zoneColor =
+                  zone.zone_type === "unpaved"
+                    ? "#f59e0b"
+                    : zone.zone_type === "height_limit"
+                      ? "#ef4444"
+                      : zone.zone_type === "truck_prohibited"
+                        ? "#a855f7"
+                        : "#f97316";
+
+                return (
+                  <Polygon
+                    key={`avoid-zone-${zone.zone_id}`}
+                    positions={zone.coordinates}
+                    pathOptions={{
+                      color: zoneColor,
+                      fillColor: zoneColor,
+                      fillOpacity: zone.is_active ? 0.35 : 0.08,
+                      weight: zone.is_active ? 2.5 : 1,
+                      dashArray: zone.is_active ? undefined : "4,4",
+                    }}
+                  >
+                    <Popup maxWidth={260} autoPan={false}>
+                      <div className="text-xs space-y-1.5 p-0.5">
+                        <div className="flex items-center gap-1.5 font-bold text-slate-900 border-b border-slate-100 pb-1">
+                          <ShieldAlert className="w-4 h-4 text-rose-600" />
+                          <span>{zone.zone_name}</span>
+                        </div>
+                        <div className="text-[11px] text-slate-500 font-semibold">
+                          ประเภท:{" "}
+                          {zone.zone_type === "unpaved"
+                            ? "🚜 ทางดินเลน/ลูกรัง"
+                            : zone.zone_type === "height_limit"
+                              ? "🌉 สะพานจำกัดความสูง"
+                              : zone.zone_type === "truck_prohibited"
+                                ? "🚚 ห้ามรถบรรทุก"
+                                : "⚠️ พื้นที่เสี่ยงภัย"}
+                        </div>
+                        {zone.description && (
+                          <div className="text-[11px] text-slate-600">
+                            {zone.description}
+                          </div>
+                        )}
+                        <div className="pt-1.5 flex items-center justify-between">
+                          <span
+                            className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                              zone.is_active
+                                ? "bg-emerald-100 text-emerald-800"
+                                : "bg-slate-100 text-slate-500"
+                            }`}
+                          >
+                            {zone.is_active ? "เปิดใช้งาน" : "ปิดใช้งาน"}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => handleToggleAvoidZoneActive(zone)}
+                            className="text-[10px] font-bold text-blue-600 hover:underline"
+                          >
+                            {zone.is_active ? "ปิดชั่วคราว" : "เปิดใช้งาน"}
+                          </button>
+                        </div>
+                      </div>
+                    </Popup>
+                  </Polygon>
+                );
+              })}
+
+              {/* Drawing Preview Polygon */}
+              {isDrawingAvoidZone && drawingPoints.length > 0 && (
+                <>
+                  {drawingPoints.length >= 2 && (
+                    <Polyline
+                      positions={drawingPoints}
+                      pathOptions={{
+                        color: "#ef4444",
+                        weight: 3,
+                        dashArray: "6,6",
+                      }}
+                    />
+                  )}
+                  {drawingPoints.length >= 3 && (
+                    <Polygon
+                      positions={drawingPoints}
+                      pathOptions={{
+                        color: "#ef4444",
+                        fillColor: "#f87171",
+                        fillOpacity: 0.25,
+                        weight: 2,
+                      }}
+                    />
+                  )}
+                  {drawingPoints.map((pt, pIdx) => (
+                    <Marker
+                      key={`drawing-pt-${pIdx}`}
+                      position={pt}
+                      icon={L.divIcon({
+                        className: "drawing-vertex-marker",
+                        html: `<div style="background:#ef4444;width:12px;height:12px;border-radius:50%;border:2px solid white;box-shadow:0 2px 4px rgba(0,0,0,0.3);cursor:pointer;"></div>`,
+                        iconSize: [12, 12],
+                        iconAnchor: [6, 6],
+                      })}
+                    />
+                  ))}
+                </>
+              )}
+
+              {/* Drawing Map Events Component */}
+              <MapDrawingEvents
+                isDrawing={isDrawingAvoidZone}
+                onAddPoint={handleAddDrawingPoint}
               />
 
               {/* Starting Depot Marker (17.1266642, 102.9635667) */}
@@ -3505,7 +3962,12 @@ export const RoutePage: React.FC = () => {
                   <Marker
                     key={`unassigned-${stop.list_id || idx}`}
                     position={[stop.lat, stop.lng]}
-                    icon={createStopMarker(idx + 1, "#9ca3af", false, "unassigned")}
+                    icon={createStopMarker(
+                      idx + 1,
+                      "#9ca3af",
+                      false,
+                      "unassigned",
+                    )}
                   >
                     <Popup maxWidth={300} autoPan={false}>
                       <div
@@ -3537,9 +3999,7 @@ export const RoutePage: React.FC = () => {
                           </strong>
                         </div>
                         {stop.address && (
-                          <div
-                            style={{ color: "#64748b", marginBottom: 4 }}
-                          >
+                          <div style={{ color: "#64748b", marginBottom: 4 }}>
                             {stop.address}
                           </div>
                         )}
@@ -4132,6 +4592,9 @@ export const RoutePage: React.FC = () => {
                             setUnassignedQuantity(1);
                             setUnassignedLatLong("");
                             setUnassignedOrderNo("");
+                            setUnassignedTax(false);
+                            setUnassignedNote("");
+                            setUnassignedCreatedDate(selectedDate);
                             setIsCreateUnassignedModalOpen(true);
                           }}
                           className="bg-amber-600 hover:bg-amber-700 text-white font-semibold text-xs px-2.5 py-1 rounded-md flex items-center gap-1 shadow-2xs transition-colors shrink-0"
@@ -4295,10 +4758,11 @@ export const RoutePage: React.FC = () => {
                         {visibleColumns.actual_duration !== false && (
                           <th className="px-2.5 py-1 w-24">ระยะเวลาจริง</th>
                         )}
-                        {visibleColumns.proof_of_delivery !== false && (
-                          <th className="px-2.5 py-1 w-24 text-center">
-                            หลักฐานการส่ง
-                          </th>
+                        {visibleColumns.tax !== false && (
+                          <th className="px-2.5 py-1 w-24">ใบกำกับภาษี</th>
+                        )}
+                        {visibleColumns.note !== false && (
+                          <th className="px-2.5 py-1 w-24">หมายเหตุ</th>
                         )}
                         {loadingTypesList.map(
                           (lt) =>
@@ -4383,6 +4847,16 @@ export const RoutePage: React.FC = () => {
                               {/* 3. ที่ตั้ง / ร้านค้า */}
                               {visibleColumns.store_info !== false && (
                                 <td className="px-2.5 py-1">
+                                  {(stop.is_store_closed ||
+                                    stop.is_closed_today) && (
+                                    <span
+                                      className="inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded bg-rose-100 text-rose-700 border border-rose-200 shrink-0 shadow-2xs mr-1.5 animate-pulse"
+                                      title={`ร้านค้าปิดทำการในวันเลือกจัดส่ง (${selectedDate})`}
+                                    >
+                                      <AlertTriangle className="w-3.5 h-3.5 text-rose-600 shrink-0" />
+                                      ร้านปิดวันนี้
+                                    </span>
+                                  )}
                                   <span className="font-semibold text-slate-900">
                                     {stop.storeName}
                                   </span>
@@ -4450,14 +4924,29 @@ export const RoutePage: React.FC = () => {
                                 </td>
                               )}
 
-                              {/* 11. หลักฐานการส่ง */}
-                              {visibleColumns.proof_of_delivery !== false && (
-                                <td className="px-2.5 py-1 text-center text-slate-400 font-mono">
-                                  -
+                              {/* 11. ใบกำกับภาษี */}
+                              {visibleColumns.tax !== false && (
+                                <td className="px-2.5 py-1 text-center font-bold">
+                                  {isTaxActive(stop.tax) ? (
+                                    <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-700 border border-emerald-200 shadow-2xs">
+                                      มี
+                                    </span>
+                                  ) : (
+                                    <span className="text-slate-400 font-normal">
+                                      -
+                                    </span>
+                                  )}
                                 </td>
                               )}
 
-                              {/* 12. Dynamic Cargo Loading Type Cells */}
+                              {/* 12. หมายเหตุ */}
+                              {visibleColumns.note !== false && (
+                                <td className="px-2.5 py-1 text-slate-800 font-bold">
+                                  {stop.note || "-"}
+                                </td>
+                              )}
+
+                              {/* 13. Dynamic Cargo Loading Type Cells */}
                               {loadingTypesList.map((lt) => {
                                 if (
                                   visibleColumns[
@@ -4558,10 +5047,11 @@ export const RoutePage: React.FC = () => {
                         {visibleColumns.actual_duration !== false && (
                           <th className="px-2.5 py-1 w-24">ระยะเวลาจริง</th>
                         )}
-                        {visibleColumns.proof_of_delivery !== false && (
-                          <th className="px-2.5 py-1 w-24 text-center">
-                            หลักฐานการส่ง
-                          </th>
+                        {visibleColumns.tax !== false && (
+                          <th className="px-2.5 py-1 w-24">ใบกำกับภาษี</th>
+                        )}
+                        {visibleColumns.note !== false && (
+                          <th className="px-2.5 py-1 w-24">หมายเหตุ</th>
                         )}
                         {loadingTypesList.map(
                           (lt) =>
@@ -4767,32 +5257,29 @@ export const RoutePage: React.FC = () => {
                               </td>
                             )}
 
-                            {/* 11. หลักฐานการส่ง (POD) */}
-                            {visibleColumns.proof_of_delivery !== false && (
-                              <td className="px-2.5 py-1 text-center">
-                                {stop.pod_image ? (
-                                  <a
-                                    href={stop.pod_image}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    onClick={(e) => e.stopPropagation()}
-                                    className="inline-block"
-                                  >
-                                    <img
-                                      src={stop.pod_image}
-                                      alt="POD"
-                                      className="w-5 h-5 object-cover rounded border border-slate-300 hover:scale-110 transition-transform"
-                                    />
-                                  </a>
+                            {/* 11. ใบกำกับภาษี */}
+                            {visibleColumns.tax !== false && (
+                              <td className="px-2.5 py-1 text-center font-bold">
+                                {isTaxActive(stop.tax) ? (
+                                  <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-700 border border-emerald-200 shadow-2xs">
+                                    มี
+                                  </span>
                                 ) : (
-                                  <span className="text-slate-400 font-mono">
+                                  <span className="text-slate-400 font-normal">
                                     -
                                   </span>
                                 )}
                               </td>
                             )}
 
-                            {/* 12. Dynamic Cargo Loading Type Cells */}
+                            {/* 12. หมายเหตุ */}
+                            {visibleColumns.note !== false && (
+                              <td className="px-2.5 py-1 text-slate-800 font-bold">
+                                {stop.note || "-"}
+                              </td>
+                            )}
+
+                            {/* 13. Dynamic Cargo Loading Type Cells */}
                             {loadingTypesList.map((lt) => {
                               if (
                                 visibleColumns[
@@ -5279,6 +5766,31 @@ export const RoutePage: React.FC = () => {
               required
             />
           </div>
+
+          <div className="rounded-lg flex items-center gap-2">
+            <input
+              type="checkbox"
+              checked={formStopTax}
+              onChange={(e) => setFormStopTax(e.target.checked)}
+              className="w-4 h-4 text-blue-600 focus:ring-blue-500 cursor-pointer"
+            />
+            <label className="block text-slate-700 font-semibold">
+              ใบกำกับภาษี
+            </label>
+          </div>
+
+          <div>
+            <label className="block text-slate-700 font-semibold mb-1">
+              หมายเหตุ
+            </label>
+            <textarea
+              rows={2}
+              value={formStopNote}
+              onChange={(e) => setFormStopNote(e.target.value)}
+              placeholder="ระบุหมายเหตุเพิ่มเติม (ถ้ามี)"
+              className="w-full border border-slate-200 rounded-lg p-2.5 text-slate-800 bg-slate-50 focus:bg-white focus:outline-none focus:border-slate-400"
+            />
+          </div>
         </div>
       </AnimatedDrawer>
 
@@ -5612,6 +6124,31 @@ export const RoutePage: React.FC = () => {
               { value: "problem", label: "ติดปัญหา", colorDot: "#f43f5e" },
             ]}
           />
+
+          <div className="rounded-lg flex items-center gap-2">
+            <input
+              type="checkbox"
+              checked={editFormStopTax}
+              onChange={(e) => setEditFormStopTax(e.target.checked)}
+              className="w-4 h-4 text-blue-600 focus:ring-blue-500 cursor-pointer"
+            />
+            <label className="block text-slate-700 font-semibold">
+              ใบกำกับภาษี
+            </label>
+          </div>
+
+          <div>
+            <label className="block text-slate-700 font-semibold mb-1">
+              หมายเหตุ
+            </label>
+            <textarea
+              rows={2}
+              value={editFormStopNote}
+              onChange={(e) => setEditFormStopNote(e.target.value)}
+              placeholder="ระบุหมายเหตุเพิ่มเติม (ถ้ามี)"
+              className="w-full border border-slate-200 rounded-lg p-2.5 text-slate-800 bg-slate-50 focus:bg-white focus:outline-none focus:border-slate-400"
+            />
+          </div>
         </div>
       </AnimatedDrawer>
 
@@ -5656,12 +6193,12 @@ export const RoutePage: React.FC = () => {
             <label className="block text-slate-700 font-semibold mb-1">
               วันที่จัดส่ง <span className="text-rose-500">*</span>
             </label>
-            <input
-              type="date"
+            <CustomDatePicker
               value={editGroupDate}
-              onChange={(e) => setEditGroupDate(e.target.value)}
-              className="w-full border border-slate-200 rounded-lg p-2.5 text-slate-800 bg-slate-50 focus:bg-white focus:outline-none focus:border-slate-400 font-semibold"
-              required
+              onChange={(val) => setEditGroupDate(val)}
+              label=""
+              showActiveOrdersToggle={false}
+              className="w-full"
             />
           </div>
 
@@ -5742,7 +6279,7 @@ export const RoutePage: React.FC = () => {
               totalLoadsQty > 0 ? totalLoadsQty : unassignedQuantity;
 
             const res = await api.post("/optimoroute/unassigned", {
-              date: selectedDate,
+              date: unassignedCreatedDate || selectedDate,
               store_id: unassignedStoreId,
               store_name: unassignedStoreName,
               address: unassignedAddress,
@@ -5750,6 +6287,8 @@ export const RoutePage: React.FC = () => {
               lat_long: unassignedLatLong,
               data_store_no: unassignedOrderNo,
               priority: unassignedPriority,
+              tax: unassignedTax ? 1 : 0,
+              note: unassignedNote.trim() || undefined,
               position_product_id: unassignedPositionProductId || undefined,
               position_production_order: unassignedPositionOrder || 1,
               loads: loadsPayload,
@@ -5763,6 +6302,8 @@ export const RoutePage: React.FC = () => {
               setUnassignedQuantity(1);
               setUnassignedLatLong("");
               setUnassignedOrderNo("");
+              setUnassignedTax(false);
+              setUnassignedNote("");
               setUnassignedLoads({});
               setUnassignedPositionProductId("");
               setUnassignedPositionOrder(1);
@@ -5784,18 +6325,17 @@ export const RoutePage: React.FC = () => {
         isSubmitting={creatingUnassigned}
       >
         <div className="space-y-4 text-xs">
-          
           <div className="space-y-1">
-              <label className="block text-slate-700 font-semibold mb-1">
-                เลือกวันที่ต้องการจัดส่ง <span className="text-rose-500">*</span>
-              </label>
-              <CustomDatePicker
-                value={unassignedCreatedDate}
-                onChange={(val) => setUnassignedCreatedDate(val)}
-                label=""
-                showActiveOrdersToggle={false}
-                className="w-full "
-              />
+            <label className="block text-slate-700 font-semibold mb-1">
+              เลือกวันที่ต้องการจัดส่ง <span className="text-rose-500">*</span>
+            </label>
+            <CustomDatePicker
+              value={unassignedCreatedDate}
+              onChange={(val) => setUnassignedCreatedDate(val)}
+              label=""
+              showActiveOrdersToggle={false}
+              className="w-full "
+            />
             <p className="text-[11px] text-slate-500 mt-1">
               วันที่กำหนดให้รถขนส่งวิ่ง ไม่เกี่ยวกับวันที่สั่งสินค้า
             </p>
@@ -6037,6 +6577,31 @@ export const RoutePage: React.FC = () => {
               required
             />
           </div>
+
+          <div className="rounded-lg flex items-center gap-2">
+            <input
+              type="checkbox"
+              checked={unassignedTax}
+              onChange={(e) => setUnassignedTax(e.target.checked)}
+              className="w-4 h-4 text-blue-600 focus:ring-blue-500 cursor-pointer"
+            />
+            <label className="block text-slate-700 font-semibold">
+              ใบกำกับภาษี
+            </label>
+          </div>
+
+          <div>
+            <label className="block text-slate-700 font-semibold mb-1">
+              หมายเหตุ
+            </label>
+            <textarea
+              rows={2}
+              value={unassignedNote}
+              onChange={(e) => setUnassignedNote(e.target.value)}
+              placeholder="ระบุหมายเหตุเพิ่มเติม (ถ้ามี)"
+              className="w-full border border-slate-200 rounded-lg p-2.5 text-slate-800 bg-slate-50 focus:bg-white focus:outline-none focus:border-slate-400"
+            />
+          </div>
         </div>
       </AnimatedDrawer>
 
@@ -6051,6 +6616,22 @@ export const RoutePage: React.FC = () => {
         isSubmitting={updatingUnassigned}
       >
         <div className="space-y-4 text-xs">
+          <div className="space-y-1">
+            <label className="block text-slate-700 font-semibold mb-1">
+              เลือกวันที่ต้องการจัดส่ง <span className="text-rose-500">*</span>
+            </label>
+            <CustomDatePicker
+              value={unassignedEditCreatedDate}
+              onChange={(val) => setUnassignedEditCreatedDate(val)}
+              label=""
+              showActiveOrdersToggle={false}
+              className="w-full"
+            />
+            <p className="text-[11px] text-slate-500 mt-1">
+              วันที่กำหนดให้รถขนส่งวิ่ง ไม่เกี่ยวกับวันที่สั่งสินค้า
+            </p>
+          </div>
+
           <SearchableSelect
             label="ลำดับความสำคัญ"
             value={unassignedEditPriority}
@@ -6291,6 +6872,31 @@ export const RoutePage: React.FC = () => {
               required
             />
           </div>
+
+          <div className="rounded-lg flex items-center gap-2">
+            <input
+              type="checkbox"
+              checked={unassignedEditTax}
+              onChange={(e) => setUnassignedEditTax(e.target.checked)}
+              className="w-4 h-4 text-blue-600 focus:ring-blue-500 cursor-pointer"
+            />
+            <label className="block text-slate-700 font-semibold">
+              ใบกำกับภาษี
+            </label>
+          </div>
+
+          <div>
+            <label className="block text-slate-700 font-semibold mb-1">
+              หมายเหตุ
+            </label>
+            <textarea
+              rows={2}
+              value={unassignedEditNote}
+              onChange={(e) => setUnassignedEditNote(e.target.value)}
+              placeholder="ระบุหมายเหตุเพิ่มเติม (ถ้ามี)"
+              className="w-full border border-slate-200 rounded-lg p-2.5 text-slate-800 bg-slate-50 focus:bg-white focus:outline-none focus:border-slate-400"
+            />
+          </div>
         </div>
       </AnimatedDrawer>
 
@@ -6348,7 +6954,9 @@ export const RoutePage: React.FC = () => {
                   <th className="p-2 text-center w-8">#</th>
                   <th className="p-2 w-20">รหัสร้านค้า</th>
                   <th className="p-2 w-36">ชื่อร้านค้า</th>
-                  <th className="p-2 min-w-[180px]">ที่อยู่</th>
+                  <th className="p-2 w-20 text-center">ใบกำกับภาษี</th>
+                  <th className="p-2 min-w-[140px]">หมายเหตุ</th>
+                  <th className="p-2 w-44 text-center">วันที่จัดส่ง</th>
                   {loadingTypesList.map((lt) => (
                     <th
                       key={lt.loading_type_id}
@@ -6443,15 +7051,52 @@ export const RoutePage: React.FC = () => {
                         title="ดึงข้อมูลอัตโนมัติจากมาสเตอร์ร้านค้า (แก้ไขไม่ได้)"
                       />
                     </td>
-                    <td className="p-1">
+                    <td className="p-1 text-center">
+                      <input
+                        type="checkbox"
+                        checked={!!item.tax}
+                        onChange={(e) => {
+                          const checked = e.target.checked;
+                          setExcelPreviewStops((prev) =>
+                            prev.map((row) =>
+                              row.id === item.id
+                                ? { ...row, tax: checked }
+                                : row,
+                            ),
+                          );
+                        }}
+                        className="w-4 h-4 text-blue-600 rounded border-slate-300 cursor-pointer"
+                      />
+                    </td>
+                    <td className="p-1 min-w-[140px]">
                       <input
                         type="text"
-                        value={item.address || "-"}
-                        readOnly
-                        disabled
-                        tabIndex={-1}
-                        className="w-full border border-slate-200 rounded px-1.5 py-1 text-xs text-slate-500 bg-slate-100/90 cursor-not-allowed"
-                        title="ดึงข้อมูลอัตโนมัติจากมาสเตอร์ร้านค้า (แก้ไขไม่ได้)"
+                        value={item.note || ""}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setExcelPreviewStops((prev) =>
+                            prev.map((row) =>
+                              row.id === item.id ? { ...row, note: val } : row,
+                            ),
+                          );
+                        }}
+                        placeholder="หมายเหตุ..."
+                        className="w-full border border-slate-200 rounded px-1.5 py-1 text-xs text-slate-800 focus:border-blue-400"
+                      />
+                    </td>
+                    <td className="p-1 w-44">
+                      <CustomDatePicker
+                        value={item.date || selectedDate}
+                        onChange={(val) => {
+                          setExcelPreviewStops((prev) =>
+                            prev.map((row) =>
+                              row.id === item.id ? { ...row, date: val } : row,
+                            ),
+                          );
+                        }}
+                        label=""
+                        showActiveOrdersToggle={false}
+                        className="w-full"
                       />
                     </td>
                     {/* Dynamic Cargo Loading Types Columns */}
@@ -6717,7 +7362,9 @@ export const RoutePage: React.FC = () => {
                   <th className="p-2 text-center w-8">#</th>
                   <th className="p-2 w-20">รหัสร้านค้า</th>
                   <th className="p-2 w-36">ชื่อร้านค้า</th>
-                  <th className="p-2 min-w-[180px]">ที่อยู่</th>
+                  <th className="p-2 w-20 text-center">ใบกำกับภาษี</th>
+                  <th className="p-2 min-w-[140px]">หมายเหตุ</th>
+                  <th className="p-2 w-44 text-center">วันที่จัดส่ง</th>
                   {loadingTypesList.map((lt) => (
                     <th
                       key={lt.loading_type_id}
@@ -6796,15 +7443,52 @@ export const RoutePage: React.FC = () => {
                         title="ดึงข้อมูลอัตโนมัติจากมาสเตอร์ร้านค้า (แก้ไขไม่ได้)"
                       />
                     </td>
-                    <td className="p-1">
+                    <td className="p-1 text-center">
+                      <input
+                        type="checkbox"
+                        checked={!!item.tax}
+                        onChange={(e) => {
+                          const checked = e.target.checked;
+                          setMultiAddStops((prev) =>
+                            prev.map((row) =>
+                              row.id === item.id
+                                ? { ...row, tax: checked }
+                                : row,
+                            ),
+                          );
+                        }}
+                        className="w-4 h-4 text-blue-600 rounded border-slate-300 cursor-pointer"
+                      />
+                    </td>
+                    <td className="p-1 min-w-[140px]">
                       <input
                         type="text"
-                        value={item.address || "-"}
-                        readOnly
-                        disabled
-                        tabIndex={-1}
-                        className="w-full border border-slate-200 rounded px-1.5 py-1 text-xs text-slate-500 bg-slate-100/90 cursor-not-allowed"
-                        title="ดึงข้อมูลอัตโนมัติจากมาสเตอร์ร้านค้า (แก้ไขไม่ได้)"
+                        value={item.note || ""}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setMultiAddStops((prev) =>
+                            prev.map((row) =>
+                              row.id === item.id ? { ...row, note: val } : row,
+                            ),
+                          );
+                        }}
+                        placeholder="หมายเหตุ..."
+                        className="w-full border border-slate-200 rounded px-1.5 py-1 text-xs text-slate-800 focus:border-blue-400"
+                      />
+                    </td>
+                    <td className="p-1 w-44">
+                      <CustomDatePicker
+                        value={item.date || selectedDate}
+                        onChange={(val) => {
+                          setMultiAddStops((prev) =>
+                            prev.map((row) =>
+                              row.id === item.id ? { ...row, date: val } : row,
+                            ),
+                          );
+                        }}
+                        label=""
+                        showActiveOrdersToggle={false}
+                        className="w-full"
                       />
                     </td>
                     {/* Dynamic Cargo Loading Types Columns */}
@@ -7324,9 +8008,33 @@ export const RoutePage: React.FC = () => {
                       )}
                     </div>
 
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-amber-100 text-amber-800 border border-amber-200">
-                        บรรจุได้ {capacity} ลัง
+                    <div
+                      className="flex items-center gap-1.5"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <span className="text-[11px] font-semibold text-slate-600">
+                        บรรจุได้
+                      </span>
+                      <input
+                        type="number"
+                        min={1}
+                        value={
+                          customVehicleCapacities[vId] !== undefined
+                            ? customVehicleCapacities[vId]
+                            : capacity
+                        }
+                        onChange={(e) => {
+                          const val = parseInt(e.target.value, 10);
+                          setCustomVehicleCapacities((prev) => ({
+                            ...prev,
+                            [vId]: isNaN(val) ? 0 : val,
+                          }));
+                        }}
+                        disabled={isAssigned}
+                        className="w-20 px-2 py-0.5 border border-amber-300 rounded text-center text-xs font-bold text-amber-900 bg-amber-50 focus:bg-white focus:outline-none focus:border-blue-500 font-mono disabled:opacity-50"
+                      />
+                      <span className="text-[11px] font-semibold text-slate-600">
+                        ลัง
                       </span>
                       {isAssigned && (
                         <span className="text-[9px] font-bold px-2 py-0.5 rounded-md bg-rose-100 text-rose-700 border border-rose-200">
@@ -7567,6 +8275,125 @@ export const RoutePage: React.FC = () => {
         onCancel={() => setIsConfirmClearUnassignedModalOpen(false)}
         isLoading={clearingUnassigned}
       />
+
+      {/* Avoid Zone Management Drawer */}
+      <AvoidZoneDrawer
+        isOpen={isAvoidZoneDrawerOpen}
+        onClose={() => setIsAvoidZoneDrawerOpen(false)}
+        zones={avoidZones}
+        onToggleActive={handleToggleAvoidZoneActive}
+        onDeleteZone={handleDeleteAvoidZone}
+        onFocusZone={(zone) => {
+          setIsAvoidZoneDrawerOpen(false);
+          if (zone.coordinates && zone.coordinates.length > 0) {
+            setActiveGpsTarget({
+              lat: zone.coordinates[0][0],
+              lng: zone.coordinates[0][1],
+            });
+          }
+        }}
+      />
+
+      {/* Modal บันทึกพื้นที่ห้ามผ่าน (Save Avoid Zone Modal) */}
+      {isSaveZoneModalOpen && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-[2000] p-4 animate-fadeIn">
+          <div className="bg-white rounded-2xl max-w-md w-full p-5 shadow-2xl border border-slate-100 space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2 text-rose-700 font-bold">
+                <ShieldAlert className="w-5 h-5 text-rose-600" />
+                <span>บันทึกพื้นที่ห้ามผ่าน</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsSaveZoneModalOpen(false)}
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveAvoidZoneSubmit} className="space-y-3">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  ชื่อพื้นที่ห้ามผ่าน <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={newZoneName}
+                  onChange={(e) => setNewZoneName(e.target.value)}
+                  placeholder="เช่น สะพานจำกัดความสูง 3.2m / ทางลูกรังหมู่บ้านโนนทอง"
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs focus:ring-2 focus:ring-rose-500 focus:border-rose-500 outline-none font-semibold text-slate-800"
+                  autoFocus
+                  required
+                />
+              </div>
+
+              <div>
+                <SearchableSelect
+                  label="ประเภทพื้นที่ห้ามผ่าน"
+                  value={newZoneType}
+                  onChange={(val) => setNewZoneType(val as any)}
+                  placeholder="-- ไม่ระบุประเภทพื้นที่ห้ามผ่าน --"
+                  searchPlaceholder="พิมพ์ค้นหาประเภทพื้นที่ห้ามผ่าน..."
+                  options={[
+                    { value: "unpaved", label: "🚜 ทางดินเลน / ถนนลูกรัง" },
+                    { value: "height_limit", label: "🌉 สะพานจำกัดความสูง" },
+                    {
+                      value: "truck_prohibited",
+                      label: "🚚 เขตห้ามรถบรรทุกผ่าน",
+                    },
+                    { value: "custom", label: "⚠️ พื้นที่เสี่ยงภัย / อื่นๆ" },
+                  ]}
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  รายละเอียดเพิ่มเติม / หมายเหตุ
+                </label>
+                <textarea
+                  rows={2}
+                  value={newZoneDescription}
+                  onChange={(e) => setNewZoneDescription(e.target.value)}
+                  placeholder="ระบุข้อจำกัด เช่น รถ 6 ล้อผ่านไม่ได้ หรือดินเลนสไลด์ช่วงฤดูฝน..."
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs focus:ring-2 focus:ring-rose-500 outline-none font-normal text-slate-700"
+                />
+              </div>
+
+              <div className="p-2.5 bg-rose-50 border border-rose-100 rounded-xl text-[11px] text-rose-800 font-medium flex items-start gap-2">
+                <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                <div>
+                  พิกัดแนวเขต Polygon ถูกเลือกไว้{" "}
+                  <strong>{drawingPoints.length} จุด</strong> บนแผนที่
+                  ระบบจะนำไปใช้หลีกเลี่ยงการจัดเส้นทางโดยอัตโนมัติ
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setIsSaveZoneModalOpen(false)}
+                  className="px-3.5 py-2 rounded-lg text-xs font-bold text-slate-600 hover:bg-slate-100 cursor-pointer"
+                >
+                  ยกเลิก
+                </button>
+                <button
+                  type="submit"
+                  disabled={savingAvoidZone}
+                  className="px-4 py-2 rounded-lg text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white flex items-center gap-1.5 shadow-md disabled:opacity-50 cursor-pointer"
+                >
+                  {savingAvoidZone ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <Check className="w-3.5 h-3.5" />
+                  )}
+                  <span>บันทึกพื้นที่ห้ามผ่าน</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* Export PDF / Excel Drawer for RoutePage */}
       <ExportDrawer

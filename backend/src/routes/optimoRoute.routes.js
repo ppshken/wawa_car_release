@@ -66,6 +66,8 @@ router.get('/routes', authenticateToken, async (req, res) => {
           ls.pod_image,
           ls.position_product_id,
           ls.position_production_order,
+          ls.tax,
+          ls.note,
           pp.position_product_name,
           s.store_name,
           s.store_address,
@@ -108,6 +110,8 @@ router.get('/routes', authenticateToken, async (req, res) => {
             ls.created_at,
             ls.position_product_id,
             ls.position_production_order,
+            ls.tax,
+            ls.note,
             pp.position_product_name,
             s.store_name,
             s.store_address,
@@ -166,6 +170,35 @@ router.get('/routes', authenticateToken, async (req, res) => {
       }
     }
 
+    // Fetch store business hours for target date
+    const storeIds = Array.from(new Set((rows || []).map((r) => r.store_id).filter(Boolean)));
+    let closedStoreSet = new Set();
+    let storeHoursMap = {};
+
+    if (storeIds.length > 0) {
+      try {
+        const daysMap = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+        const targetDay = daysMap[new Date(targetDate).getDay()];
+        const placeholders = storeIds.map(() => '?').join(',');
+
+        const bhRows = await query(
+          `SELECT store_id, day_of_week, is_open, open_time, close_time 
+           FROM store_business_hours 
+           WHERE store_id IN (${placeholders}) AND day_of_week = ?`,
+          [...storeIds, targetDay]
+        );
+
+        (bhRows || []).forEach((bh) => {
+          storeHoursMap[bh.store_id] = bh;
+          if (bh.is_open === 0 || bh.is_open === '0' || bh.is_open === false) {
+            closedStoreSet.add(String(bh.store_id));
+          }
+        });
+      } catch (eBH) {
+        console.warn('Fetch store_business_hours for routes warning:', eBH.message);
+      }
+    }
+
     rows.forEach((row) => {
       const gId = row.group_store_id;
       if (!groupMap.has(gId)) {
@@ -197,6 +230,9 @@ router.get('/routes', authenticateToken, async (req, res) => {
           lng = parseFloat(parts[1]) || 0;
         }
 
+        const isClosedToday = closedStoreSet.has(String(row.store_id));
+        const bhInfo = storeHoursMap[row.store_id];
+
         grp.stops.push({
           stopId: row.list_id || grp.stops.length + 1,
           group_store_name: row.group_store_name,
@@ -205,6 +241,7 @@ router.get('/routes', authenticateToken, async (req, res) => {
           orderNo: row.data_store_no || row.store_id || '-',
           data_store_no: row.data_store_no || row.store_id || '-',
           locationNo: row.store_id,
+          store_id: row.store_id,
           storeName: row.store_name_result || row.store_name || `ร้านค้า ${row.store_id}`,
           address: row.store_address || '',
           telephone_number: row.telephone_number || '',
@@ -216,11 +253,17 @@ router.get('/routes', authenticateToken, async (req, res) => {
           start_service_time: row.start_service_time || null,
           end_service_time: row.end_service_time || null,
           priority: row.priority || 'medium',
+          tax: row.tax ? 1 : 0,
+          note: row.note || null,
           pod_image: row.pod_image || null,
           position_product_id: row.position_product_id,
           position_production_order: row.position_production_order,
           position_product_name: row.position_product_name,
           loads: loadsMap[row.list_id] || [],
+          is_store_closed: isClosedToday,
+          is_closed_today: isClosedToday,
+          store_open_time: bhInfo ? bhInfo.open_time : null,
+          store_close_time: bhInfo ? bhInfo.close_time : null,
           arrivalTime: '',
           departureTime: '',
           status: row.status || 'pending',
@@ -609,7 +652,6 @@ router.post('/stops', authenticateToken, async (req, res) => {
       orderNo,
       order_no,
       store_name,
-      address,
       row_order,
       sum_quantity,
       lat_long,
@@ -617,39 +659,29 @@ router.post('/stops', authenticateToken, async (req, res) => {
       scheduledTime,
       priority,
       status,
-      date
+      date,
+      tax,
+      note
     } = req.body;
 
-    if (!group_store_id) {
-      return res.status(400).json({ success: false, message: 'กรุณาเลือกสายจัดส่ง (group_store_id)' });
+    if (!group_store_id || !store_id || !data_store_no || !date || !sum_quantity || !lat_long || !scheduled_time || !priority || !status) {
+      return res.status(400).json({ success: false, message: 'กรุณากรอกข้อมูลให้ครบถ้วน!' });
     }
 
     // หากไม่มี store_id ให้สร้างอัตโนมัติ
-    let targetStoreId = store_id ? String(store_id).trim() : `ST-${Date.now().toString().slice(-6)}`;
-    const storeNameResult = store_name || `ร้านค้า ${targetStoreId}`;
+    const target_store_id = store_id || null;
+    const storeNameResult = store_name;
     const targetDate = date || new Date().toISOString().slice(0, 10);
     const quantityNum = sum_quantity ? parseInt(sum_quantity, 10) : 0;
     const rowOrderNum = row_order ? parseInt(row_order, 10) : 1;
     const targetOrderNo = data_store_no || orderNo || order_no || null;
-    const targetStatus = status || 'in_progress';
+    const targetStatus = status || 'unassigned';
     const targetScheduledTime = scheduled_time || scheduledTime || null;
     const targetPriority = priority || 'medium';
     const targetPosProdId = req.body.position_product_id ? parseInt(req.body.position_product_id, 10) : null;
     const targetPosProdOrder = req.body.position_production_order !== undefined && req.body.position_production_order !== '' && req.body.position_production_order !== null ? parseInt(req.body.position_production_order, 10) : null;
-
-    // ถ้ามี store_name ให้ upsert ลงตาราง store ด้วย
-    if (store_name) {
-      try {
-        await query(
-          `INSERT INTO store (store_id, store_name, store_address, store_location)
-           VALUES (?, ?, ?, ?)
-           ON DUPLICATE KEY UPDATE store_name = VALUES(store_name), store_address = VALUES(store_address), store_location = VALUES(store_location)`,
-          [targetStoreId, storeNameResult, address || null, lat_long || null]
-        );
-      } catch (eStore) {
-        console.warn('Upsert store warning:', eStore.message);
-      }
-    }
+    const targetTax = tax || null;
+    const targetNote = note || null;
 
     const createdByVal = req.user ? (req.user.user_id || req.user.id || req.user.name || req.user.username || 1) : 1;
 
@@ -657,22 +689,22 @@ router.post('/stops', authenticateToken, async (req, res) => {
     let insertRes;
     try {
       insertRes = await query(
-        `INSERT INTO list_store (store_id, group_store_id, row_order, sum_quantity, lat_long, store_name_result, data_store_no, scheduled_time, priority, status, position_product_id, position_production_order, created_by, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [targetStoreId, group_store_id, rowOrderNum, quantityNum, lat_long || null, storeNameResult, targetOrderNo, targetScheduledTime, targetPriority, targetStatus, targetPosProdId, targetPosProdOrder, createdByVal, `${targetDate} 08:00:00`]
+        `INSERT INTO list_store (store_id, group_store_id, row_order, sum_quantity, lat_long, store_name_result, data_store_no, scheduled_time, priority, status, position_product_id, position_production_order, created_by, created_at, tax, note)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [target_store_id, group_store_id, rowOrderNum, quantityNum, lat_long || null, storeNameResult, targetOrderNo, targetScheduledTime, targetPriority, targetStatus, targetPosProdId, targetPosProdOrder, createdByVal, `${targetDate} 00:00:00`, targetTax, targetNote]
       );
     } catch (eIns) {
       try {
         insertRes = await query(
-          `INSERT INTO list_store (store_id, group_store_id, row_order, sum_quantity, lat_long, store_name_result, data_store_no, created_by, created_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-          [targetStoreId, group_store_id, rowOrderNum, quantityNum, lat_long || null, storeNameResult, targetOrderNo, createdByVal, `${targetDate} 08:00:00`]
+          `INSERT INTO list_store (store_id, group_store_id, row_order, sum_quantity, lat_long, store_name_result, data_store_no, created_by, created_at, tax, note)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [target_store_id, group_store_id, rowOrderNum, quantityNum, lat_long || null, storeNameResult, targetOrderNo, createdByVal, `${targetDate} 00:00:00`, targetTax, targetNote]
         );
       } catch (e2) {
         insertRes = await query(
-          `INSERT INTO list_store (store_id, group_store_id, row_order, sum_quantity, lat_long, store_name_result, created_by, created_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-          [targetStoreId, group_store_id, rowOrderNum, quantityNum, lat_long || null, storeNameResult, createdByVal, `${targetDate} 08:00:00`]
+          `INSERT INTO list_store (store_id, group_store_id, row_order, sum_quantity, lat_long, store_name_result, created_by, created_at, tax, note)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [target_store_id, group_store_id, rowOrderNum, quantityNum, lat_long || null, storeNameResult, createdByVal, `${targetDate} 00:00:00`, targetTax, targetNote]
         );
       }
     }
@@ -697,7 +729,7 @@ router.post('/stops', authenticateToken, async (req, res) => {
       success: true,
       message: 'เพิ่มรายการจุดจัดส่งเรียบร้อยแล้ว',
       list_id: insertRes.insertId,
-      store_id: targetStoreId,
+      store_id: target_store_id,
       data_store_no: targetOrderNo,
       group_store_id,
       row_order: rowOrderNum
@@ -730,6 +762,9 @@ router.put('/stops/:listId', authenticateToken, async (req, res) => {
       position_product_id,
       position_production_order,
       priority,
+      tax,
+      note,
+      date,
     } = req.body;
 
     const rowOrderNum = row_order ? parseInt(row_order, 10) : 1;
@@ -738,6 +773,9 @@ router.put('/stops/:listId', authenticateToken, async (req, res) => {
     const targetScheduledTime = scheduled_time !== undefined ? scheduled_time : (scheduledTime !== undefined ? scheduledTime : null);
     const targetPosProdId = position_product_id !== undefined ? (position_product_id ? parseInt(position_product_id, 10) : null) : null;
     const targetPosProdOrder = position_production_order !== undefined && position_production_order !== '' && position_production_order !== null ? parseInt(position_production_order, 10) : null;
+    const targetTax = tax !== undefined ? (tax === 1 || tax === '1' || tax === true || tax === 'true' ? 1 : 0) : null;
+    const targetNote = note !== undefined && note !== null ? (String(note).trim() ? String(note).trim() : null) : null;
+    const targetCreatedAt = date ? `${date} 00:00:00` : null;
 
     // ถ้ามี store_id & store_name ให้อัปเดตตาราง store ด้วย
     if (store_id && store_name) {
@@ -770,9 +808,12 @@ router.put('/stops/:listId', authenticateToken, async (req, res) => {
              status = COALESCE(?, status),
              position_product_id = ?,
              position_production_order = ?,
-             priority = ?
+             priority = ?,
+             tax = COALESCE(?, tax),
+             note = ?,
+             created_at = COALESCE(?, created_at)
          WHERE list_id = ?`,
-        [targetGroupId, store_id || null, rowOrderNum, quantityNum, lat_long || null, store_name || null, targetOrderNo, targetScheduledTime, status || null, targetPosProdId, targetPosProdOrder, priority || null, listId]
+        [targetGroupId, store_id || null, rowOrderNum, quantityNum, lat_long || null, store_name || null, targetOrderNo, targetScheduledTime, status || null, targetPosProdId, targetPosProdOrder, priority || null, targetTax, targetNote, targetCreatedAt, listId]
       );
     } catch (eUp) {
       await query(
@@ -914,7 +955,10 @@ router.get('/unassigned', authenticateToken, async (req, res) => {
         ls.priority,
         ls.position_product_id,
         ls.position_production_order,
+        ls.tax,
+        ls.note,
         pp.position_product_name,
+        DATE_FORMAT(ls.created_at, '%Y-%m-%d') AS created_date,
         ls.created_at,
         s.store_name,
         s.store_address,
@@ -930,6 +974,8 @@ router.get('/unassigned', authenticateToken, async (req, res) => {
     );
 
     const listIds = (rows || []).map((r) => r.list_id).filter(Boolean);
+    const storeIds = Array.from(new Set((rows || []).map((r) => r.store_id).filter(Boolean)));
+
     let loadsMap = {};
     if (listIds.length > 0) {
       try {
@@ -948,6 +994,34 @@ router.get('/unassigned', authenticateToken, async (req, res) => {
       }
     }
 
+    // Fetch store business hours for target date
+    let closedStoreSet = new Set();
+    let storeHoursMap = {};
+
+    if (storeIds.length > 0) {
+      try {
+        const daysMap = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+        const targetDay = daysMap[new Date(targetDate).getDay()];
+        const placeholders = storeIds.map(() => '?').join(',');
+
+        const bhRows = await query(
+          `SELECT store_id, day_of_week, is_open, open_time, close_time 
+           FROM store_business_hours 
+           WHERE store_id IN (${placeholders}) AND day_of_week = ?`,
+          [...storeIds, targetDay]
+        );
+
+        (bhRows || []).forEach((bh) => {
+          storeHoursMap[bh.store_id] = bh;
+          if (bh.is_open === 0 || bh.is_open === '0' || bh.is_open === false) {
+            closedStoreSet.add(String(bh.store_id));
+          }
+        });
+      } catch (eBH) {
+        console.warn('Fetch store_business_hours for unassigned warning:', eBH.message);
+      }
+    }
+
     const stops = (rows || []).map((row) => {
       let lat = 0;
       let lng = 0;
@@ -957,6 +1031,9 @@ router.get('/unassigned', authenticateToken, async (req, res) => {
         lat = parseFloat(parts[0]) || 0;
         lng = parseFloat(parts[1]) || 0;
       }
+
+      const isClosedToday = closedStoreSet.has(String(row.store_id));
+      const bhInfo = storeHoursMap[row.store_id];
 
       return {
         list_id: row.list_id,
@@ -978,9 +1055,16 @@ router.get('/unassigned', authenticateToken, async (req, res) => {
         position_product_id: row.position_product_id,
         position_production_order: row.position_production_order,
         position_product_name: row.position_product_name,
+        tax: row.tax || null,
+        note: row.note || null,
         loads: loadsMap[row.list_id] || [],
+        is_store_closed: isClosedToday,
+        is_closed_today: isClosedToday,
+        store_open_time: bhInfo ? bhInfo.open_time : null,
+        store_close_time: bhInfo ? bhInfo.close_time : null,
         type: 'delivery',
-        created_at: row.created_at
+        created_at: row.created_date || targetDate,
+        date: row.created_date || targetDate
       };
     });
 
@@ -1010,7 +1094,9 @@ router.post('/unassigned', authenticateToken, async (req, res) => {
       priority,
       date,
       position_product_id,
-      position_production_order
+      position_production_order,
+      tax,
+      note
     } = req.body;
 
     let targetStoreId = store_id ? String(store_id).trim() : `ST-${Date.now().toString().slice(-6)}`;
@@ -1021,6 +1107,8 @@ router.post('/unassigned', authenticateToken, async (req, res) => {
     const targetPriority = priority || 'medium';
     const targetPosProdId = position_product_id ? parseInt(position_product_id, 10) : null;
     const targetPosProdOrder = position_production_order !== undefined && position_production_order !== '' && position_production_order !== null ? parseInt(position_production_order, 10) : 1;
+    const targetTax = tax === 1 || tax === '1' || tax === true || tax === 'true' ? 1 : 0;
+    const targetNote = note ? String(note).trim() : null;
 
     if (store_name) {
       try {
@@ -1042,20 +1130,20 @@ router.post('/unassigned', authenticateToken, async (req, res) => {
       insertRes = await query(
         `INSERT INTO list_store (store_id, group_store_id, row_order, sum_quantity, lat_long, store_name_result, data_store_no, priority, status, position_product_id, position_production_order, created_by, created_at)
          VALUES (?, NULL, NULL, ?, ?, ?, ?, ?, 'unassigned', ?, ?, ?, ?)`,
-        [targetStoreId, quantityNum, lat_long || null, storeNameResult, targetOrderNo, targetPriority, targetPosProdId, targetPosProdOrder, createdByVal, `${targetDate} 08:00:00`]
+        [targetStoreId, quantityNum, lat_long || null, storeNameResult, targetOrderNo, targetPriority, targetPosProdId, targetPosProdOrder, createdByVal, `${targetDate} 00:00:00`]
       );
     } catch (eIns) {
       try {
         insertRes = await query(
           `INSERT INTO list_store (store_id, group_store_id, row_order, sum_quantity, lat_long, store_name_result, data_store_no, status, created_by, created_at)
            VALUES (?, NULL, NULL, ?, ?, ?, ?, 'unassigned', ?, ?)`,
-          [targetStoreId, quantityNum, lat_long || null, storeNameResult, targetOrderNo, createdByVal, `${targetDate} 08:00:00`]
+          [targetStoreId, quantityNum, lat_long || null, storeNameResult, targetOrderNo, createdByVal, `${targetDate} 00:00:00`]
         );
       } catch (e2) {
         insertRes = await query(
           `INSERT INTO list_store (store_id, group_store_id, row_order, sum_quantity, lat_long, store_name_result, status, created_by, created_at)
            VALUES (?, NULL, NULL, ?, ?, ?, 'unassigned', ?, ?)`,
-          [targetStoreId, quantityNum, lat_long || null, storeNameResult, createdByVal, `${targetDate} 08:00:00`]
+          [targetStoreId, quantityNum, lat_long || null, storeNameResult, createdByVal, `${targetDate} 00:00:00`]
         );
       }
     }
@@ -1123,18 +1211,22 @@ router.post('/unassigned/import', authenticateToken, async (req, res) => {
 
       const createdByVal = req.user ? (req.user.user_id || req.user.id || req.user.name || req.user.username || 1) : 1;
 
+      const itemTax = item.tax === 1 || item.tax === '1' || item.tax === true || item.tax === 'true' ? 1 : 0;
+      const itemNote = item.note ? String(item.note).trim() : null;
+      const itemDate = item.date || targetDate;
+
       let insertRes;
       try {
         insertRes = await query(
-          `INSERT INTO list_store (store_id, group_store_id, row_order, sum_quantity, lat_long, store_name_result, data_store_no, status, position_product_id, position_production_order, created_by, created_at)
-           VALUES (?, NULL, NULL, ?, ?, ?, ?, 'unassigned', ?, ?, ?, ?)`,
-          [storeId, quantity, latLong || null, storeName, orderNo, posProdId, posProdOrder, createdByVal, `${targetDate} 08:00:00`]
+          `INSERT INTO list_store (store_id, group_store_id, row_order, sum_quantity, lat_long, store_name_result, data_store_no, status, position_product_id, position_production_order, created_by, created_at, tax, note)
+           VALUES (?, NULL, NULL, ?, ?, ?, ?, 'unassigned', ?, ?, ?, ?, ?, ?)`,
+          [storeId, quantity, latLong || null, storeName, orderNo, posProdId, posProdOrder, createdByVal, `${itemDate} 00:00:00`, itemTax, itemNote]
         );
       } catch (eIns) {
         insertRes = await query(
-          `INSERT INTO list_store (store_id, group_store_id, row_order, sum_quantity, lat_long, store_name_result, status, position_product_id, position_production_order, created_by, created_at)
-           VALUES (?, NULL, NULL, ?, ?, ?, 'unassigned', ?, ?, ?, ?)`,
-          [storeId, quantity, latLong || null, storeName, posProdId, posProdOrder, createdByVal, `${targetDate} 08:00:00`]
+          `INSERT INTO list_store (store_id, group_store_id, row_order, sum_quantity, lat_long, store_name_result, status, position_product_id, position_production_order, created_by, created_at, tax, note)
+           VALUES (?, NULL, NULL, ?, ?, ?, 'unassigned', ?, ?, ?, ?, ?, ?)`,
+          [storeId, quantity, latLong || null, storeName, posProdId, posProdOrder, createdByVal, `${itemDate} 00:00:00`, itemTax, itemNote]
         );
       }
 
@@ -1309,6 +1401,104 @@ function haversineKm(lat1, lng1, lat2, lng2) {
 }
 
 /**
+ * Ray-Casting Point-in-Polygon Test
+ * ตรวจสอบว่าจุด (lat, lng) อยู่ภายใน Polygon หรือไม่
+ * polygon = [[lat, lng], [lat, lng], ...]
+ */
+function pointInPolygon(lat, lng, polygon) {
+  if (!polygon || polygon.length < 3) return false;
+  let inside = false;
+  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+    const xi = polygon[i][0], yi = polygon[i][1];
+    const xj = polygon[j][0], yj = polygon[j][1];
+    const intersect = ((yi > lng) !== (yj > lng))
+      && (lat < (xj - xi) * (lng - yi) / (yj - yi) + xi);
+    if (intersect) inside = !inside;
+  }
+  return inside;
+}
+
+/**
+ * Line Segment Intersection Test (Cross Product Method)
+ * ตรวจสอบว่าเส้นตรง A(x1,y1)->B(x2,y2) ตัดกับ C(x3,y3)->D(x4,y4) หรือไม่
+ */
+function lineSegmentsIntersect(x1, y1, x2, y2, x3, y3, x4, y4) {
+  function crossProduct(ax, ay, bx, by, cx, cy) {
+    return (bx - ax) * (cy - ay) - (by - ay) * (cx - ax);
+  }
+
+  const cp1 = crossProduct(x1, y1, x2, y2, x3, y3);
+  const cp2 = crossProduct(x1, y1, x2, y2, x4, y4);
+  const cp3 = crossProduct(x3, y3, x4, y4, x1, y1);
+  const cp4 = crossProduct(x3, y3, x4, y4, x2, y2);
+
+  if (((cp1 > 0 && cp2 < 0) || (cp1 < 0 && cp2 > 0)) &&
+      ((cp3 > 0 && cp4 < 0) || (cp3 < 0 && cp4 > 0))) {
+    return true;
+  }
+
+  const onSegment = (px, py, qx, qy, rx, ry) => {
+    return (
+      qx <= Math.max(px, rx) && qx >= Math.min(px, rx) &&
+      qy <= Math.max(py, ry) && qy >= Math.min(py, ry)
+    );
+  };
+
+  if (Math.abs(cp1) < 1e-9 && onSegment(x1, y1, x3, y3, x2, y2)) return true;
+  if (Math.abs(cp2) < 1e-9 && onSegment(x1, y1, x4, y4, x2, y2)) return true;
+  if (Math.abs(cp3) < 1e-9 && onSegment(x3, y3, x1, y1, x4, y4)) return true;
+  if (Math.abs(cp4) < 1e-9 && onSegment(x3, y3, x2, y2, x4, y4)) return true;
+
+  return false;
+}
+
+/**
+ * ตรวจสอบว่าเส้นตรงระหว่าง 2 จุดตัดผ่าน Polygon หรือไม่
+ * รวมการเช็ค exact boundary edge intersection + endpoint in polygon + 20-step sampling
+ */
+function segmentCrossesPolygon(lat1, lng1, lat2, lng2, polygon) {
+  if (!polygon || polygon.length < 3) return false;
+
+  // 1. เช็คว่าจุดเริ่มต้นหรือจุดปลายอยู่ใน polygon หรือไม่
+  if (pointInPolygon(lat1, lng1, polygon)) return true;
+  if (pointInPolygon(lat2, lng2, polygon)) return true;
+
+  // 2. เช็คการตัดผ่านของเส้นตรงกับทุกขอบของ Polygon
+  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+    const plat1 = polygon[i][0], plng1 = polygon[i][1];
+    const plat2 = polygon[j][0], plng2 = polygon[j][1];
+
+    if (lineSegmentsIntersect(lat1, lng1, lat2, lng2, plat1, plng1, plat2, plng2)) {
+      return true;
+    }
+  }
+
+  // 3. สุ่มตรวจเพิ่มเติม 20 จุดตามความยาวเส้นตรง
+  for (let t = 0.05; t <= 0.95; t += 0.05) {
+    const midLat = lat1 + (lat2 - lat1) * t;
+    const midLng = lng1 + (lng2 - lng1) * t;
+    if (pointInPolygon(midLat, midLng, polygon)) return true;
+  }
+
+  return false;
+}
+
+/**
+ * คำนวณ penalty factor สำหรับเส้นทางที่ตัดผ่านพื้นที่ห้ามผ่าน
+ * คืนค่า 1.0 ถ้าไม่ตัดผ่าน, คืนค่า 100,000 เท่า ถ้าตัดผ่าน (บังคับให้อัลกอริทึมเลี่ยงแน่นอน)
+ */
+function avoidZonePenalty(lat1, lng1, lat2, lng2, avoidZones) {
+  if (!avoidZones || avoidZones.length === 0) return 1.0;
+  for (const zone of avoidZones) {
+    if (!zone.coordinates || zone.coordinates.length < 3) continue;
+    if (segmentCrossesPolygon(lat1, lng1, lat2, lng2, zone.coordinates)) {
+      return 100000.0; // Extreme penalty
+    }
+  }
+  return 1.0;
+}
+
+/**
  * Estimate travel time in minutes based on distance
  * ความเร็วแยกตามระยะทาง: พิกัดเดียวกัน (0 นาที), ใกล้ (25 km/h), กลาง (40 km/h), ไกล (60 km/h)
  */
@@ -1322,26 +1512,35 @@ function estimateTravelMinutes(distKm) {
 
 /**
  * Calculate total route distance (Haversine) including depot->first and last->depot
+ * Apply avoid zone penalty if a segment crosses an avoid zone
  */
-function totalRouteDistance(stops, depot) {
+function totalRouteDistance(stops, depot, avoidZones = []) {
   if (stops.length === 0) return 0;
   let total = haversineKm(depot.lat, depot.lng, stops[0].lat, stops[0].lng);
+  total *= avoidZonePenalty(depot.lat, depot.lng, stops[0].lat, stops[0].lng, avoidZones);
+
   for (let i = 0; i < stops.length - 1; i++) {
-    total += haversineKm(stops[i].lat, stops[i].lng, stops[i + 1].lat, stops[i + 1].lng);
+    let segDist = haversineKm(stops[i].lat, stops[i].lng, stops[i + 1].lat, stops[i + 1].lng);
+    segDist *= avoidZonePenalty(stops[i].lat, stops[i].lng, stops[i + 1].lat, stops[i + 1].lng, avoidZones);
+    total += segDist;
   }
-  total += haversineKm(stops[stops.length - 1].lat, stops[stops.length - 1].lng, depot.lat, depot.lng);
+
+  let lastSeg = haversineKm(stops[stops.length - 1].lat, stops[stops.length - 1].lng, depot.lat, depot.lng);
+  lastSeg *= avoidZonePenalty(stops[stops.length - 1].lat, stops[stops.length - 1].lng, depot.lat, depot.lng, avoidZones);
+  total += lastSeg;
+
   return total;
 }
 
 /**
  * 2-opt Route Improvement — สลับลำดับจุดจัดส่งเพื่อลดระยะทางรวม
- * ลดเส้นทางตัดกัน (crossing routes) อย่างมีประสิทธิภาพ
+ * ลดเส้นทางตัดกัน (crossing routes) อย่างมีประสิทธิภาพ และรักษาเงื่อนไข Avoid Zone
  */
-function twoOptImprove(stops, depot, maxIterations = 100) {
+function twoOptImprove(stops, depot, avoidZones = [], maxIterations = 100) {
   if (stops.length < 3) return stops;
 
   let improved = [...stops];
-  let bestDist = totalRouteDistance(improved, depot);
+  let bestDist = totalRouteDistance(improved, depot, avoidZones);
   let iteration = 0;
   let hasImproved = true;
 
@@ -1356,7 +1555,7 @@ function twoOptImprove(stops, depot, maxIterations = 100) {
           ...improved.slice(i, j + 1).reverse(),
           ...improved.slice(j + 1)
         ];
-        const newDist = totalRouteDistance(newRoute, depot);
+        const newDist = totalRouteDistance(newRoute, depot, avoidZones);
         if (newDist < bestDist - 0.01) { // 10m threshold
           improved = newRoute;
           bestDist = newDist;
@@ -1465,7 +1664,8 @@ router.post('/auto-route', authenticateToken, async (req, res) => {
       strategy = 'shortest_distance',
       maxLoadPerVehicle = 100,
       maxStopsPerVehicle = 15,
-      selectedVehicleIds = []
+      selectedVehicleIds = [],
+      customCapacities = {}
     } = req.body;
 
     const targetDate = date || new Date().toISOString().slice(0, 10);
@@ -1506,6 +1706,23 @@ router.post('/auto-route', authenticateToken, async (req, res) => {
 
     const totalUnassignedQuantity = items.reduce((sum, i) => sum + i.quantity, 0);
 
+    // 1.5. ดึงพื้นที่ห้ามผ่าน (Avoid Zones) ที่เปิดใช้งาน
+    let activeAvoidZones = [];
+    try {
+      const azRows = await query(
+        `SELECT zone_id, zone_name, zone_type, coordinates FROM avoid_zone WHERE is_active = 1`
+      );
+      activeAvoidZones = (azRows || []).map((z) => {
+        let coords = z.coordinates;
+        if (typeof coords === 'string') {
+          try { coords = JSON.parse(coords); } catch (e) { coords = []; }
+        }
+        return { ...z, coordinates: coords };
+      }).filter((z) => z.coordinates && z.coordinates.length >= 3);
+    } catch (azErr) {
+      console.warn('Fetch avoid zones for auto-route skipped:', azErr.message || azErr);
+    }
+
     // 2. ตรวจสอบรถที่ถูกใช้งานไปแล้วในวันนี้ (ห้ามใช้ซ้ำวัน)
     const assignedRows = await query(
       `SELECT car_id FROM group_store WHERE (DATE_FORMAT(date, '%Y-%m-%d') = ? OR DATE_FORMAT(created_at, '%Y-%m-%d') = ?) AND car_id IS NOT NULL AND car_id != ''`,
@@ -1531,17 +1748,26 @@ router.post('/auto-route', authenticateToken, async (req, res) => {
         `SELECT * FROM car WHERE car_id IN (${placeholders})`,
         availableVehicleIds
       );
-      selectedVehicles = (cars || []).map((c) => ({
-        car_id: c.car_id,
-        license_plate: c.license_plate || c.car_id,
-        capacity: parseInt(c.quantity || c.max_load || c.car_load || maxLoadPerVehicle || 100, 10)
-      }));
+      selectedVehicles = (cars || []).map((c) => {
+        const cId = String(c.car_id);
+        const customCap = customCapacities && customCapacities[cId] !== undefined && customCapacities[cId] !== null ? parseInt(customCapacities[cId], 10) : NaN;
+        const defaultCap = parseInt(c.quantity || c.max_load || c.car_load || maxLoadPerVehicle || 100, 10);
+        return {
+          car_id: c.car_id,
+          license_plate: c.license_plate || c.car_id,
+          capacity: !isNaN(customCap) && customCap > 0 ? customCap : defaultCap
+        };
+      });
     } catch (eCars) {
-      selectedVehicles = availableVehicleIds.map((id) => ({
-        car_id: id,
-        license_plate: id,
-        capacity: maxLoadPerVehicle || 100
-      }));
+      selectedVehicles = availableVehicleIds.map((id) => {
+        const cId = String(id);
+        const customCap = customCapacities && customCapacities[cId] !== undefined && customCapacities[cId] !== null ? parseInt(customCapacities[cId], 10) : NaN;
+        return {
+          car_id: id,
+          license_plate: id,
+          capacity: !isNaN(customCap) && customCap > 0 ? customCap : (maxLoadPerVehicle || 100)
+        };
+      });
     }
 
     const totalSelectedCapacity = selectedVehicles.reduce((sum, v) => sum + v.capacity, 0);
@@ -1639,19 +1865,26 @@ router.post('/auto-route', authenticateToken, async (req, res) => {
         return 0;
       }
 
+      let mins = 0;
       if (osrmMatrix && osrmPointsMap) {
         const fromIdx = osrmPointsMap.get(fromId);
         const toIdx = osrmPointsMap.get(toId);
         if (fromIdx !== undefined && toIdx !== undefined) {
           const seconds = osrmMatrix[fromIdx][toIdx];
           if (seconds !== null && seconds !== undefined && seconds >= 0) {
-            return Math.round(seconds / 60);
+            mins = Math.round(seconds / 60);
           }
         }
       }
-      // Fallback: Haversine + speed estimate
-      const distKm = haversineKm(fromLat, fromLng, toLat, toLng);
-      return estimateTravelMinutes(distKm);
+      if (mins === 0) {
+        const distKm = haversineKm(fromLat, fromLng, toLat, toLng);
+        mins = estimateTravelMinutes(distKm);
+      }
+
+      // Apply avoid zone penalty if line segment intersects any active avoid zone
+      const baseVal = Math.max(1, mins);
+      const penalty = avoidZonePenalty(fromLat, fromLng, toLat, toLng, activeAvoidZones);
+      return baseVal * penalty;
     }
 
     // ─── Phase 1+2: Build Routes with Nearest Neighbor + 2-opt + Clustering ───
@@ -1703,6 +1936,8 @@ router.post('/auto-route', authenticateToken, async (req, res) => {
               } else {
                 metric = haversineKm(state.currentPos.lat, state.currentPos.lng, item.lat, item.lng);
               }
+              // Apply avoid zone penalty
+              metric *= avoidZonePenalty(state.currentPos.lat, state.currentPos.lng, item.lat, item.lng, activeAvoidZones);
               if (metric < minMetric) {
                 minMetric = metric;
                 nearestIdx = i;
@@ -1739,7 +1974,9 @@ router.post('/auto-route', authenticateToken, async (req, res) => {
           for (let i = 0; i < leftoverItems.length; i++) {
             const item = leftoverItems[i];
             if (state.currentLoad + item.quantity <= state.vehicleCap) {
-              const metric = haversineKm(state.currentPos.lat, state.currentPos.lng, item.lat, item.lng);
+              let metric = haversineKm(state.currentPos.lat, state.currentPos.lng, item.lat, item.lng);
+              // Apply avoid zone penalty
+              metric *= avoidZonePenalty(state.currentPos.lat, state.currentPos.lng, item.lat, item.lng, activeAvoidZones);
               if (metric < minMetric) {
                 minMetric = metric;
                 bestIdx = i;
@@ -1789,7 +2026,7 @@ router.post('/auto-route', authenticateToken, async (req, res) => {
       // ไม่ทำ 2-opt สำหรับ FIFO mode (ต้องรักษาลำดับเดิม)
       let optimizedStops = routeStops;
       if (effectivePriority !== 'order_fifo' && routeStops.length >= 3) {
-        optimizedStops = twoOptImprove(routeStops, DEPOT);
+        optimizedStops = twoOptImprove(routeStops, DEPOT, activeAvoidZones);
       }
 
       // ─── Save to DB ───

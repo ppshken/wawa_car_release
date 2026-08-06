@@ -18,6 +18,11 @@ import {
   ExternalLink,
   MapPin,
   Clock,
+  CalendarDays,
+  Eye,
+  Phone,
+  Globe,
+  Mail,
 } from "lucide-react";
 
 interface StoreData {
@@ -33,6 +38,42 @@ interface StoreData {
   open_time?: string;
   close_time?: string;
 }
+
+interface BusinessHour {
+  day_of_week: string;
+  is_open: number | boolean;
+  open_time: string;
+  close_time: string;
+}
+
+const DAY_LABELS: Record<string, string> = {
+  monday: 'จันทร์',
+  tuesday: 'อังคาร',
+  wednesday: 'พุธ',
+  thursday: 'พฤหัสบดี',
+  friday: 'ศุกร์',
+  saturday: 'เสาร์',
+  sunday: 'อาทิตย์',
+};
+
+const DAY_SHORT_LABELS: Record<string, string> = {
+  monday: 'จ',
+  tuesday: 'อ',
+  wednesday: 'พ',
+  thursday: 'พฤ',
+  friday: 'ศ',
+  saturday: 'ส',
+  sunday: 'อา',
+};
+
+const DAYS_ORDER = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+
+const DEFAULT_BUSINESS_HOURS: BusinessHour[] = DAYS_ORDER.map(day => ({
+  day_of_week: day,
+  is_open: ['saturday', 'sunday'].includes(day) ? 0 : 1,
+  open_time: '08:00',
+  close_time: '17:00',
+}));
 
 export const StoresPage: React.FC = () => {
   const { showSuccess, showError } = useToast();
@@ -64,6 +105,16 @@ export const StoresPage: React.FC = () => {
   const [importFile, setImportFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [exporting, setExporting] = useState(false);
+
+  // Business Hours
+  const [businessHours, setBusinessHours] = useState<BusinessHour[]>(DEFAULT_BUSINESS_HOURS);
+  const [loadingHours, setLoadingHours] = useState(false);
+
+  // Detail Drawer (read-only)
+  const [isDetailOpen, setIsDetailOpen] = useState(false);
+  const [detailStore, setDetailStore] = useState<StoreData | null>(null);
+  const [detailHours, setDetailHours] = useState<BusinessHour[]>(DEFAULT_BUSINESS_HOURS);
+  const [loadingDetailHours, setLoadingDetailHours] = useState(false);
 
   // Delete Modal
   const [storeToDelete, setStoreToDelete] = useState<StoreData | null>(null);
@@ -148,6 +199,56 @@ export const StoresPage: React.FC = () => {
     fetchStores();
   }, [fetchStores]);
 
+  const fetchBusinessHours = useCallback(async (storeId: string) => {
+    setLoadingHours(true);
+    try {
+      const res = await api.get(`/master/stores/${storeId}/business-hours`);
+      if (res.data.success && res.data.business_hours && res.data.business_hours.length > 0) {
+        const existingMap = new Map<string, BusinessHour>(res.data.business_hours.map((b: BusinessHour) => [b.day_of_week, b]));
+        const full7Days = DAYS_ORDER.map((day) => {
+          if (existingMap.has(day)) {
+            return existingMap.get(day)!;
+          }
+          return DEFAULT_BUSINESS_HOURS.find((d) => d.day_of_week === day)!;
+        });
+        setBusinessHours(full7Days);
+      } else {
+        setBusinessHours(DEFAULT_BUSINESS_HOURS);
+      }
+    } catch (err) {
+      console.error('Error fetching business hours:', err);
+      setBusinessHours(DEFAULT_BUSINESS_HOURS);
+    } finally {
+      setLoadingHours(false);
+    }
+  }, []);
+
+  const handleOpenDetailStore = useCallback(async (store: StoreData) => {
+    setDetailStore(store);
+    setDetailHours([]);
+    setIsDetailOpen(true);
+    setLoadingDetailHours(true);
+    try {
+      const res = await api.get(`/master/stores/${store.store_id}/business-hours`);
+      if (res.data.success && res.data.business_hours && res.data.business_hours.length > 0) {
+        setDetailHours(res.data.business_hours);
+      } else {
+        setDetailHours([]);
+      }
+    } catch (err) {
+      console.error('Error fetching detail business hours:', err);
+      setDetailHours([]);
+    } finally {
+      setLoadingDetailHours(false);
+    }
+  }, []);
+
+  const handleDetailToEdit = () => {
+    if (!detailStore) return;
+    setIsDetailOpen(false);
+    handleOpenEditStore(detailStore);
+  };
+
   const handleOpenAddStore = () => {
     setEditingStore(null);
     setFormStoreId("");
@@ -160,6 +261,7 @@ export const StoresPage: React.FC = () => {
     setFormStoreLocation("");
     setFormOpenTime("08:00");
     setFormCloseTime("17:00");
+    setBusinessHours(DEFAULT_BUSINESS_HOURS);
     setIsDrawerOpen(true);
   };
 
@@ -175,6 +277,8 @@ export const StoresPage: React.FC = () => {
     setFormStoreLocation(store.store_location || "");
     setFormOpenTime(store.open_time || "08:00");
     setFormCloseTime(store.close_time || "17:00");
+    setBusinessHours(DEFAULT_BUSINESS_HOURS);
+    fetchBusinessHours(store.store_id);
     setIsDrawerOpen(true);
   };
 
@@ -201,9 +305,17 @@ export const StoresPage: React.FC = () => {
 
       if (editingStore) {
         await api.put(`/master/stores/${editingStore.store_id}`, payload);
+        // Save business hours
+        await api.put(`/master/stores/${editingStore.store_id}/business-hours`, {
+          business_hours: businessHours,
+        });
         showSuccess("อัปเดตข้อมูลร้านค้าเรียบร้อยแล้ว!");
       } else {
         await api.post("/master/stores", payload);
+        // Save business hours for newly created store
+        await api.put(`/master/stores/${formStoreId}/business-hours`, {
+          business_hours: businessHours,
+        });
         showSuccess("เพิ่มข้อมูลร้านค้าใหม่สำเร็จ!");
       }
       setIsDrawerOpen(false);
@@ -375,7 +487,7 @@ export const StoresPage: React.FC = () => {
             </thead>
             <tbody className="divide-y divide-slate-200/60 text-slate-800 whitespace-nowrap">
               {stores.map((s) => (
-                <tr key={s.store_id} className="hover:bg-slate-50/80 transition-colors">
+                <tr key={s.store_id} className="hover:bg-blue-50/50 transition-colors cursor-pointer" onClick={() => handleOpenDetailStore(s)}>
                   <td className="py-1 px-3 text-center">
                     <span className="font-mono font-bold bg-slate-100 border border-slate-200 text-slate-700 px-1.5 py-0.2 rounded text-[11px]">
                       {s.store_id}
@@ -403,6 +515,7 @@ export const StoresPage: React.FC = () => {
                         rel="noopener noreferrer"
                         className="inline-flex items-center gap-1 text-slate-700 hover:text-amber-600 hover:underline font-medium transition-colors group"
                         title={`เปิดแผนที่ Google Maps (${s.store_location})`}
+                        onClick={(e) => e.stopPropagation()}
                       >
                         <MapPin className="w-3 h-3 text-amber-500 group-hover:text-amber-600 shrink-0" />
                         <span>{s.store_location}</span>
@@ -415,10 +528,10 @@ export const StoresPage: React.FC = () => {
                     {(s as any).created_at ? new Date((s as any).created_at).toLocaleDateString("th-TH") : "-"}
                   </td>
                   <td className="py-1 px-3 text-right space-x-1">
-                    <button onClick={() => handleOpenEditStore(s)} className="p-0.5 rounded-md text-slate-600 hover:text-slate-900 hover:bg-slate-100" title="แก้ไข">
+                    <button onClick={(e) => { e.stopPropagation(); handleOpenEditStore(s); }} className="p-0.5 rounded-md text-slate-600 hover:text-slate-900 hover:bg-slate-100" title="แก้ไข">
                       <Edit2 className="w-3.5 h-3.5" />
                     </button>
-                    <button onClick={() => setStoreToDelete(s)} className="p-0.5 rounded-md text-slate-400 hover:text-rose-600 hover:bg-rose-50" title="ลบ">
+                    <button onClick={(e) => { e.stopPropagation(); setStoreToDelete(s); }} className="p-0.5 rounded-md text-slate-400 hover:text-rose-600 hover:bg-rose-50" title="ลบ">
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
                   </td>
@@ -483,6 +596,94 @@ export const StoresPage: React.FC = () => {
             />
           )}
         </div>
+
+        {/* ====== Business Hours Section ====== */}
+        <div className="border border-slate-200 rounded-lg p-3 bg-slate-50/50">
+          <div className="flex items-center gap-2 mb-3">
+            <CalendarDays className="w-4 h-4 text-blue-600" />
+            <span className="font-bold text-slate-800 text-xs">วันทำการ (จันทร์ - อาทิตย์)</span>
+          </div>
+          {loadingHours ? (
+            <div className="text-center text-slate-400 text-xs py-4">กำลังโหลดข้อมูลวันทำการ...</div>
+          ) : (
+            <div className="space-y-1.5">
+              {businessHours.map((bh, idx) => {
+                const isOpen = bh.is_open === 1 || bh.is_open === true;
+                return (
+                  <div
+                    key={bh.day_of_week}
+                    className={`flex items-center gap-2 rounded-lg px-2.5 py-1.5 transition-colors ${
+                      isOpen ? 'bg-white border border-slate-200' : 'bg-slate-100/80 border border-slate-100'
+                    }`}
+                  >
+                    {/* Day label */}
+                    <span className={`w-16 text-xs font-bold shrink-0 ${
+                      isOpen ? 'text-slate-800' : 'text-slate-400'
+                    }`}>
+                      {DAY_LABELS[bh.day_of_week]}
+                    </span>
+
+                    {/* Toggle switch */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const updated = [...businessHours];
+                        updated[idx] = { ...bh, is_open: isOpen ? 0 : 1 };
+                        setBusinessHours(updated);
+                      }}
+                      className={`relative w-9 h-5 rounded-full transition-colors shrink-0 ${
+                        isOpen ? 'bg-emerald-500' : 'bg-slate-300'
+                      }`}
+                    >
+                      <span className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${
+                        isOpen ? 'translate-x-4' : 'translate-x-0'
+                      }`} />
+                    </button>
+                    <span className={`text-[10px] w-7 shrink-0 ${
+                      isOpen ? 'text-emerald-600 font-bold' : 'text-slate-400'
+                    }`}>
+                      {isOpen ? 'เปิด' : 'ปิด'}
+                    </span>
+
+                    {/* Time inputs */}
+                    <input
+                      type="time"
+                      value={bh.open_time || '08:00'}
+                      disabled={!isOpen}
+                      onChange={(e) => {
+                        const updated = [...businessHours];
+                        updated[idx] = { ...bh, open_time: e.target.value };
+                        setBusinessHours(updated);
+                      }}
+                      className={`w-[90px] text-xs border rounded px-1.5 py-0.5 font-mono ${
+                        isOpen
+                          ? 'border-slate-200 bg-white text-slate-800 focus:outline-none focus:border-blue-400'
+                          : 'border-slate-100 bg-slate-50 text-slate-300 cursor-not-allowed'
+                      }`}
+                    />
+                    <span className="text-slate-400 text-[10px]">ถึง</span>
+                    <input
+                      type="time"
+                      value={bh.close_time || '17:00'}
+                      disabled={!isOpen}
+                      onChange={(e) => {
+                        const updated = [...businessHours];
+                        updated[idx] = { ...bh, close_time: e.target.value };
+                        setBusinessHours(updated);
+                      }}
+                      className={`w-[90px] text-xs border rounded px-1.5 py-0.5 font-mono ${
+                        isOpen
+                          ? 'border-slate-200 bg-white text-slate-800 focus:outline-none focus:border-blue-400'
+                          : 'border-slate-100 bg-slate-50 text-slate-300 cursor-not-allowed'
+                      }`}
+                    />
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
         {renderField("ที่อยู่ร้านค้า", true,
           <textarea value={formStoreAddress} onChange={(e) => setFormStoreAddress(e.target.value)} placeholder="ที่อยู่..." rows={3} className={`${inputCls} resize-none`} required />
         )}
@@ -500,6 +701,196 @@ export const StoresPage: React.FC = () => {
         )}
         {renderField("พิกัด GPS (lat,long)", false,
           <input type="text" value={formStoreLocation} onChange={(e) => setFormStoreLocation(e.target.value)} placeholder="เช่น 13.6682,100.6140" className={inputCls} />
+        )}
+      </AnimatedDrawer>
+
+      {/* Store Detail Drawer (read-only) */}
+      <AnimatedDrawer
+        isOpen={isDetailOpen}
+        onClose={() => setIsDetailOpen(false)}
+        title="รายละเอียดร้านค้า"
+      >
+        {detailStore && (
+          <div className="space-y-4 text-xs">
+            {/* SINGLE COLUMN STORE DETAILS - Matching DeliveryCheckInOutModal style */}
+            <div className="bg-white overflow-hidden pt-3">
+              <div className="bg-slate-50 py-1.5 px-2 font-bold text-xs text-slate-900 border-b border-slate-200 mb-1 rounded-t">
+                ข้อมูลร้านค้า
+              </div>
+              <div className="divide-y divide-slate-100 text-xs">
+                {/* Row 1: Store ID */}
+                <div className="py-2 px-1 flex items-center justify-between gap-2 bg-white">
+                  <span className="font-semibold text-slate-500 shrink-0 w-36 text-xs">
+                    รหัสร้านค้า
+                  </span>
+                  <span className="font-mono font-bold text-slate-900 text-right text-xs">
+                    {detailStore.store_id || "-"}
+                  </span>
+                </div>
+
+                {/* Row 2: Store Name */}
+                <div className="py-2 px-1 flex items-start justify-between gap-2 bg-white">
+                  <span className="font-semibold text-slate-500 shrink-0 w-36 text-xs">
+                    ชื่อร้านค้า
+                  </span>
+                  <span className="font-bold text-slate-900 text-right text-xs">
+                    {detailStore.store_name || "-"}
+                  </span>
+                </div>
+
+                {/* Row 3: Address */}
+                <div className="py-2 px-1 flex items-start justify-between gap-2 bg-white">
+                  <span className="font-semibold text-slate-500 shrink-0 w-36 text-xs">
+                    ที่อยู่ร้านค้า
+                  </span>
+                  <span className="font-medium text-slate-800 text-right text-xs leading-relaxed max-w-[240px]">
+                    {detailStore.store_address || "-"}
+                  </span>
+                </div>
+
+                {/* Row 4: Phone */}
+                <div className="py-2 px-1 flex items-center justify-between gap-2 bg-white">
+                  <span className="font-semibold text-slate-500 shrink-0 w-36 text-xs">
+                    เบอร์โทรศัพท์
+                  </span>
+                  <span className="font-mono font-bold text-slate-900 text-right text-xs">
+                    {detailStore.telephone_number || "-"}
+                  </span>
+                </div>
+
+                {/* Row 5: Fax */}
+                <div className="py-2 px-1 flex items-center justify-between gap-2 bg-white">
+                  <span className="font-semibold text-slate-500 shrink-0 w-36 text-xs">
+                    เบอร์โทรสาร (แฟกซ์)
+                  </span>
+                  <span className="font-mono font-bold text-slate-900 text-right text-xs">
+                    {detailStore.fax_number || "-"}
+                  </span>
+                </div>
+
+                {/* Row 6: Email */}
+                <div className="py-2 px-1 flex items-center justify-between gap-2 bg-white">
+                  <span className="font-semibold text-slate-500 shrink-0 w-36 text-xs">
+                    อีเมล
+                  </span>
+                  <span className="font-bold text-slate-900 text-right text-xs">
+                    {detailStore.email || "-"}
+                  </span>
+                </div>
+
+                {/* Row 7: Website */}
+                <div className="py-2 px-1 flex items-center justify-between gap-2 bg-white">
+                  <span className="font-semibold text-slate-500 shrink-0 w-36 text-xs">
+                    เว็บไซต์ / URL
+                  </span>
+                  <span className="font-bold text-slate-900 text-right text-xs">
+                    {detailStore.url ? (
+                      <a
+                        href={detailStore.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-blue-600 hover:underline break-all"
+                      >
+                        {detailStore.url}
+                      </a>
+                    ) : (
+                      "-"
+                    )}
+                  </span>
+                </div>
+
+                {/* Row 8: GPS */}
+                <div className="py-2 px-1 flex items-center justify-between gap-2 bg-white">
+                  <span className="font-semibold text-slate-500 shrink-0 w-36 text-xs">
+                    พิกัด GPS
+                  </span>
+                  <span className="font-mono font-bold text-slate-900 text-right text-xs">
+                    {detailStore.store_location ? (
+                      <a
+                        href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+                          detailStore.store_location
+                        )}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-blue-600 hover:underline"
+                      >
+                        {detailStore.store_location}
+                      </a>
+                    ) : (
+                      "-"
+                    )}
+                  </span>
+                </div>
+
+                {/* Row 9: Default Open/Close Time */}
+                <div className="py-2 px-1 flex items-center justify-between gap-2 bg-white">
+                  <span className="font-semibold text-slate-500 shrink-0 w-36 text-xs">
+                    เวลาเปิด-ปิด (ค่าเริ่มต้น)
+                  </span>
+                  <span className="font-mono font-bold text-slate-900 text-right text-xs">
+                    {detailStore.open_time || "08:00"} - {detailStore.close_time || "17:00"}
+                  </span>
+                </div>
+
+                {/* Row 10: Created At */}
+                <div className="py-2 px-1 flex items-center justify-between gap-2 bg-white">
+                  <span className="font-semibold text-slate-500 shrink-0 w-36 text-xs">
+                    วันที่สร้าง
+                  </span>
+                  <span className="font-mono font-bold text-slate-900 text-right text-xs">
+                    {(detailStore as any).created_at
+                      ? new Date((detailStore as any).created_at).toLocaleDateString("th-TH", {
+                          year: "numeric",
+                          month: "long",
+                          day: "numeric",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })
+                      : "-"}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Business Hours Table/List in Key-Value format without icons */}
+            <div className="bg-white overflow-hidden pt-3">
+              <div className="bg-slate-50 py-1.5 px-2 font-bold text-xs text-slate-900 border-b border-slate-200 mb-1 rounded-t">
+                วันทำการ (จันทร์ - อาทิตย์)
+              </div>
+              {loadingDetailHours ? (
+                <div className="text-center text-slate-400 text-xs py-4">กำลังโหลด...</div>
+              ) : detailHours.length === 0 ? (
+                <div className="text-center text-slate-400 font-medium text-xs py-3">ยังไม่มีข้อมูล</div>
+              ) : (
+                <div className="divide-y divide-slate-100 text-xs">
+                  {detailHours.map((bh) => {
+                    const isOpen = bh.is_open === 1 || bh.is_open === true;
+                    return (
+                      <div
+                        key={bh.day_of_week}
+                        className="py-2 px-1 flex items-center justify-between gap-2 bg-white"
+                      >
+                        <span className="font-semibold text-slate-500 shrink-0 w-36 text-xs">
+                          {DAY_LABELS[bh.day_of_week]}
+                        </span>
+                        <span className="text-right text-xs">
+                          {isOpen ? (
+                            <span className="font-mono font-bold text-slate-900">
+                              เปิด ({bh.open_time || "08:00"} - {bh.close_time || "17:00"})
+                            </span>
+                          ) : (
+                            <span className="font-medium text-slate-400">
+                              ปิดทำการ
+                            </span>
+                          )}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
         )}
       </AnimatedDrawer>
 
