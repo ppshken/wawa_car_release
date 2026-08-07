@@ -430,7 +430,7 @@ router.get('/car-release/:id', authenticateToken, async (req, res) => {
     const stores = await query(
       `SELECT ls.*, 
               pp.position_product_name,
-              s.store_name, s.store_address, s.telephone_number, s.customer_delivery_time, s.store_location,
+              s.store_name, s.store_name AS store_name_result, s.store_address, s.telephone_number, s.customer_delivery_time, s.store_location, s.store_location AS lat_long,
               ci.check_in_id, ci.image_check_in, ci.date_time_check_in, ci.signature, ci.location as check_in_location,
               co.check_out_id, co.payment_id, co.image_bill, co.date_time_check_out, co.cash, co.transfer, 
               co.transfer_according, co.off_site as check_out_off_site, co.paid, co.amount, co.visit_customer, 
@@ -487,11 +487,7 @@ router.get('/car-release/:id', authenticateToken, async (req, res) => {
           [st.list_id]
         );
         st.loads = loads || [];
-        for (const l of st.loads) {
-          if (l.loading_type_id) {
-            st[`loading_type_${l.loading_type_id}`] = l.quantity || l.qty || 0;
-          }
-        }
+
       } catch (eLoad) {
         st.loads = [];
       }

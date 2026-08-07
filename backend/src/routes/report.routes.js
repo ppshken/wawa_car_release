@@ -360,7 +360,7 @@ router.get('/reports/pending-transfer', authenticateToken, async (req, res) => {
       : `JOIN car_release cr ON ls.group_store_id = cr.group_store_id`;
 
     const list = await query(`
-      SELECT co.*, ls.store_name_result, ${selectReleaseId}
+      SELECT co.*, s.store_name AS store_name_result, ${selectReleaseId}
              cr.car_release_no, cr.created_at as release_date,
              c.license_plate, u.name as driver_name,
              s.store_name, s.telephone_number
@@ -388,7 +388,7 @@ router.get('/reports/off-site-checks', authenticateToken, async (req, res) => {
       : `JOIN car_release cr ON ls.group_store_id = cr.group_store_id`;
 
     const list = await query(`
-      SELECT co.*, ls.store_name_result, ls.lat_long as target_location,
+      SELECT co.*, s.store_name AS store_name_result, s.store_location as target_location,
              cr.car_release_no, u.name as driver_name,
              s.store_name, s.store_location
       FROM check_out co

@@ -1,17 +1,16 @@
-const express = require('express');
+const express = require("express");
 const router = express.Router();
-const { authenticateToken } = require('../middleware/auth');
-const { getApiKey } = require('../utils/apiKeyHelper');
+const { authenticateToken } = require("../middleware/auth");
+const { getApiKey } = require("../utils/apiKeyHelper");
 
 // =========================================================
 // OptimoRoute API Proxy
 // =========================================================
 
-
 // GET /api/optimoroute/active-dates (ดึงวันที่ทั้งหมดที่มีออเดอร์/เส้นทาง)
-router.get('/active-dates', authenticateToken, async (req, res) => {
+router.get("/active-dates", authenticateToken, async (req, res) => {
   try {
-    const { query } = require('../config/db');
+    const { query } = require("../config/db");
     const rows = await query(`
       SELECT DISTINCT d FROM (
         SELECT DATE_FORMAT(date, '%Y-%m-%d') AS d FROM group_store WHERE date IS NOT NULL AND date != ''
@@ -23,7 +22,7 @@ router.get('/active-dates', authenticateToken, async (req, res) => {
       WHERE d IS NOT NULL AND d != '0000-00-00'
       ORDER BY d ASC
     `);
-    const activeDates = rows.map(r => r.d).filter(Boolean);
+    const activeDates = rows.map((r) => r.d).filter(Boolean);
     return res.json({ success: true, activeDates });
   } catch (err) {
     console.error("Fetch active route dates error:", err);
@@ -33,9 +32,9 @@ router.get('/active-dates', authenticateToken, async (req, res) => {
 
 // GET /api/optimoroute/routes?date=YYYY-MM-DD
 // ดึงข้อมูลเส้นทางและจุดหยุดแวะโดยตรงจากฐานข้อมูลระบบ (group_store, list_store, store)
-router.get('/routes', authenticateToken, async (req, res) => {
+router.get("/routes", authenticateToken, async (req, res) => {
   try {
-    const { query } = require('../config/db');
+    const { query } = require("../config/db");
     const targetDate = req.query.date || new Date().toISOString().slice(0, 10);
 
     // 1. ดึงข้อมูลจากฐานข้อมูลของระบบ (group_store + list_store + store) ตามวันที่ระบุ
@@ -55,8 +54,8 @@ router.get('/routes', authenticateToken, async (req, res) => {
           ls.store_id,
           ls.row_order,
           ls.sum_quantity,
-          ls.lat_long,
-          ls.store_name_result,
+          s.store_location AS lat_long,
+          s.store_name AS store_name_result,
           ls.status,
           ls.created_at,
           ls.scheduled_time,
@@ -87,7 +86,7 @@ router.get('/routes', authenticateToken, async (req, res) => {
           (gs.date IS NULL AND (DATE_FORMAT(gs.created_at, '%Y-%m-%d') = ? OR DATE_FORMAT(ls.created_at, '%Y-%m-%d') = ?))
         )
         ORDER BY gs.group_store_id ASC, ls.row_order ASC`,
-        [targetDate, targetDate, targetDate, targetDate]
+        [targetDate, targetDate, targetDate, targetDate],
       );
     } catch (eJoin) {
       try {
@@ -104,10 +103,13 @@ router.get('/routes', authenticateToken, async (req, res) => {
             ls.store_id,
             ls.row_order,
             ls.sum_quantity,
-            ls.lat_long,
-            ls.store_name_result,
+            s.store_location AS lat_long,
+            s.store_name AS store_name_result,
             ls.status,
             ls.created_at,
+            ls.scheduled_time,
+            ls.start_service_time,
+            ls.end_service_time,
             ls.position_product_id,
             ls.position_production_order,
             ls.tax,
@@ -130,10 +132,10 @@ router.get('/routes', authenticateToken, async (req, res) => {
             (gs.date IS NULL AND (DATE_FORMAT(gs.created_at, '%Y-%m-%d') = ? OR DATE_FORMAT(ls.created_at, '%Y-%m-%d') = ?))
           )
           ORDER BY gs.group_store_id ASC, ls.row_order ASC`,
-          [targetDate, targetDate, targetDate, targetDate]
+          [targetDate, targetDate, targetDate, targetDate],
         );
       } catch (e2) {
-        console.warn('Query routes fallback error:', e2.message);
+        console.warn("Query routes fallback error:", e2.message);
       }
     }
 
@@ -142,14 +144,22 @@ router.get('/routes', authenticateToken, async (req, res) => {
       return res.json({
         success: true,
         date: targetDate,
-        source: 'database',
-        routes: []
+        source: "database",
+        routes: [],
       });
     }
 
     // 2. จัดกลุ่มข้อมูลตาม group_store
     const groupMap = new Map();
-    const colors = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4'];
+    const colors = [
+      "#3b82f6",
+      "#10b981",
+      "#f59e0b",
+      "#ef4444",
+      "#8b5cf6",
+      "#ec4899",
+      "#06b6d4",
+    ];
 
     const listIds = (rows || []).map((r) => r.list_id).filter(Boolean);
     let loadsMap = {};
@@ -159,19 +169,24 @@ router.get('/routes', authenticateToken, async (req, res) => {
           `SELECT lsl.list_id, lsl.loading_type_id, lsl.quantity, lt.type_name, lt.unit_name, lt.type_code
            FROM list_store_load lsl
            JOIN loading_type lt ON lsl.loading_type_id = lt.loading_type_id
-           WHERE lsl.list_id IN (${listIds.join(',')})`
+           WHERE lsl.list_id IN (${listIds.join(",")})`,
         );
         (loadRows || []).forEach((l) => {
           if (!loadsMap[l.list_id]) loadsMap[l.list_id] = [];
           loadsMap[l.list_id].push(l);
         });
       } catch (eLoads) {
-        console.warn('Fetch list_store_load for routes warning:', eLoads.message);
+        console.warn(
+          "Fetch list_store_load for routes warning:",
+          eLoads.message,
+        );
       }
     }
 
     // Fetch store business hours for target date
-    const storeIds = Array.from(new Set((rows || []).map((r) => r.store_id).filter(Boolean)));
+    const storeIds = Array.from(
+      new Set((rows || []).map((r) => r.store_id).filter(Boolean)),
+    );
     let closedStoreSet = new Set();
     let storeHoursMap = {};
 
@@ -179,43 +194,52 @@ router.get('/routes', authenticateToken, async (req, res) => {
       try {
         const daysMap = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
         const targetDay = daysMap[new Date(targetDate).getDay()];
-        const placeholders = storeIds.map(() => '?').join(',');
+        const placeholders = storeIds.map(() => "?").join(",");
 
         const bhRows = await query(
           `SELECT store_id, day_of_week, is_open, open_time, close_time 
            FROM store_business_hours 
            WHERE store_id IN (${placeholders}) AND day_of_week = ?`,
-          [...storeIds, targetDay]
+          [...storeIds, targetDay],
         );
 
         (bhRows || []).forEach((bh) => {
           storeHoursMap[bh.store_id] = bh;
-          if (bh.is_open === 0 || bh.is_open === '0' || bh.is_open === false) {
+          if (bh.is_open === 0 || bh.is_open === "0" || bh.is_open === false) {
             closedStoreSet.add(String(bh.store_id));
           }
         });
       } catch (eBH) {
-        console.warn('Fetch store_business_hours for routes warning:', eBH.message);
+        console.warn(
+          "Fetch store_business_hours for routes warning:",
+          eBH.message,
+        );
       }
     }
 
     rows.forEach((row) => {
       const gId = row.group_store_id;
       if (!groupMap.has(gId)) {
-        const isReleased = Boolean(row.group_status === 1 || row.group_status === '1');
+        const isReleased = Boolean(
+          row.group_status === 1 || row.group_status === "1",
+        );
         groupMap.set(gId, {
           routeId: `ROUTE-${gId}`,
           groupStoreId: gId,
-          groupStoreName: row.group_store_name || `Optimo Routes-${String(gId).padStart(3, '0')}`,
+          groupStoreName:
+            row.group_store_name ||
+            `Optimo Routes-${String(gId).padStart(3, "0")}`,
           driverName: row.group_store_name || `สายจัดส่ง ${gId}`,
-          vehiclePlate: row.vehicle_plate || row.car_id || '-',
-          car_id: row.car_id || '',
+          vehiclePlate: row.vehicle_plate || row.car_id || "-",
+          car_id: row.car_id || "",
           load1: row.load1 || 0,
-          vehicleCapacity: row.vehicle_capacity ? parseInt(row.vehicle_capacity, 10) : 0,
+          vehicleCapacity: row.vehicle_capacity
+            ? parseInt(row.vehicle_capacity, 10)
+            : 0,
           color: row.group_color || colors[groupMap.size % colors.length],
           status: isReleased ? 1 : 0,
           is_released: isReleased,
-          stops: []
+          stops: [],
         });
       }
 
@@ -224,8 +248,8 @@ router.get('/routes', authenticateToken, async (req, res) => {
         let lat = 0;
         let lng = 0;
         const locStr = row.lat_long || row.store_location;
-        if (locStr && typeof locStr === 'string' && locStr.includes(',')) {
-          const parts = locStr.split(',');
+        if (locStr && typeof locStr === "string" && locStr.includes(",")) {
+          const parts = locStr.split(",");
           lat = parseFloat(parts[0]) || 0;
           lng = parseFloat(parts[1]) || 0;
         }
@@ -238,21 +262,24 @@ router.get('/routes', authenticateToken, async (req, res) => {
           group_store_name: row.group_store_name,
           rowOrder: row.row_order || grp.stops.length + 1,
           row_order: row.row_order || grp.stops.length + 1,
-          orderNo: row.data_store_no || row.store_id || '-',
-          data_store_no: row.data_store_no || row.store_id || '-',
+          orderNo: row.data_store_no || row.store_id || "-",
+          data_store_no: row.data_store_no || row.store_id || "-",
           locationNo: row.store_id,
           store_id: row.store_id,
-          storeName: row.store_name_result || row.store_name || `ร้านค้า ${row.store_id}`,
-          address: row.store_address || '',
-          telephone_number: row.telephone_number || '',
+          storeName:
+            row.store_name_result ||
+            row.store_name ||
+            `ร้านค้า ${row.store_id}`,
+          address: row.store_address || "",
+          telephone_number: row.telephone_number || "",
           quantity: row.sum_quantity || 0,
           lat,
           lng,
           lat_long: locStr || (lat && lng ? `${lat},${lng}` : null),
-          scheduled_time: row.scheduled_time || '',
+          scheduled_time: row.scheduled_time || "",
           start_service_time: row.start_service_time || null,
           end_service_time: row.end_service_time || null,
-          priority: row.priority || 'medium',
+          priority: row.priority || "medium",
           tax: row.tax ? 1 : 0,
           note: row.note || null,
           pod_image: row.pod_image || null,
@@ -264,44 +291,44 @@ router.get('/routes', authenticateToken, async (req, res) => {
           is_closed_today: isClosedToday,
           store_open_time: bhInfo ? bhInfo.open_time : null,
           store_close_time: bhInfo ? bhInfo.close_time : null,
-          arrivalTime: '',
-          departureTime: '',
-          status: row.status || 'pending',
-          type: 'delivery'
+          arrivalTime: "",
+          departureTime: "",
+          status: row.status || "pending",
+          type: "delivery",
         });
       }
     });
 
-    const routes = Array.from(groupMap.values()).map(r => ({
+    const routes = Array.from(groupMap.values()).map((r) => ({
       ...r,
-      totalStops: r.stops.length
+      totalStops: r.stops.length,
     }));
 
     res.json({
       success: true,
       date: targetDate,
-      source: 'database',
+      source: "database",
       totalGroups: routes.length,
-      routes
+      routes,
     });
-
   } catch (err) {
-    console.error('OptimoRoute database fetch routes error:', err);
+    console.error("OptimoRoute database fetch routes error:", err);
     res.status(500).json({ success: false, message: err.message });
   }
 });
 
 // POST /api/optimoroute/preview
 // ดึงข้อมูลจาก OptimoRoute API เพื่อพรีวิวก่อนบันทึกลงฐานข้อมูล
-router.post('/preview', authenticateToken, async (req, res) => {
+router.post("/preview", authenticateToken, async (req, res) => {
   try {
-    const apiKey = await getApiKey('OPTIMOROUTE_API_KEY');
+    const apiKey = await getApiKey("OPTIMOROUTE_API_KEY");
     const targetDate = req.body.date || new Date().toISOString().slice(0, 10);
 
-    if (!apiKey || apiKey.trim() === '') {
+    if (!apiKey || apiKey.trim() === "") {
       return res.status(400).json({
         success: false,
-        message: 'ยังไม่ได้ตั้งค่า OPTIMOROUTE_API_KEY ในระบบ หรือตั้งค่าเป็นปิดใช้งาน (Disabled)'
+        message:
+          "ยังไม่ได้ตั้งค่า OPTIMOROUTE_API_KEY ในระบบ หรือตั้งค่าเป็นปิดใช้งาน (Disabled)",
       });
     }
 
@@ -314,7 +341,7 @@ router.post('/preview', authenticateToken, async (req, res) => {
       if (!response.ok || (data && data.success === false)) {
         return res.status(response.status || 400).json({
           success: false,
-          message: `ไม่สามารถดึงข้อมูลจาก OptimoRoute API ได้: ${data?.message || data?.error || response.statusText || 'เกิดข้อผิดพลาดในการเชื่อมต่อ'}`
+          message: `ไม่สามารถดึงข้อมูลจาก OptimoRoute API ได้: ${data?.message || data?.error || response.statusText || "เกิดข้อผิดพลาดในการเชื่อมต่อ"}`,
         });
       }
 
@@ -322,50 +349,102 @@ router.post('/preview', authenticateToken, async (req, res) => {
         routeData = data.routes;
       }
     } catch (e) {
-      console.error('Fetch OptimoRoute API error during preview:', e.message);
+      console.error("Fetch OptimoRoute API error during preview:", e.message);
       return res.status(500).json({
         success: false,
-        message: `เกิดข้อผิดพลาดในการเชื่อมต่อกับ OptimoRoute API: ${e.message}`
+        message: `เกิดข้อผิดพลาดในการเชื่อมต่อกับ OptimoRoute API: ${e.message}`,
       });
     }
 
     if (!routeData || routeData.length === 0) {
       return res.status(404).json({
         success: false,
-        message: `ไม่พบเส้นทางจัดส่งใน OptimoRoute API สำหรับวันที่ ${targetDate}`
+        message: `ไม่พบเส้นทางจัดส่งใน OptimoRoute API สำหรับวันที่ ${targetDate}`,
       });
     }
 
     const RANDOM_PALETTE = [
-      '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6',
-      '#ec4899', '#06b6d4', '#84cc16', '#f97316', '#14b8a6',
-      '#6366f1', '#a855f7', '#059669', '#d97706', '#0284c7'
+      "#3b82f6",
+      "#10b981",
+      "#f59e0b",
+      "#ef4444",
+      "#8b5cf6",
+      "#ec4899",
+      "#06b6d4",
+      "#84cc16",
+      "#f97316",
+      "#14b8a6",
+      "#6366f1",
+      "#a855f7",
+      "#059669",
+      "#d97706",
+      "#0284c7",
     ];
 
     let totalStopsCount = 0;
     const previewRoutes = routeData.map((r, rIdx) => {
-      const routeNoStr = String(rIdx + 1).padStart(3, '0');
-      const groupName = r.groupStoreName || r.group_store_name || `Optimo Routes-${routeNoStr}`;
-      const randomColor = RANDOM_PALETTE[Math.floor(Math.random() * RANDOM_PALETTE.length)];
+      const routeNoStr = String(rIdx + 1).padStart(3, "0");
+      const groupName =
+        r.groupStoreName || r.group_store_name || `Optimo Routes-${routeNoStr}`;
+      const randomColor =
+        RANDOM_PALETTE[Math.floor(Math.random() * RANDOM_PALETTE.length)];
       const color = r.groupColor || r.group_color || r.color || randomColor;
       const rawStops = r.stops || r.manifest || [];
 
       const stops = rawStops.map((stop, sIdx) => {
-        let lat = stop.lat || stop.latitude || stop.coordinates?.lat || stop.coordinates?.latitude || stop.location?.lat || stop.location?.latitude || stop.location_latitude || 0;
-        let lng = stop.lng || stop.longitude || stop.lon || stop.coordinates?.lng || stop.coordinates?.longitude || stop.location?.lng || stop.location?.longitude || stop.location_longitude || 0;
+        let lat =
+          stop.lat ||
+          stop.latitude ||
+          stop.coordinates?.lat ||
+          stop.coordinates?.latitude ||
+          stop.location?.lat ||
+          stop.location?.latitude ||
+          stop.location_latitude ||
+          0;
+        let lng =
+          stop.lng ||
+          stop.longitude ||
+          stop.lon ||
+          stop.coordinates?.lng ||
+          stop.coordinates?.longitude ||
+          stop.location?.lng ||
+          stop.location?.longitude ||
+          stop.location_longitude ||
+          0;
 
         let storeLocation = null;
         if (lat && lng) {
           storeLocation = `${lat},${lng}`;
-        } else if (stop.lat_long || stop.store_location || (typeof stop.location === 'string' && stop.location.includes(','))) {
-          const locStr = String(stop.lat_long || stop.store_location || stop.location);
-          if (locStr.includes(',')) storeLocation = locStr.replace(/\s+/g, '');
+        } else if (
+          stop.lat_long ||
+          stop.store_location ||
+          (typeof stop.location === "string" && stop.location.includes(","))
+        ) {
+          const locStr = String(
+            stop.lat_long || stop.store_location || stop.location,
+          );
+          if (locStr.includes(",")) storeLocation = locStr.replace(/\s+/g, "");
         }
 
-        const targetStoreId = stop.locationNo || stop.orderNo || stop.stopId || `OR-${String(sIdx + 1).padStart(5, '0')}`;
-        const orderNo = stop.orderNo || stop.order_no || stop.orderNumber || stop.data_store_no || stop.locationNo || `ORD-${String(sIdx + 1).padStart(5, '0')}`;
-        const storeName = stop.storeName || stop.name || stop.locationName || `ร้านค้า ${targetStoreId}`;
-        const quantity = stop.quantity || stop.sum_quantity || stop.numOrders || 0;
+        const targetStoreId =
+          stop.locationNo ||
+          stop.orderNo ||
+          stop.stopId ||
+          `OR-${String(sIdx + 1).padStart(5, "0")}`;
+        const orderNo =
+          stop.orderNo ||
+          stop.order_no ||
+          stop.orderNumber ||
+          stop.data_store_no ||
+          stop.locationNo ||
+          `ORD-${String(sIdx + 1).padStart(5, "0")}`;
+        const storeName =
+          stop.storeName ||
+          stop.name ||
+          stop.locationName ||
+          `ร้านค้า ${targetStoreId}`;
+        const quantity =
+          stop.quantity || stop.sum_quantity || stop.numOrders || 0;
 
         return {
           rowOrder: sIdx + 1,
@@ -373,17 +452,17 @@ router.post('/preview', authenticateToken, async (req, res) => {
           orderNo,
           data_store_no: orderNo,
           storeName,
-          address: stop.address || stop.location || '',
+          address: stop.address || stop.location || "",
           quantity,
           lat,
           lng,
-          lat_long: storeLocation
+          lat_long: storeLocation,
         };
       });
 
       totalStopsCount += stops.length;
 
-      const vehicleVal = r.vehicleRegistration || '-';
+      const vehicleVal = r.vehicleRegistration || "-";
       return {
         groupStoreName: groupName,
         groupColor: color,
@@ -392,41 +471,41 @@ router.post('/preview', authenticateToken, async (req, res) => {
         vehicleLabel: vehicleVal,
         load1: r.load1 || r.load_1 || r.capacity || r.load || 0,
         totalStops: stops.length,
-        stops
+        stops,
       };
     });
 
     res.json({
       success: true,
       date: targetDate,
-      source: 'api',
+      source: "api",
       totalGroups: previewRoutes.length,
       totalStops: totalStopsCount,
-      routes: previewRoutes
+      routes: previewRoutes,
     });
-
   } catch (err) {
-    console.error('Preview error:', err);
+    console.error("Preview error:", err);
     res.status(500).json({ success: false, message: err.message });
   }
 });
 
 // POST /api/optimoroute/import
 // นำเข้าข้อมูลเส้นทางและจุดหยุดส่งสินค้าจาก OptimoRoute API ลงในฐานข้อมูล
-router.post('/import', authenticateToken, async (req, res) => {
+router.post("/import", authenticateToken, async (req, res) => {
   try {
-    const { query } = require('../config/db');
-    const apiKey = await getApiKey('OPTIMOROUTE_API_KEY');
+    const { query } = require("../config/db");
+    const apiKey = await getApiKey("OPTIMOROUTE_API_KEY");
     const targetDate = req.body.date || new Date().toISOString().slice(0, 10);
 
     let routeData = req.body.routes || [];
 
     // 1. ดึงข้อมูลจาก OptimoRoute API หากไม่มีการส่ง routes จาก preview
     if (!routeData || routeData.length === 0) {
-      if (!apiKey || apiKey.trim() === '') {
+      if (!apiKey || apiKey.trim() === "") {
         return res.status(400).json({
           success: false,
-          message: 'ยังไม่ได้ตั้งค่า OPTIMOROUTE_API_KEY ในระบบ หรือตั้งค่าเป็นปิดใช้งาน (Disabled)'
+          message:
+            "ยังไม่ได้ตั้งค่า OPTIMOROUTE_API_KEY ในระบบ หรือตั้งค่าเป็นปิดใช้งาน (Disabled)",
         });
       }
 
@@ -439,28 +518,36 @@ router.post('/import', authenticateToken, async (req, res) => {
         } else {
           return res.status(response.status || 400).json({
             success: false,
-            message: `ไม่สามารถดึงข้อมูลจาก OptimoRoute API ได้: ${data?.message || data?.error || response.statusText}`
+            message: `ไม่สามารถดึงข้อมูลจาก OptimoRoute API ได้: ${data?.message || data?.error || response.statusText}`,
           });
         }
       } catch (e) {
-        console.error('Fetch OptimoRoute API error during import:', e.message);
+        console.error("Fetch OptimoRoute API error during import:", e.message);
         return res.status(500).json({
           success: false,
-          message: `เกิดข้อผิดพลาดในการเชื่อมต่อกับ OptimoRoute API: ${e.message}`
+          message: `เกิดข้อผิดพลาดในการเชื่อมต่อกับ OptimoRoute API: ${e.message}`,
         });
       }
 
       if (!routeData || routeData.length === 0) {
         return res.status(404).json({
           success: false,
-          message: `ไม่พบข้อมูลเส้นทาง OptimoRoute ที่จะนำเข้าในวันที่ ${targetDate}`
+          message: `ไม่พบข้อมูลเส้นทาง OptimoRoute ที่จะนำเข้าในวันที่ ${targetDate}`,
         });
       }
     }
 
     const RANDOM_PALETTE = [
-      '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6',
-      '#ec4899', '#06b6d4', '#84cc16', '#f97316', '#14b8a6'
+      "#3b82f6",
+      "#10b981",
+      "#f59e0b",
+      "#ef4444",
+      "#8b5cf6",
+      "#ec4899",
+      "#06b6d4",
+      "#84cc16",
+      "#f97316",
+      "#14b8a6",
     ];
 
     let importedGroups = 0;
@@ -472,15 +559,28 @@ router.post('/import', authenticateToken, async (req, res) => {
 
       // 1. ตรวจสอบ/สร้าง group_store (รูปแบบชื่อ Optimo Routes-001, Optimo Routes-002)
       let groupStoreId;
-      const routeNoStr = String(rIdx + 1).padStart(3, '0');
-      const groupName = r.groupStoreName || r.group_store_name || `Optimo Routes-${routeNoStr}`;
-      const groupColor = r.groupColor || r.group_color || r.color || RANDOM_PALETTE[rIdx % RANDOM_PALETTE.length];
-      const vehicleVal = r.vehicleLabel || r.vehiclePlate || r.car_id || r.car || r.vehicle || r.driverName || r.driver || '';
+      const routeNoStr = String(rIdx + 1).padStart(3, "0");
+      const groupName =
+        r.groupStoreName || r.group_store_name || `Optimo Routes-${routeNoStr}`;
+      const groupColor =
+        r.groupColor ||
+        r.group_color ||
+        r.color ||
+        RANDOM_PALETTE[rIdx % RANDOM_PALETTE.length];
+      const vehicleVal =
+        r.vehicleLabel ||
+        r.vehiclePlate ||
+        r.car_id ||
+        r.car ||
+        r.vehicle ||
+        r.driverName ||
+        r.driver ||
+        "";
       const load1 = r.load1 || 0;
 
       const existingGroup = await query(
         `SELECT group_store_id FROM group_store WHERE group_store_name = ? AND (date = ? OR date IS NULL)`,
-        [groupName, targetDate]
+        [groupName, targetDate],
       );
 
       if (existingGroup.length > 0) {
@@ -488,28 +588,28 @@ router.post('/import', authenticateToken, async (req, res) => {
         try {
           await query(
             `UPDATE group_store SET group_color = ?, car_id = ?, date = ?, load1 = ? WHERE group_store_id = ?`,
-            [groupColor, vehicleVal, targetDate, load1, groupStoreId]
+            [groupColor, vehicleVal, targetDate, load1, groupStoreId],
           );
         } catch (eUp) {
-          console.warn('Update group_store import warning:', eUp.message);
+          console.warn("Update group_store import warning:", eUp.message);
         }
       } else {
         let newGroup;
         try {
           newGroup = await query(
             `INSERT INTO group_store (group_store_name, group_color, car_id, date, load1) VALUES (?, ?, ?, ?, ?)`,
-            [groupName, groupColor, vehicleVal, targetDate, load1]
+            [groupName, groupColor, vehicleVal, targetDate, load1],
           );
         } catch (eInsert) {
           try {
             newGroup = await query(
               `INSERT INTO group_store (group_store_name, group_color, car_id, load1) VALUES (?, ?, ?, ?)`,
-              [groupName, groupColor, vehicleVal, load1]
+              [groupName, groupColor, vehicleVal, load1],
             );
           } catch (eInsert2) {
             newGroup = await query(
               `INSERT INTO group_store (group_store_name, group_color, load1) VALUES (?, ?, ?)`,
-              [groupName, groupColor, load1]
+              [groupName, groupColor, load1],
             );
           }
         }
@@ -523,29 +623,67 @@ router.post('/import', authenticateToken, async (req, res) => {
         const stop = stops[sIdx];
 
         // สกัดพิกัด (lat, long) รองรับทุกรูปแบบของ OptimoRoute API / JSON Payload
-        let lat = stop.lat || stop.latitude || stop.coordinates?.lat || stop.coordinates?.latitude || stop.location?.lat || stop.location?.latitude || stop.location_latitude || 0;
-        let lng = stop.lng || stop.longitude || stop.lon || stop.coordinates?.lng || stop.coordinates?.longitude || stop.location?.lng || stop.location?.longitude || stop.location_longitude || 0;
+        let lat =
+          stop.lat ||
+          stop.latitude ||
+          stop.coordinates?.lat ||
+          stop.coordinates?.latitude ||
+          stop.location?.lat ||
+          stop.location?.latitude ||
+          stop.location_latitude ||
+          0;
+        let lng =
+          stop.lng ||
+          stop.longitude ||
+          stop.lon ||
+          stop.coordinates?.lng ||
+          stop.coordinates?.longitude ||
+          stop.location?.lng ||
+          stop.location?.longitude ||
+          stop.location_longitude ||
+          0;
 
         let storeLocation = null;
         if (lat && lng) {
           storeLocation = `${lat},${lng}`;
-        } else if (stop.lat_long || stop.store_location || (typeof stop.location === 'string' && stop.location.includes(','))) {
-          const locStr = String(stop.lat_long || stop.store_location || stop.location);
-          if (locStr.includes(',')) {
-            storeLocation = locStr.replace(/\s+/g, '');
+        } else if (
+          stop.lat_long ||
+          stop.store_location ||
+          (typeof stop.location === "string" && stop.location.includes(","))
+        ) {
+          const locStr = String(
+            stop.lat_long || stop.store_location || stop.location,
+          );
+          if (locStr.includes(",")) {
+            storeLocation = locStr.replace(/\s+/g, "");
           }
         }
 
-        const targetStoreId = stop.locationNo || stop.orderNo || stop.stopId || `OR-${String(sIdx + 1).padStart(5, '0')}`;
-        const orderNo = stop.orderNo || stop.order_no || stop.orderNumber || stop.data_store_no || stop.locationNo || `ORD-${String(sIdx + 1).padStart(5, '0')}`;
-        const storeName = stop.storeName || stop.name || stop.locationName || `ร้านค้า ${targetStoreId}`;
-        const quantity = stop.quantity || stop.sum_quantity || stop.numOrders || 0;
+        const targetStoreId =
+          stop.locationNo ||
+          stop.orderNo ||
+          stop.stopId ||
+          `OR-${String(sIdx + 1).padStart(5, "0")}`;
+        const orderNo =
+          stop.orderNo ||
+          stop.order_no ||
+          stop.orderNumber ||
+          stop.data_store_no ||
+          stop.locationNo ||
+          `ORD-${String(sIdx + 1).padStart(5, "0")}`;
+        const storeName =
+          stop.storeName ||
+          stop.name ||
+          stop.locationName ||
+          `ร้านค้า ${targetStoreId}`;
+        const quantity =
+          stop.quantity || stop.sum_quantity || stop.numOrders || 0;
 
         // หาหรือสร้าง store ในตาราง store
         let storeId = targetStoreId;
         let existingStore = await query(
           `SELECT store_id, store_location FROM store WHERE store_id = ? OR store_name = ? LIMIT 1`,
-          [targetStoreId, storeName]
+          [targetStoreId, storeName],
         );
 
         if (existingStore.length > 0) {
@@ -557,11 +695,11 @@ router.post('/import', authenticateToken, async (req, res) => {
           try {
             await query(
               `INSERT INTO store (store_id, store_name, store_address, store_location) VALUES (?, ?, ?, ?)`,
-              [targetStoreId, storeName, stop.address || '', storeLocation]
+              [targetStoreId, storeName, stop.address || "", storeLocation],
             );
             importedStores++;
           } catch (e) {
-            console.warn('Store insert notice:', e.message);
+            console.warn("Store insert notice:", e.message);
           }
         }
 
@@ -569,55 +707,60 @@ router.post('/import', authenticateToken, async (req, res) => {
         const rowOrder = sIdx + 1;
         const existingList = await query(
           `SELECT list_id FROM list_store WHERE group_store_id = ? AND row_order = ? AND DATE(created_at) = ?`,
-          [groupStoreId, rowOrder, targetDate]
+          [groupStoreId, rowOrder, targetDate],
         );
 
         if (existingList.length === 0) {
           try {
             await query(
-              `INSERT INTO list_store (store_id, group_store_id, row_order, sum_quantity, lat_long, store_name_result, data_store_no, created_by, created_at, status)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+              `INSERT INTO list_store (store_id, group_store_id, row_order, sum_quantity, data_store_no, created_by, created_at, status)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
               [
                 storeId,
                 groupStoreId,
                 rowOrder,
                 quantity,
-                storeLocation,
-                storeName,
                 orderNo,
                 req.user ? req.user.user_id : 1,
                 `${targetDate} 00:00:00`,
-                'in_progress'
-              ]
+                "in_progress",
+              ],
             );
           } catch (eIns) {
             await query(
-              `INSERT INTO list_store (store_id, group_store_id, row_order, sum_quantity, lat_long, store_name_result, data_store_no, created_by, created_at, status)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+              `INSERT INTO list_store (store_id, group_store_id, row_order, sum_quantity, created_by, created_at, status)
+               VALUES (?, ?, ?, ?, ?, ?, ?)`,
               [
                 storeId,
                 groupStoreId,
                 rowOrder,
                 quantity,
-                storeLocation,
-                storeName,
                 req.user ? req.user.user_id : 1,
                 `${targetDate} 00:00:00`,
-                'in_progress'
-              ]
+                "in_progress",
+              ],
             );
           }
           importedListStores++;
         } else {
           try {
             await query(
-              `UPDATE list_store SET store_id = ?, sum_quantity = ?, lat_long = ?, store_name_result = ?, data_store_no = ? WHERE list_id = ?`,
-              [storeId, quantity, storeLocation, storeName, orderNo, existingList[0].list_id]
+              `UPDATE list_store SET store_id = ?, sum_quantity = ?, data_store_no = ? WHERE list_id = ?`,
+              [
+                storeId,
+                quantity,
+                orderNo,
+                existingList[0].list_id,
+              ],
             );
           } catch (eUpd) {
             await query(
-              `UPDATE list_store SET store_id = ?, sum_quantity = ?, lat_long = ?, store_name_result = ? WHERE list_id = ?`,
-              [storeId, quantity, storeLocation, storeName, existingList[0].list_id]
+              `UPDATE list_store SET store_id = ?, sum_quantity = ? WHERE list_id = ?`,
+              [
+                storeId,
+                quantity,
+                existingList[0].list_id,
+              ],
             );
           }
         }
@@ -630,21 +773,20 @@ router.post('/import', authenticateToken, async (req, res) => {
       stats: {
         importedGroups,
         importedStores,
-        importedListStores
-      }
+        importedListStores,
+      },
     });
-
   } catch (err) {
-    console.error('Import error:', err);
+    console.error("Import error:", err);
     res.status(500).json({ success: false, message: err.message });
   }
 });
 
 // POST /api/optimoroute/stops
 // เพิ่มจุดจัดส่งสินค้าใหม่ (list_store)
-router.post('/stops', authenticateToken, async (req, res) => {
+router.post("/stops", authenticateToken, async (req, res) => {
   try {
-    const { query } = require('../config/db');
+    const { query } = require("../config/db");
     const {
       group_store_id,
       store_id,
@@ -661,11 +803,23 @@ router.post('/stops', authenticateToken, async (req, res) => {
       status,
       date,
       tax,
-      note
+      note,
     } = req.body;
 
-    if (!group_store_id || !store_id || !data_store_no || !date || !sum_quantity || !lat_long || !scheduled_time || !priority || !status) {
-      return res.status(400).json({ success: false, message: 'กรุณากรอกข้อมูลให้ครบถ้วน!' });
+    if (
+      !group_store_id ||
+      !store_id ||
+      !data_store_no ||
+      !date ||
+      !sum_quantity ||
+      !lat_long ||
+      !scheduled_time ||
+      !priority ||
+      !status
+    ) {
+      return res
+        .status(400)
+        .json({ success: false, message: "กรุณากรอกข้อมูลให้ครบถ้วน!" });
     }
 
     // หากไม่มี store_id ให้สร้างอัตโนมัติ
@@ -675,76 +829,135 @@ router.post('/stops', authenticateToken, async (req, res) => {
     const quantityNum = sum_quantity ? parseInt(sum_quantity, 10) : 0;
     const rowOrderNum = row_order ? parseInt(row_order, 10) : 1;
     const targetOrderNo = data_store_no || orderNo || order_no || null;
-    const targetStatus = status || 'unassigned';
+    const targetStatus = status || "unassigned";
     const targetScheduledTime = scheduled_time || scheduledTime || null;
-    const targetPriority = priority || 'medium';
-    const targetPosProdId = req.body.position_product_id ? parseInt(req.body.position_product_id, 10) : null;
-    const targetPosProdOrder = req.body.position_production_order !== undefined && req.body.position_production_order !== '' && req.body.position_production_order !== null ? parseInt(req.body.position_production_order, 10) : null;
+    const targetPriority = priority || "medium";
+    const targetPosProdId = req.body.position_product_id
+      ? parseInt(req.body.position_product_id, 10)
+      : null;
+    const targetPosProdOrder =
+      req.body.position_production_order !== undefined &&
+      req.body.position_production_order !== "" &&
+      req.body.position_production_order !== null
+        ? parseInt(req.body.position_production_order, 10)
+        : null;
     const targetTax = tax || null;
     const targetNote = note || null;
 
-    const createdByVal = req.user ? (req.user.user_id || req.user.id || req.user.name || req.user.username || 1) : 1;
+    const createdByVal = req.user
+      ? req.user.user_id ||
+        req.user.id ||
+        req.user.name ||
+        req.user.username ||
+        1
+      : 1;
 
     // บันทึกลง list_store
     let insertRes;
     try {
       insertRes = await query(
-        `INSERT INTO list_store (store_id, group_store_id, row_order, sum_quantity, lat_long, store_name_result, data_store_no, scheduled_time, priority, status, position_product_id, position_production_order, created_by, created_at, tax, note)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [target_store_id, group_store_id, rowOrderNum, quantityNum, lat_long || null, storeNameResult, targetOrderNo, targetScheduledTime, targetPriority, targetStatus, targetPosProdId, targetPosProdOrder, createdByVal, `${targetDate} 00:00:00`, targetTax, targetNote]
+        `INSERT INTO list_store (store_id, group_store_id, row_order, sum_quantity, data_store_no, scheduled_time, priority, status, position_product_id, position_production_order, created_by, created_at, tax, note)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          target_store_id,
+          group_store_id,
+          rowOrderNum,
+          quantityNum,
+          targetOrderNo,
+          targetScheduledTime,
+          targetPriority,
+          targetStatus,
+          targetPosProdId,
+          targetPosProdOrder,
+          createdByVal,
+          `${targetDate} 00:00:00`,
+          targetTax,
+          targetNote,
+        ],
       );
     } catch (eIns) {
       try {
         insertRes = await query(
-          `INSERT INTO list_store (store_id, group_store_id, row_order, sum_quantity, lat_long, store_name_result, data_store_no, created_by, created_at, tax, note)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-          [target_store_id, group_store_id, rowOrderNum, quantityNum, lat_long || null, storeNameResult, targetOrderNo, createdByVal, `${targetDate} 00:00:00`, targetTax, targetNote]
+          `INSERT INTO list_store (store_id, group_store_id, row_order, sum_quantity, data_store_no, created_by, created_at, tax, note)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            target_store_id,
+            group_store_id,
+            rowOrderNum,
+            quantityNum,
+            targetOrderNo,
+            createdByVal,
+            `${targetDate} 00:00:00`,
+            targetTax,
+            targetNote,
+          ],
         );
       } catch (e2) {
         insertRes = await query(
-          `INSERT INTO list_store (store_id, group_store_id, row_order, sum_quantity, lat_long, store_name_result, created_by, created_at, tax, note)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-          [target_store_id, group_store_id, rowOrderNum, quantityNum, lat_long || null, storeNameResult, createdByVal, `${targetDate} 00:00:00`, targetTax, targetNote]
+          `INSERT INTO list_store (store_id, group_store_id, row_order, sum_quantity, created_by, created_at, tax, note)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            target_store_id,
+            group_store_id,
+            rowOrderNum,
+            quantityNum,
+            createdByVal,
+            `${targetDate} 00:00:00`,
+            targetTax,
+            targetNote,
+          ],
         );
       }
     }
 
     const { loads } = req.body;
-    if (insertRes && insertRes.insertId && Array.isArray(loads) && loads.length > 0) {
+    if (
+      insertRes &&
+      insertRes.insertId &&
+      Array.isArray(loads) &&
+      loads.length > 0
+    ) {
       try {
         for (const l of loads) {
           if (l.loading_type_id && parseInt(l.quantity, 10) > 0) {
             await query(
               `INSERT INTO list_store_load (list_id, loading_type_id, quantity) VALUES (?, ?, ?)`,
-              [insertRes.insertId, parseInt(l.loading_type_id, 10), parseInt(l.quantity, 10)]
+              [
+                insertRes.insertId,
+                parseInt(l.loading_type_id, 10),
+                parseInt(l.quantity, 10),
+              ],
             );
           }
         }
       } catch (eLoadIns) {
-        console.warn('Insert list_store_load error in POST /stops:', eLoadIns.message);
+        console.warn(
+          "Insert list_store_load error in POST /stops:",
+          eLoadIns.message,
+        );
       }
     }
 
     res.json({
       success: true,
-      message: 'เพิ่มรายการจุดจัดส่งเรียบร้อยแล้ว',
+      message: "เพิ่มรายการจุดจัดส่งเรียบร้อยแล้ว",
       list_id: insertRes.insertId,
       store_id: target_store_id,
       data_store_no: targetOrderNo,
       group_store_id,
-      row_order: rowOrderNum
+      row_order: rowOrderNum,
     });
   } catch (err) {
-    console.error('POST /stops error:', err);
+    console.error("POST /stops error:", err);
     res.status(500).json({ success: false, message: err.message });
   }
 });
 
 // PUT /api/optimoroute/stops/:listId
 // แก้ไขข้อมูลจุดจัดส่ง (list_store)
-router.put('/stops/:listId', authenticateToken, async (req, res) => {
+router.put("/stops/:listId", authenticateToken, async (req, res) => {
   try {
-    const { query } = require('../config/db');
+    const { query } = require("../config/db");
     const { listId } = req.params;
     const {
       group_store_id,
@@ -768,13 +981,39 @@ router.put('/stops/:listId', authenticateToken, async (req, res) => {
     } = req.body;
 
     const rowOrderNum = row_order ? parseInt(row_order, 10) : 1;
-    const quantityNum = sum_quantity !== undefined ? parseInt(sum_quantity, 10) : 1;
+    const quantityNum =
+      sum_quantity !== undefined ? parseInt(sum_quantity, 10) : 1;
     const targetOrderNo = data_store_no || orderNo || null;
-    const targetScheduledTime = scheduled_time !== undefined ? scheduled_time : (scheduledTime !== undefined ? scheduledTime : null);
-    const targetPosProdId = position_product_id !== undefined ? (position_product_id ? parseInt(position_product_id, 10) : null) : null;
-    const targetPosProdOrder = position_production_order !== undefined && position_production_order !== '' && position_production_order !== null ? parseInt(position_production_order, 10) : null;
-    const targetTax = tax !== undefined ? (tax === 1 || tax === '1' || tax === true || tax === 'true' ? 1 : 0) : null;
-    const targetNote = note !== undefined && note !== null ? (String(note).trim() ? String(note).trim() : null) : null;
+    const targetScheduledTime =
+      scheduled_time !== undefined
+        ? scheduled_time
+        : scheduledTime !== undefined
+          ? scheduledTime
+          : null;
+    const targetPosProdId =
+      position_product_id !== undefined
+        ? position_product_id
+          ? parseInt(position_product_id, 10)
+          : null
+        : null;
+    const targetPosProdOrder =
+      position_production_order !== undefined &&
+      position_production_order !== "" &&
+      position_production_order !== null
+        ? parseInt(position_production_order, 10)
+        : null;
+    const targetTax =
+      tax !== undefined
+        ? tax === 1 || tax === "1" || tax === true || tax === "true"
+          ? 1
+          : 0
+        : null;
+    const targetNote =
+      note !== undefined && note !== null
+        ? String(note).trim()
+          ? String(note).trim()
+          : null
+        : null;
     const targetCreatedAt = date ? `${date} 00:00:00` : null;
 
     // ถ้ามี store_id & store_name ให้อัปเดตตาราง store ด้วย
@@ -784,14 +1023,19 @@ router.put('/stops/:listId', authenticateToken, async (req, res) => {
           `INSERT INTO store (store_id, store_name, store_address, store_location)
            VALUES (?, ?, ?, ?)
            ON DUPLICATE KEY UPDATE store_name = VALUES(store_name), store_address = VALUES(store_address), store_location = VALUES(store_location)`,
-          [store_id, store_name, address || null, lat_long || null]
+          [store_id, store_name, address || null, lat_long || null],
         );
       } catch (eStore) {
-        console.warn('Update store warning:', eStore.message);
+        console.warn("Update store warning:", eStore.message);
       }
     }
 
-    const targetGroupId = (group_store_id !== undefined && group_store_id !== '' && group_store_id !== null) ? group_store_id : null;
+    const targetGroupId =
+      group_store_id !== undefined &&
+      group_store_id !== "" &&
+      group_store_id !== null
+        ? group_store_id
+        : null;
 
     // อัปเดตข้อมูลใน list_store
     try {
@@ -801,8 +1045,6 @@ router.put('/stops/:listId', authenticateToken, async (req, res) => {
              store_id = COALESCE(?, store_id),
              row_order = ?,
              sum_quantity = ?,
-             lat_long = ?,
-             store_name_result = ?,
              data_store_no = ?,
              scheduled_time = COALESCE(?, scheduled_time),
              status = COALESCE(?, status),
@@ -813,7 +1055,22 @@ router.put('/stops/:listId', authenticateToken, async (req, res) => {
              note = ?,
              created_at = COALESCE(?, created_at)
          WHERE list_id = ?`,
-        [targetGroupId, store_id || null, rowOrderNum, quantityNum, lat_long || null, store_name || null, targetOrderNo, targetScheduledTime, status || null, targetPosProdId, targetPosProdOrder, priority || null, targetTax, targetNote, targetCreatedAt, listId]
+        [
+          targetGroupId,
+          store_id || null,
+          rowOrderNum,
+          quantityNum,
+          targetOrderNo,
+          targetScheduledTime,
+          status || null,
+          targetPosProdId,
+          targetPosProdOrder,
+          priority || null,
+          targetTax,
+          targetNote,
+          targetCreatedAt,
+          listId,
+        ],
       );
     } catch (eUp) {
       await query(
@@ -822,11 +1079,16 @@ router.put('/stops/:listId', authenticateToken, async (req, res) => {
              store_id = COALESCE(?, store_id),
              row_order = ?,
              sum_quantity = ?,
-             lat_long = ?,
-             store_name_result = ?,
              status = COALESCE(?, status)
          WHERE list_id = ?`,
-        [targetGroupId, store_id || null, rowOrderNum, quantityNum, lat_long || null, store_name || null, status || null, listId]
+        [
+          targetGroupId,
+          store_id || null,
+          rowOrderNum,
+          quantityNum,
+          status || null,
+          listId,
+        ],
       );
     }
 
@@ -838,65 +1100,71 @@ router.put('/stops/:listId', authenticateToken, async (req, res) => {
           if (l.loading_type_id && parseInt(l.quantity, 10) > 0) {
             await query(
               `INSERT INTO list_store_load (list_id, loading_type_id, quantity) VALUES (?, ?, ?)`,
-              [listId, parseInt(l.loading_type_id, 10), parseInt(l.quantity, 10)]
+              [
+                listId,
+                parseInt(l.loading_type_id, 10),
+                parseInt(l.quantity, 10),
+              ],
             );
           }
         }
       } catch (eLoadUp) {
-        console.warn('Update list_store_load error:', eLoadUp.message);
+        console.warn("Update list_store_load error:", eLoadUp.message);
       }
     }
 
     res.json({
       success: true,
-      message: 'อัปเดตข้อมูลจุดจัดส่งเรียบร้อยแล้ว'
+      message: "อัปเดตข้อมูลจุดจัดส่งเรียบร้อยแล้ว",
     });
   } catch (err) {
-    console.error('PUT /stops/:listId error:', err);
+    console.error("PUT /stops/:listId error:", err);
     res.status(500).json({ success: false, message: err.message });
   }
 });
 
 // DELETE /api/optimoroute/stops/:listId
 // ลบข้อมูลจุดจัดส่ง (list_store)
-router.delete('/stops/:listId', authenticateToken, async (req, res) => {
+router.delete("/stops/:listId", authenticateToken, async (req, res) => {
   try {
-    const { query } = require('../config/db');
+    const { query } = require("../config/db");
     const { listId } = req.params;
 
     await query(`DELETE FROM list_store WHERE list_id = ?`, [listId]);
 
     res.json({
       success: true,
-      message: 'ลบรายการจุดจัดส่งเรียบร้อยแล้ว'
+      message: "ลบรายการจุดจัดส่งเรียบร้อยแล้ว",
     });
   } catch (err) {
-    console.error('DELETE /stops/:listId error:', err);
+    console.error("DELETE /stops/:listId error:", err);
     res.status(500).json({ success: false, message: err.message });
   }
 });
 
 // GET /api/optimoroute/gps/devices or /api/gps/devices
 // ดึงข้อมูลพิกัด GPS รถปัจจุบันจาก API (https://api.gpsiam.app/devices)
-router.get('/gps/devices', authenticateToken, async (req, res) => {
-  const https = require('https');
+router.get("/gps/devices", authenticateToken, async (req, res) => {
+  const https = require("https");
   try {
-    const token = await getApiKey('GPS_API_TOKEN');
+    const token = await getApiKey("GPS_API_TOKEN");
     const options = {
-      hostname: 'api.gpsiam.app',
-      path: '/devices?address=1',
-      method: 'GET',
+      hostname: "api.gpsiam.app",
+      path: "/devices?address=1",
+      method: "GET",
       headers: {
-        'Authorization': `Bearer ${token}`,
-        'Accept': 'application/json',
-        'User-Agent': 'WawaCarRelease/1.0'
-      }
+        Authorization: `Bearer ${token}`,
+        Accept: "application/json",
+        "User-Agent": "WawaCarRelease/1.0",
+      },
     };
 
     const gpsReq = https.request(options, (gpsRes) => {
-      let body = '';
-      gpsRes.on('data', (chunk) => { body += chunk; });
-      gpsRes.on('end', () => {
+      let body = "";
+      gpsRes.on("data", (chunk) => {
+        body += chunk;
+      });
+      gpsRes.on("end", () => {
         try {
           const parsed = JSON.parse(body);
           if (parsed && (parsed.ok !== false || parsed.devices)) {
@@ -904,30 +1172,127 @@ router.get('/gps/devices', authenticateToken, async (req, res) => {
               success: true,
               devices: parsed.devices || [],
               pois: parsed.pois || [],
-              timestamp: new Date().toISOString()
+              timestamp: new Date().toISOString(),
             });
           } else {
             return res.json({
               success: false,
-              message: parsed.message || 'Failed to fetch GPS devices',
-              devices: []
+              message: parsed.message || "Failed to fetch GPS devices",
+              devices: [],
             });
           }
         } catch (eParse) {
-          return res.status(500).json({ success: false, message: 'Invalid JSON from GPS provider', devices: [] });
+          return res.status(500).json({
+            success: false,
+            message: "Invalid JSON from GPS provider",
+            devices: [],
+          });
         }
       });
     });
 
-    gpsReq.on('error', (errReq) => {
-      console.error('GPS API Request Error:', errReq.message);
-      return res.status(500).json({ success: false, message: errReq.message, devices: [] });
+    gpsReq.on("error", (errReq) => {
+      console.error("GPS API Request Error:", errReq.message);
+      return res
+        .status(500)
+        .json({ success: false, message: errReq.message, devices: [] });
     });
 
     gpsReq.end();
   } catch (err) {
-    console.error('GET /gps/devices error:', err);
+    console.error("GET /gps/devices error:", err);
     res.status(500).json({ success: false, message: err.message, devices: [] });
+  }
+});
+
+// GET /api/optimoroute/gps/device/log/:deviceId or /api/gps/device/log/:deviceId
+// ดึงข้อมูลประวัติการขับขี่ของรถจาก GPS IAM API (https://api.gpsiam.app/device/log/{{DEVICE}})
+router.get("/gps/device/log/:deviceId", authenticateToken, async (req, res) => {
+  const https = require("https");
+  try {
+    const { deviceId } = req.params;
+    let { start, end, address } = req.query;
+
+    if (!deviceId) {
+      return res.status(400).json({ success: false, message: "deviceId is required" });
+    }
+
+    // Default start and end to today if not provided
+    if (!start) {
+      const today = new Date().toISOString().slice(0, 10);
+      start = `${today} 00:00:00`;
+    }
+    if (!end) {
+      const today = new Date().toISOString().slice(0, 10);
+      end = `${today} 23:59:59`;
+    }
+
+    const token = await getApiKey("GPS_API_TOKEN");
+
+    let queryParams = `start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`;
+    if (address !== undefined && address !== null) {
+      queryParams += `&address=${encodeURIComponent(address)}`;
+    }
+
+    const options = {
+      hostname: "api.gpsiam.app",
+      path: `/device/log/${encodeURIComponent(deviceId)}?${queryParams}`,
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: "application/json",
+        "User-Agent": "WawaCarRelease/1.0",
+      },
+    };
+
+    const gpsReq = https.request(options, (gpsRes) => {
+      let body = "";
+      gpsRes.on("data", (chunk) => {
+        body += chunk;
+      });
+      gpsRes.on("end", () => {
+        try {
+          const parsed = JSON.parse(body);
+          if (parsed && parsed.ok !== false) {
+            return res.json({
+              success: true,
+              device: parsed.device || null,
+              start: parsed.start || start,
+              end: parsed.end || end,
+              logs: parsed.logs || [],
+              timestamp: new Date().toISOString(),
+            });
+          } else {
+            return res.json({
+              success: false,
+              message: parsed.message || "Failed to fetch GPS device logs",
+              device: parsed.device || null,
+              logs: [],
+            });
+          }
+        } catch (eParse) {
+          return res.status(500).json({
+            success: false,
+            message: "Failed to parse GPS IAM response",
+            raw: body,
+          });
+        }
+      });
+    });
+
+    gpsReq.on("error", (errReq) => {
+      console.error("GPS IAM API log request error:", errReq);
+      return res.status(502).json({
+        success: false,
+        message: `GPS IAM API connection error: ${errReq.message}`,
+        logs: [],
+      });
+    });
+
+    gpsReq.end();
+  } catch (err) {
+    console.error("GET /gps/device/log error:", err);
+    res.status(500).json({ success: false, message: err.message, logs: [] });
   }
 });
 
@@ -937,9 +1302,9 @@ router.get('/gps/devices', authenticateToken, async (req, res) => {
 
 // GET /api/optimoroute/unassigned?date=YYYY-MM-DD
 // ดึงรายการจุดจัดส่งที่ยังไม่ได้จัดสาย (group_store_id IS NULL)
-router.get('/unassigned', authenticateToken, async (req, res) => {
+router.get("/unassigned", authenticateToken, async (req, res) => {
   try {
-    const { query } = require('../config/db');
+    const { query } = require("../config/db");
     const targetDate = req.query.date || new Date().toISOString().slice(0, 10);
 
     const rows = await query(
@@ -949,9 +1314,12 @@ router.get('/unassigned', authenticateToken, async (req, res) => {
         ls.store_id,
         ls.row_order,
         ls.sum_quantity,
-        ls.lat_long,
-        ls.store_name_result,
+        s.store_location AS lat_long,
+        s.store_name AS store_name_result,
         ls.status,
+        ls.scheduled_time,
+        ls.start_service_time,
+        ls.end_service_time,
         ls.priority,
         ls.position_product_id,
         ls.position_production_order,
@@ -970,11 +1338,13 @@ router.get('/unassigned', authenticateToken, async (req, res) => {
       WHERE (ls.group_store_id IS NULL OR ls.group_store_id = 0)
         AND (DATE_FORMAT(ls.created_at, '%Y-%m-%d') = ? OR ? IS NULL)
       ORDER BY ls.list_id DESC`,
-      [targetDate, targetDate]
+      [targetDate, targetDate],
     );
 
     const listIds = (rows || []).map((r) => r.list_id).filter(Boolean);
-    const storeIds = Array.from(new Set((rows || []).map((r) => r.store_id).filter(Boolean)));
+    const storeIds = Array.from(
+      new Set((rows || []).map((r) => r.store_id).filter(Boolean)),
+    );
 
     let loadsMap = {};
     if (listIds.length > 0) {
@@ -983,14 +1353,14 @@ router.get('/unassigned', authenticateToken, async (req, res) => {
           `SELECT lsl.list_id, lsl.loading_type_id, lsl.quantity, lt.type_name, lt.unit_name, lt.type_code
            FROM list_store_load lsl
            JOIN loading_type lt ON lsl.loading_type_id = lt.loading_type_id
-           WHERE lsl.list_id IN (${listIds.join(',')})`
+           WHERE lsl.list_id IN (${listIds.join(",")})`,
         );
         (loadRows || []).forEach((l) => {
           if (!loadsMap[l.list_id]) loadsMap[l.list_id] = [];
           loadsMap[l.list_id].push(l);
         });
       } catch (eLoads) {
-        console.warn('Fetch list_store_load warning:', eLoads.message);
+        console.warn("Fetch list_store_load warning:", eLoads.message);
       }
     }
 
@@ -1000,25 +1370,36 @@ router.get('/unassigned', authenticateToken, async (req, res) => {
 
     if (storeIds.length > 0) {
       try {
-        const daysMap = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+        const daysMap = [
+          "sunday",
+          "monday",
+          "tuesday",
+          "wednesday",
+          "thursday",
+          "friday",
+          "saturday",
+        ];
         const targetDay = daysMap[new Date(targetDate).getDay()];
-        const placeholders = storeIds.map(() => '?').join(',');
+        const placeholders = storeIds.map(() => "?").join(",");
 
         const bhRows = await query(
           `SELECT store_id, day_of_week, is_open, open_time, close_time 
            FROM store_business_hours 
            WHERE store_id IN (${placeholders}) AND day_of_week = ?`,
-          [...storeIds, targetDay]
+          [...storeIds, targetDay],
         );
 
         (bhRows || []).forEach((bh) => {
           storeHoursMap[bh.store_id] = bh;
-          if (bh.is_open === 0 || bh.is_open === '0' || bh.is_open === false) {
+          if (bh.is_open === 0 || bh.is_open === "0" || bh.is_open === false) {
             closedStoreSet.add(String(bh.store_id));
           }
         });
       } catch (eBH) {
-        console.warn('Fetch store_business_hours for unassigned warning:', eBH.message);
+        console.warn(
+          "Fetch store_business_hours for unassigned warning:",
+          eBH.message,
+        );
       }
     }
 
@@ -1026,8 +1407,8 @@ router.get('/unassigned', authenticateToken, async (req, res) => {
       let lat = 0;
       let lng = 0;
       const locStr = row.lat_long || row.store_location;
-      if (locStr && typeof locStr === 'string' && locStr.includes(',')) {
-        const parts = locStr.split(',');
+      if (locStr && typeof locStr === "string" && locStr.includes(",")) {
+        const parts = locStr.split(",");
         lat = parseFloat(parts[0]) || 0;
         lng = parseFloat(parts[1]) || 0;
       }
@@ -1038,20 +1419,25 @@ router.get('/unassigned', authenticateToken, async (req, res) => {
       return {
         list_id: row.list_id,
         stopId: row.list_id,
-        orderNo: row.data_store_no || row.store_id || '-',
-        data_store_no: row.data_store_no || row.store_id || '-',
+        orderNo: row.data_store_no || row.store_id || "-",
+        data_store_no: row.data_store_no || row.store_id || "-",
         store_id: row.store_id,
         locationNo: row.store_id,
-        storeName: row.store_name_result || row.store_name || `ร้านค้า ${row.store_id}`,
-        store_name: row.store_name_result || row.store_name || `ร้านค้า ${row.store_id}`,
-        address: row.store_address || '',
+        storeName:
+          row.store_name_result || row.store_name || `ร้านค้า ${row.store_id}`,
+        store_name:
+          row.store_name_result || row.store_name || `ร้านค้า ${row.store_id}`,
+        address: row.store_address || "",
         quantity: row.sum_quantity || 0,
         sum_quantity: row.sum_quantity || 0,
         lat,
         lng,
         lat_long: locStr || (lat && lng ? `${lat},${lng}` : null),
-        status: row.status || 'unassigned',
-        priority: row.priority || 'medium',
+        status: row.status || "unassigned",
+        scheduled_time: row.scheduled_time || "",
+        start_service_time: row.start_service_time || null,
+        end_service_time: row.end_service_time || null,
+        priority: row.priority || "medium",
         position_product_id: row.position_product_id,
         position_production_order: row.position_production_order,
         position_product_name: row.position_product_name,
@@ -1062,27 +1448,27 @@ router.get('/unassigned', authenticateToken, async (req, res) => {
         is_closed_today: isClosedToday,
         store_open_time: bhInfo ? bhInfo.open_time : null,
         store_close_time: bhInfo ? bhInfo.close_time : null,
-        type: 'delivery',
+        type: "delivery",
         created_at: row.created_date || targetDate,
-        date: row.created_date || targetDate
+        date: row.created_date || targetDate,
       };
     });
 
     res.json({
       success: true,
-      stops
+      stops,
     });
   } catch (err) {
-    console.error('GET /unassigned error:', err);
+    console.error("GET /unassigned error:", err);
     res.status(500).json({ success: false, message: err.message, stops: [] });
   }
 });
 
 // POST /api/optimoroute/unassigned
 // สร้างรายการจัดส่งใหม่แบบยังไม่จัดสาย (group_store_id = NULL)
-router.post('/unassigned', authenticateToken, async (req, res) => {
+router.post("/unassigned", authenticateToken, async (req, res) => {
   try {
-    const { query } = require('../config/db');
+    const { query } = require("../config/db");
     const {
       store_id,
       data_store_no,
@@ -1096,19 +1482,37 @@ router.post('/unassigned', authenticateToken, async (req, res) => {
       position_product_id,
       position_production_order,
       tax,
-      note
+      note,
     } = req.body;
 
-    let targetStoreId = store_id ? String(store_id).trim() : `ST-${Date.now().toString().slice(-6)}`;
+    let targetStoreId = store_id
+      ? String(store_id).trim()
+      : `ST-${Date.now().toString().slice(-6)}`;
     const storeNameResult = store_name || `ร้านค้า ${targetStoreId}`;
     const targetDate = date || new Date().toISOString().slice(0, 10);
     const quantityNum = sum_quantity ? parseInt(sum_quantity, 10) : 1;
-    const targetOrderNo = data_store_no || orderNo || `ORD-${Date.now().toString().slice(-6)}`;
-    const targetPriority = priority || 'medium';
-    const targetPosProdId = position_product_id ? parseInt(position_product_id, 10) : null;
-    const targetPosProdOrder = position_production_order !== undefined && position_production_order !== '' && position_production_order !== null ? parseInt(position_production_order, 10) : 1;
-    const targetTax = tax === 1 || tax === '1' || tax === true || tax === 'true' ? 1 : 0;
+    const targetOrderNo =
+      data_store_no || orderNo || `ORD-${Date.now().toString().slice(-6)}`;
+    const targetPriority = priority || "medium";
+    const targetPosProdId = position_product_id
+      ? parseInt(position_product_id, 10)
+      : null;
+    const targetPosProdOrder =
+      position_production_order !== undefined &&
+      position_production_order !== "" &&
+      position_production_order !== null
+        ? parseInt(position_production_order, 10)
+        : 1;
+    const targetTax =
+      tax === 1 || tax === "1" || tax === true || tax === "true" ? 1 : 0;
     const targetNote = note ? String(note).trim() : null;
+
+    const targetScheduledTime =
+      req.body.scheduled_time ||
+      req.body.scheduledTime ||
+      req.body.scheduled_eta ||
+      req.body.eta ||
+      null;
 
     if (store_name) {
       try {
@@ -1116,34 +1520,65 @@ router.post('/unassigned', authenticateToken, async (req, res) => {
           `INSERT INTO store (store_id, store_name, store_address, store_location)
            VALUES (?, ?, ?, ?)
            ON DUPLICATE KEY UPDATE store_name = VALUES(store_name), store_address = VALUES(store_address), store_location = VALUES(store_location)`,
-          [targetStoreId, storeNameResult, address || null, lat_long || null]
+          [targetStoreId, storeNameResult, address || null, lat_long || null],
         );
       } catch (eStore) {
-        console.warn('Upsert store warning:', eStore.message);
+        console.warn("Upsert store warning:", eStore.message);
       }
     }
 
-    const createdByVal = req.user ? (req.user.user_id || req.user.id || req.user.name || req.user.username || 1) : 1;
+    const createdByVal = req.user
+      ? req.user.user_id ||
+        req.user.id ||
+        req.user.name ||
+        req.user.username ||
+        1
+      : 1;
 
     let insertRes;
     try {
       insertRes = await query(
-        `INSERT INTO list_store (store_id, group_store_id, row_order, sum_quantity, lat_long, store_name_result, data_store_no, priority, status, position_product_id, position_production_order, created_by, created_at)
-         VALUES (?, NULL, NULL, ?, ?, ?, ?, ?, 'unassigned', ?, ?, ?, ?)`,
-        [targetStoreId, quantityNum, lat_long || null, storeNameResult, targetOrderNo, targetPriority, targetPosProdId, targetPosProdOrder, createdByVal, `${targetDate} 00:00:00`]
+        `INSERT INTO list_store (store_id, group_store_id, row_order, sum_quantity, data_store_no, priority, status, scheduled_time, position_product_id, position_production_order, created_by, created_at, tax, note)
+         VALUES (?, NULL, NULL, ?, ?, ?, 'unassigned', ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          targetStoreId,
+          quantityNum,
+          targetOrderNo,
+          targetPriority,
+          targetScheduledTime,
+          targetPosProdId,
+          targetPosProdOrder,
+          createdByVal,
+          `${targetDate} 00:00:00`,
+          targetTax,
+          targetNote,
+        ],
       );
     } catch (eIns) {
       try {
         insertRes = await query(
-          `INSERT INTO list_store (store_id, group_store_id, row_order, sum_quantity, lat_long, store_name_result, data_store_no, status, created_by, created_at)
-           VALUES (?, NULL, NULL, ?, ?, ?, ?, 'unassigned', ?, ?)`,
-          [targetStoreId, quantityNum, lat_long || null, storeNameResult, targetOrderNo, createdByVal, `${targetDate} 00:00:00`]
+          `INSERT INTO list_store (store_id, group_store_id, row_order, sum_quantity, data_store_no, status, scheduled_time, created_by, created_at)
+           VALUES (?, NULL, NULL, ?, ?, 'unassigned', ?, ?, ?)`,
+          [
+            targetStoreId,
+            quantityNum,
+            targetOrderNo,
+            targetScheduledTime,
+            createdByVal,
+            `${targetDate} 00:00:00`,
+          ],
         );
       } catch (e2) {
         insertRes = await query(
-          `INSERT INTO list_store (store_id, group_store_id, row_order, sum_quantity, lat_long, store_name_result, status, created_by, created_at)
-           VALUES (?, NULL, NULL, ?, ?, ?, 'unassigned', ?, ?)`,
-          [targetStoreId, quantityNum, lat_long || null, storeNameResult, createdByVal, `${targetDate} 00:00:00`]
+          `INSERT INTO list_store (store_id, group_store_id, row_order, sum_quantity, status, scheduled_time, created_by, created_at)
+           VALUES (?, NULL, NULL, ?, 'unassigned', ?, ?, ?)`,
+          [
+            targetStoreId,
+            quantityNum,
+            targetScheduledTime,
+            createdByVal,
+            `${targetDate} 00:00:00`,
+          ],
         );
       }
     }
@@ -1156,10 +1591,14 @@ router.post('/unassigned', authenticateToken, async (req, res) => {
           try {
             await query(
               `INSERT INTO list_store_load (list_id, loading_type_id, quantity) VALUES (?, ?, ?)`,
-              [newListId, parseInt(l.loading_type_id, 10), parseInt(l.quantity, 10)]
+              [
+                newListId,
+                parseInt(l.loading_type_id, 10),
+                parseInt(l.quantity, 10),
+              ],
             );
           } catch (eLoadIns) {
-            console.warn('Insert list_store_load error:', eLoadIns.message);
+            console.warn("Insert list_store_load error:", eLoadIns.message);
           }
         }
       }
@@ -1167,66 +1606,120 @@ router.post('/unassigned', authenticateToken, async (req, res) => {
 
     res.json({
       success: true,
-      message: 'สร้างรายการจัดส่ง (ยังไม่จัดสาย) สำเร็จ',
-      list_id: newListId
+      message: "สร้างรายการจัดส่ง (ยังไม่จัดสาย) สำเร็จ",
+      list_id: newListId,
     });
   } catch (err) {
-    console.error('POST /unassigned error:', err);
+    console.error("POST /unassigned error:", err);
     res.status(500).json({ success: false, message: err.message });
   }
 });
 
 // POST /api/optimoroute/unassigned/import
 // นำเข้ารายการจัดส่งยังไม่จัดสายแบบทีละหลายรายการจาก Excel Preview Drawer
-router.post('/unassigned/import', authenticateToken, async (req, res) => {
+router.post("/unassigned/import", authenticateToken, async (req, res) => {
   try {
-    const { query } = require('../config/db');
+    const { query } = require("../config/db");
     const { stops, date } = req.body;
     const targetDate = date || new Date().toISOString().slice(0, 10);
 
     if (!Array.isArray(stops) || stops.length === 0) {
-      return res.status(400).json({ success: false, message: 'ไม่พบรายการจัดส่งที่ต้องนำเข้า' });
+      return res
+        .status(400)
+        .json({ success: false, message: "ไม่พบรายการจัดส่งที่ต้องนำเข้า" });
     }
 
     let count = 0;
     for (const item of stops) {
-      const storeId = item.store_id || item.locationNo || `ST-${Date.now().toString().slice(-6)}-${count}`;
-      const storeName = item.store_name || item.storeName || `ร้านค้า ${storeId}`;
-      const address = item.address || item.store_address || '';
-      const orderNo = item.data_store_no || item.orderNo || `ORD-${Date.now().toString().slice(-6)}-${count}`;
+      const storeId =
+        item.store_id ||
+        item.locationNo ||
+        `ST-${Date.now().toString().slice(-6)}-${count}`;
+      const storeName =
+        item.store_name || item.storeName || `ร้านค้า ${storeId}`;
+      const address = item.address || item.store_address || "";
+      const orderNo =
+        item.data_store_no ||
+        item.orderNo ||
+        `ORD-${Date.now().toString().slice(-6)}-${count}`;
       const quantity = parseInt(item.sum_quantity || item.quantity || 1, 10);
-      const latLong = item.lat_long || (item.lat && item.lng ? `${item.lat},${item.lng}` : null);
+      const latLong =
+        item.lat_long ||
+        (item.lat && item.lng ? `${item.lat},${item.lng}` : null);
 
-      const posProdId = item.position_product_id ? parseInt(item.position_product_id, 10) : null;
-      const posProdOrder = item.position_production_order ? parseInt(item.position_production_order, 10) : 1;
+      const posProdId = item.position_product_id
+        ? parseInt(item.position_product_id, 10)
+        : null;
+      const posProdOrder = item.position_production_order
+        ? parseInt(item.position_production_order, 10)
+        : 1;
 
       try {
         await query(
           `INSERT INTO store (store_id, store_name, store_address, store_location)
            VALUES (?, ?, ?, ?)
            ON DUPLICATE KEY UPDATE store_name = VALUES(store_name), store_address = VALUES(store_address), store_location = VALUES(store_location)`,
-          [storeId, storeName, address || null, latLong || null]
+          [storeId, storeName, address || null, latLong || null],
         );
       } catch (eStore) {}
 
-      const createdByVal = req.user ? (req.user.user_id || req.user.id || req.user.name || req.user.username || 1) : 1;
+      const createdByVal = req.user
+        ? req.user.user_id ||
+          req.user.id ||
+          req.user.name ||
+          req.user.username ||
+          1
+        : 1;
 
-      const itemTax = item.tax === 1 || item.tax === '1' || item.tax === true || item.tax === 'true' ? 1 : 0;
+      const itemTax =
+        item.tax === 1 ||
+        item.tax === "1" ||
+        item.tax === true ||
+        item.tax === "true"
+          ? 1
+          : 0;
       const itemNote = item.note ? String(item.note).trim() : null;
       const itemDate = item.date || targetDate;
+      const itemSchedTime =
+        item.scheduled_time ||
+        item.scheduledTime ||
+        item.scheduled_eta ||
+        item.scheduledEta ||
+        item.eta ||
+        null;
 
       let insertRes;
       try {
         insertRes = await query(
-          `INSERT INTO list_store (store_id, group_store_id, row_order, sum_quantity, lat_long, store_name_result, data_store_no, status, position_product_id, position_production_order, created_by, created_at, tax, note)
-           VALUES (?, NULL, NULL, ?, ?, ?, ?, 'unassigned', ?, ?, ?, ?, ?, ?)`,
-          [storeId, quantity, latLong || null, storeName, orderNo, posProdId, posProdOrder, createdByVal, `${itemDate} 00:00:00`, itemTax, itemNote]
+          `INSERT INTO list_store (store_id, group_store_id, row_order, sum_quantity, data_store_no, status, scheduled_time, position_product_id, position_production_order, created_by, created_at, tax, note)
+           VALUES (?, NULL, NULL, ?, ?, 'unassigned', ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            storeId,
+            quantity,
+            orderNo,
+            itemSchedTime,
+            posProdId,
+            posProdOrder,
+            createdByVal,
+            `${itemDate} 00:00:00`,
+            itemTax,
+            itemNote,
+          ],
         );
       } catch (eIns) {
         insertRes = await query(
-          `INSERT INTO list_store (store_id, group_store_id, row_order, sum_quantity, lat_long, store_name_result, status, position_product_id, position_production_order, created_by, created_at, tax, note)
-           VALUES (?, NULL, NULL, ?, ?, ?, 'unassigned', ?, ?, ?, ?, ?, ?)`,
-          [storeId, quantity, latLong || null, storeName, posProdId, posProdOrder, createdByVal, `${itemDate} 00:00:00`, itemTax, itemNote]
+          `INSERT INTO list_store (store_id, group_store_id, row_order, sum_quantity, status, position_product_id, position_production_order, created_by, created_at, tax, note)
+           VALUES (?, NULL, NULL, ?, 'unassigned', ?, ?, ?, ?, ?, ?)`,
+          [
+            storeId,
+            quantity,
+            posProdId,
+            posProdOrder,
+            createdByVal,
+            `${itemDate} 00:00:00`,
+            itemTax,
+            itemNote,
+          ],
         );
       }
 
@@ -1236,10 +1729,10 @@ router.post('/unassigned/import', authenticateToken, async (req, res) => {
       let itemLoadsArray = [];
       if (Array.isArray(item.loads)) {
         itemLoadsArray = item.loads;
-      } else if (item.loads && typeof item.loads === 'object') {
+      } else if (item.loads && typeof item.loads === "object") {
         itemLoadsArray = Object.entries(item.loads).map(([typeId, qty]) => ({
           loading_type_id: parseInt(typeId, 10),
-          quantity: parseInt(String(qty), 10)
+          quantity: parseInt(String(qty), 10),
         }));
       }
 
@@ -1251,10 +1744,13 @@ router.post('/unassigned/import', authenticateToken, async (req, res) => {
             try {
               await query(
                 `INSERT INTO list_store_load (list_id, loading_type_id, quantity) VALUES (?, ?, ?)`,
-                [newListId, lId, lQty]
+                [newListId, lId, lQty],
               );
             } catch (eLoadIns) {
-              console.warn('Insert list_store_load error in import:', eLoadIns.message);
+              console.warn(
+                "Insert list_store_load error in import:",
+                eLoadIns.message,
+              );
             }
           }
         }
@@ -1265,29 +1761,31 @@ router.post('/unassigned/import', authenticateToken, async (req, res) => {
     res.json({
       success: true,
       message: `นำเข้ารายการจัดส่งยังไม่จัดสายสำเร็จจำนวน ${count} รายการ`,
-      count
+      count,
     });
   } catch (err) {
-    console.error('POST /unassigned/import error:', err);
+    console.error("POST /unassigned/import error:", err);
     res.status(500).json({ success: false, message: err.message });
   }
 });
 
 // GET /api/optimoroute/delivery-settings
 // ดึงข้อมูลการตั้งค่าการจัดส่งรวมของระบบจากฐานข้อมูล
-router.get('/delivery-settings', authenticateToken, async (req, res) => {
+router.get("/delivery-settings", authenticateToken, async (req, res) => {
   try {
-    const { query } = require('../config/db');
-    const rows = await query('SELECT * FROM delivery_settings ORDER BY id ASC LIMIT 1');
+    const { query } = require("../config/db");
+    const rows = await query(
+      "SELECT * FROM delivery_settings ORDER BY id ASC LIMIT 1",
+    );
     if (!rows || rows.length === 0) {
       return res.json({
         success: true,
         settings: {
           serviceTimePerStop: 10,
-          priorityStrategy: 'fastest_time',
-          depotStartTime: '08:00',
-          bufferTimePerRoute: 15
-        }
+          priorityStrategy: "fastest_time",
+          depotStartTime: "08:00",
+          bufferTimePerRoute: 15,
+        },
       });
     }
 
@@ -1296,25 +1794,30 @@ router.get('/delivery-settings', authenticateToken, async (req, res) => {
       success: true,
       settings: {
         serviceTimePerStop: parseInt(s.service_time_per_stop || 10, 10),
-        priorityStrategy: s.priority_strategy || 'fastest_time',
-        depotStartTime: s.depot_start_time || '08:00',
-        bufferTimePerRoute: parseInt(s.buffer_time_per_route || 15, 10)
-      }
+        priorityStrategy: s.priority_strategy || "fastest_time",
+        depotStartTime: s.depot_start_time || "08:00",
+        bufferTimePerRoute: parseInt(s.buffer_time_per_route || 15, 10),
+      },
     });
   } catch (err) {
-    console.error('GET /delivery-settings error:', err);
+    console.error("GET /delivery-settings error:", err);
     res.status(500).json({ success: false, message: err.message });
   }
 });
 
 // POST /api/optimoroute/delivery-settings
 // บันทึกข้อมูลการตั้งค่าการจัดส่งลงฐานข้อมูล
-router.post('/delivery-settings', authenticateToken, async (req, res) => {
+router.post("/delivery-settings", authenticateToken, async (req, res) => {
   try {
-    const { query } = require('../config/db');
-    const { serviceTimePerStop, priorityStrategy, depotStartTime, bufferTimePerRoute } = req.body;
+    const { query } = require("../config/db");
+    const {
+      serviceTimePerStop,
+      priorityStrategy,
+      depotStartTime,
+      bufferTimePerRoute,
+    } = req.body;
 
-    const rows = await query('SELECT id FROM delivery_settings LIMIT 1');
+    const rows = await query("SELECT id FROM delivery_settings LIMIT 1");
     if (rows && rows.length > 0) {
       await query(
         `UPDATE delivery_settings
@@ -1326,11 +1829,11 @@ router.post('/delivery-settings', authenticateToken, async (req, res) => {
          WHERE id = ?`,
         [
           parseInt(serviceTimePerStop || 10, 10),
-          priorityStrategy || 'fastest_time',
-          depotStartTime || '08:00',
+          priorityStrategy || "fastest_time",
+          depotStartTime || "08:00",
           parseInt(bufferTimePerRoute || 15, 10),
-          rows[0].id
-        ]
+          rows[0].id,
+        ],
       );
     } else {
       await query(
@@ -1338,44 +1841,45 @@ router.post('/delivery-settings', authenticateToken, async (req, res) => {
          VALUES (?, ?, ?, ?, NOW())`,
         [
           parseInt(serviceTimePerStop || 10, 10),
-          priorityStrategy || 'fastest_time',
-          depotStartTime || '08:00',
-          parseInt(bufferTimePerRoute || 15, 10)
-        ]
+          priorityStrategy || "fastest_time",
+          depotStartTime || "08:00",
+          parseInt(bufferTimePerRoute || 15, 10),
+        ],
       );
     }
 
     res.json({
       success: true,
-      message: 'บันทึกการตั้งค่าจัดส่งลงฐานข้อมูลเรียบร้อยแล้ว'
+      message: "บันทึกการตั้งค่าจัดส่งลงฐานข้อมูลเรียบร้อยแล้ว",
     });
   } catch (err) {
-    console.error('POST /delivery-settings error:', err);
+    console.error("POST /delivery-settings error:", err);
     res.status(500).json({ success: false, message: err.message });
   }
 });
 
 // DELETE /api/optimoroute/unassigned/clear
 // ล้างข้อมูลรายการที่ยังไม่จัดสายทั้งหมดของวันที่ระบุ
-router.delete('/unassigned/clear', authenticateToken, async (req, res) => {
+router.delete("/unassigned/clear", authenticateToken, async (req, res) => {
   try {
-    const { query } = require('../config/db');
-    const targetDate = req.query.date || req.body.date || new Date().toISOString().slice(0, 10);
+    const { query } = require("../config/db");
+    const targetDate =
+      req.query.date || req.body.date || new Date().toISOString().slice(0, 10);
 
     const result = await query(
       `DELETE FROM list_store 
        WHERE (group_store_id IS NULL OR group_store_id = 0)
          AND DATE_FORMAT(created_at, '%Y-%m-%d') = ?`,
-      [targetDate]
+      [targetDate],
     );
 
     res.json({
       success: true,
       message: `ล้างรายการที่ยังไม่จัดสายของวันที่ ${targetDate} เรียบร้อยแล้ว (จำนวน ${result.affectedRows || 0} รายการ)`,
-      affectedRows: result.affectedRows || 0
+      affectedRows: result.affectedRows || 0,
     });
   } catch (err) {
-    console.error('DELETE /unassigned/clear error:', err);
+    console.error("DELETE /unassigned/clear error:", err);
     res.status(500).json({ success: false, message: err.message });
   }
 });
@@ -1388,14 +1892,18 @@ router.delete('/unassigned/clear', authenticateToken, async (req, res) => {
  */
 function haversineKm(lat1, lng1, lat2, lng2) {
   if (lat1 === lat2 && lng1 === lng2) return 0;
-  if (Math.abs(lat1 - lat2) < 0.00002 && Math.abs(lng1 - lng2) < 0.00002) return 0;
+  if (Math.abs(lat1 - lat2) < 0.00002 && Math.abs(lng1 - lng2) < 0.00002)
+    return 0;
 
   const R = 6371; // Earth radius in km
-  const dLat = (lat2 - lat1) * Math.PI / 180;
-  const dLng = (lng2 - lng1) * Math.PI / 180;
-  const a = Math.sin(dLat / 2) * Math.sin(dLat / 2)
-    + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180)
-    * Math.sin(dLng / 2) * Math.sin(dLng / 2);
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLng = ((lng2 - lng1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos((lat1 * Math.PI) / 180) *
+      Math.cos((lat2 * Math.PI) / 180) *
+      Math.sin(dLng / 2) *
+      Math.sin(dLng / 2);
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   return R * c;
 }
@@ -1409,10 +1917,12 @@ function pointInPolygon(lat, lng, polygon) {
   if (!polygon || polygon.length < 3) return false;
   let inside = false;
   for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
-    const xi = polygon[i][0], yi = polygon[i][1];
-    const xj = polygon[j][0], yj = polygon[j][1];
-    const intersect = ((yi > lng) !== (yj > lng))
-      && (lat < (xj - xi) * (lng - yi) / (yj - yi) + xi);
+    const xi = polygon[i][0],
+      yi = polygon[i][1];
+    const xj = polygon[j][0],
+      yj = polygon[j][1];
+    const intersect =
+      yi > lng !== yj > lng && lat < ((xj - xi) * (lng - yi)) / (yj - yi) + xi;
     if (intersect) inside = !inside;
   }
   return inside;
@@ -1432,15 +1942,19 @@ function lineSegmentsIntersect(x1, y1, x2, y2, x3, y3, x4, y4) {
   const cp3 = crossProduct(x3, y3, x4, y4, x1, y1);
   const cp4 = crossProduct(x3, y3, x4, y4, x2, y2);
 
-  if (((cp1 > 0 && cp2 < 0) || (cp1 < 0 && cp2 > 0)) &&
-      ((cp3 > 0 && cp4 < 0) || (cp3 < 0 && cp4 > 0))) {
+  if (
+    ((cp1 > 0 && cp2 < 0) || (cp1 < 0 && cp2 > 0)) &&
+    ((cp3 > 0 && cp4 < 0) || (cp3 < 0 && cp4 > 0))
+  ) {
     return true;
   }
 
   const onSegment = (px, py, qx, qy, rx, ry) => {
     return (
-      qx <= Math.max(px, rx) && qx >= Math.min(px, rx) &&
-      qy <= Math.max(py, ry) && qy >= Math.min(py, ry)
+      qx <= Math.max(px, rx) &&
+      qx >= Math.min(px, rx) &&
+      qy <= Math.max(py, ry) &&
+      qy >= Math.min(py, ry)
     );
   };
 
@@ -1465,10 +1979,14 @@ function segmentCrossesPolygon(lat1, lng1, lat2, lng2, polygon) {
 
   // 2. เช็คการตัดผ่านของเส้นตรงกับทุกขอบของ Polygon
   for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
-    const plat1 = polygon[i][0], plng1 = polygon[i][1];
-    const plat2 = polygon[j][0], plng2 = polygon[j][1];
+    const plat1 = polygon[i][0],
+      plng1 = polygon[i][1];
+    const plat2 = polygon[j][0],
+      plng2 = polygon[j][1];
 
-    if (lineSegmentsIntersect(lat1, lng1, lat2, lng2, plat1, plng1, plat2, plng2)) {
+    if (
+      lineSegmentsIntersect(lat1, lng1, lat2, lng2, plat1, plng1, plat2, plng2)
+    ) {
       return true;
     }
   }
@@ -1505,9 +2023,9 @@ function avoidZonePenalty(lat1, lng1, lat2, lng2, avoidZones) {
 function estimateTravelMinutes(distKm) {
   if (distKm <= 0.001) return 0; // สถานที่/พิกัดเดียวกัน: 0 นาที
   if (distKm <= 0.5) return Math.max(1, Math.round((distKm / 25) * 60)); // ในเมืองระยะใกล้
-  if (distKm <= 5) return Math.round((distKm / 25) * 60);    // ในเมือง: 25 km/h
-  if (distKm <= 30) return Math.round((distKm / 40) * 60);   // ชานเมือง: 40 km/h
-  return Math.round((distKm / 60) * 60);                     // ทางหลวง: 60 km/h
+  if (distKm <= 5) return Math.round((distKm / 25) * 60); // ในเมือง: 25 km/h
+  if (distKm <= 30) return Math.round((distKm / 40) * 60); // ชานเมือง: 40 km/h
+  return Math.round((distKm / 60) * 60); // ทางหลวง: 60 km/h
 }
 
 /**
@@ -1517,30 +2035,97 @@ function estimateTravelMinutes(distKm) {
 function totalRouteDistance(stops, depot, avoidZones = []) {
   if (stops.length === 0) return 0;
   let total = haversineKm(depot.lat, depot.lng, stops[0].lat, stops[0].lng);
-  total *= avoidZonePenalty(depot.lat, depot.lng, stops[0].lat, stops[0].lng, avoidZones);
+  total *= avoidZonePenalty(
+    depot.lat,
+    depot.lng,
+    stops[0].lat,
+    stops[0].lng,
+    avoidZones,
+  );
 
   for (let i = 0; i < stops.length - 1; i++) {
-    let segDist = haversineKm(stops[i].lat, stops[i].lng, stops[i + 1].lat, stops[i + 1].lng);
-    segDist *= avoidZonePenalty(stops[i].lat, stops[i].lng, stops[i + 1].lat, stops[i + 1].lng, avoidZones);
+    let segDist = haversineKm(
+      stops[i].lat,
+      stops[i].lng,
+      stops[i + 1].lat,
+      stops[i + 1].lng,
+    );
+    segDist *= avoidZonePenalty(
+      stops[i].lat,
+      stops[i].lng,
+      stops[i + 1].lat,
+      stops[i + 1].lng,
+      avoidZones,
+    );
     total += segDist;
   }
 
-  let lastSeg = haversineKm(stops[stops.length - 1].lat, stops[stops.length - 1].lng, depot.lat, depot.lng);
-  lastSeg *= avoidZonePenalty(stops[stops.length - 1].lat, stops[stops.length - 1].lng, depot.lat, depot.lng, avoidZones);
+  let lastSeg = haversineKm(
+    stops[stops.length - 1].lat,
+    stops[stops.length - 1].lng,
+    depot.lat,
+    depot.lng,
+  );
+  lastSeg *= avoidZonePenalty(
+    stops[stops.length - 1].lat,
+    stops[stops.length - 1].lng,
+    depot.lat,
+    depot.lng,
+    avoidZones,
+  );
   total += lastSeg;
 
   return total;
 }
 
 /**
- * 2-opt Route Improvement — สลับลำดับจุดจัดส่งเพื่อลดระยะทางรวม
- * ลดเส้นทางตัดกัน (crossing routes) อย่างมีประสิทธิภาพ และรักษาเงื่อนไข Avoid Zone
+ * 2-opt Route Improvement — สลับลำดับจุดจัดส่งเพื่อลดระยะทาง/เวลาเดินทางรวม
+ * ลดเส้นทางตัดกัน (crossing routes) บนโครงข่ายถนนจริงอย่างมีประสิทธิภาพ และรักษาเงื่อนไข Avoid Zone
  */
-function twoOptImprove(stops, depot, avoidZones = [], maxIterations = 100) {
-  if (stops.length < 3) return stops;
+function twoOptImprove(
+  stops,
+  depot,
+  getTravelMinutesFn = null,
+  avoidZones = [],
+  maxIterations = 100,
+) {
+  if (!stops || stops.length < 3) return stops;
+
+  const calcCost = (route) => {
+    if (!getTravelMinutesFn) {
+      return totalRouteDistance(route, depot, avoidZones);
+    }
+    let totalTime = getTravelMinutesFn(
+      "DEPOT",
+      depot.lat,
+      depot.lng,
+      String(route[0].list_id),
+      route[0].lat,
+      route[0].lng,
+    );
+    for (let i = 0; i < route.length - 1; i++) {
+      totalTime += getTravelMinutesFn(
+        String(route[i].list_id),
+        route[i].lat,
+        route[i].lng,
+        String(route[i + 1].list_id),
+        route[i + 1].lat,
+        route[i + 1].lng,
+      );
+    }
+    totalTime += getTravelMinutesFn(
+      String(route[route.length - 1].list_id),
+      route[route.length - 1].lat,
+      route[route.length - 1].lng,
+      "DEPOT",
+      depot.lat,
+      depot.lng,
+    );
+    return totalTime;
+  };
 
   let improved = [...stops];
-  let bestDist = totalRouteDistance(improved, depot, avoidZones);
+  let bestCost = calcCost(improved);
   let iteration = 0;
   let hasImproved = true;
 
@@ -1549,16 +2134,15 @@ function twoOptImprove(stops, depot, avoidZones = [], maxIterations = 100) {
     iteration++;
     for (let i = 0; i < improved.length - 1; i++) {
       for (let j = i + 1; j < improved.length; j++) {
-        // Reverse the segment between i and j
         const newRoute = [
           ...improved.slice(0, i),
           ...improved.slice(i, j + 1).reverse(),
-          ...improved.slice(j + 1)
+          ...improved.slice(j + 1),
         ];
-        const newDist = totalRouteDistance(newRoute, depot, avoidZones);
-        if (newDist < bestDist - 0.01) { // 10m threshold
+        const newCost = calcCost(newRoute);
+        if (newCost < bestCost - 0.01) {
           improved = newRoute;
-          bestDist = newDist;
+          bestCost = newCost;
           hasImproved = true;
         }
       }
@@ -1570,8 +2154,9 @@ function twoOptImprove(stops, depot, avoidZones = [], maxIterations = 100) {
 /**
  * Simple K-means Geographic Clustering
  * จัดกลุ่มจุดจัดส่งตามพื้นที่ภูมิศาสตร์ เพื่อให้แต่ละรถรับผิดชอบพื้นที่เฉพาะ ไม่เส้นทางตัดกัน
+ * รวมการเช็ค Avoid Zone ป้องกันจุดส่งข้ามเขตห้ามผ่านถูกรวมกลุ่มเดียวกัน
  */
-function kMeansCluster(items, k, maxIter = 50) {
+function kMeansCluster(items, k, avoidZones = [], maxIter = 50) {
   if (items.length <= k) {
     return items.map((item, idx) => ({ ...item, cluster: idx }));
   }
@@ -1580,7 +2165,10 @@ function kMeansCluster(items, k, maxIter = 50) {
   const sortedByLat = [...items].sort((a, b) => a.lat - b.lat);
   let centroids = [];
   for (let i = 0; i < k; i++) {
-    const idx = Math.min(Math.floor((i / k) * items.length + items.length / (2 * k)), items.length - 1);
+    const idx = Math.min(
+      Math.floor((i / k) * items.length + items.length / (2 * k)),
+      items.length - 1,
+    );
     centroids.push({ lat: sortedByLat[idx].lat, lng: sortedByLat[idx].lng });
   }
 
@@ -1589,12 +2177,26 @@ function kMeansCluster(items, k, maxIter = 50) {
   for (let iter = 0; iter < maxIter; iter++) {
     let changed = false;
 
-    // Assign each item to nearest centroid
+    // Assign each item to nearest centroid (incorporating avoidZone penalty)
     for (let i = 0; i < items.length; i++) {
       let bestCluster = 0;
       let bestDist = Infinity;
       for (let c = 0; c < k; c++) {
-        const dist = haversineKm(items[i].lat, items[i].lng, centroids[c].lat, centroids[c].lng);
+        let dist = haversineKm(
+          items[i].lat,
+          items[i].lng,
+          centroids[c].lat,
+          centroids[c].lng,
+        );
+        if (avoidZones && avoidZones.length > 0) {
+          dist *= avoidZonePenalty(
+            items[i].lat,
+            items[i].lng,
+            centroids[c].lat,
+            centroids[c].lng,
+            avoidZones,
+          );
+        }
         if (dist < bestDist) {
           bestDist = dist;
           bestCluster = c;
@@ -1614,7 +2216,7 @@ function kMeansCluster(items, k, maxIter = 50) {
       if (members.length > 0) {
         centroids[c] = {
           lat: members.reduce((s, m) => s + m.lat, 0) / members.length,
-          lng: members.reduce((s, m) => s + m.lng, 0) / members.length
+          lng: members.reduce((s, m) => s + m.lng, 0) / members.length,
         };
       }
     }
@@ -1624,19 +2226,50 @@ function kMeansCluster(items, k, maxIter = 50) {
 }
 
 /**
- * OSRM Travel Time Matrix — ดึงระยะเวลาเดินทางจริง (road network) จาก OSRM
+ * OptimoRoute Polar Sector & K-Means Hybrid Clustering
+ * Partition stops into geographic sectors radiating outward from Depot
+ * Prevents vehicles from crossing paths or zig-zagging across sectors
+ */
+function optimoRouteSectorCluster(items, k, depot, avoidZones = []) {
+  if (items.length <= k) {
+    return items.map((item, idx) => ({ ...item, cluster: idx }));
+  }
+
+  // Calculate polar angle (theta) from Depot for each stop
+  const itemsWithAngle = items.map((item) => {
+    const dLat = item.lat - depot.lat;
+    const dLng = item.lng - depot.lng;
+    const angle = Math.atan2(dLat, dLng);
+    return { ...item, angle };
+  });
+
+  // Sort by polar angle around Depot
+  itemsWithAngle.sort((a, b) => a.angle - b.angle);
+
+  // Group into k contiguous angular sectors
+  const clusterSize = Math.ceil(itemsWithAngle.length / k);
+  return itemsWithAngle.map((item, idx) => ({
+    ...item,
+    cluster: Math.min(Math.floor(idx / clusterSize), k - 1),
+  }));
+}
+
+/**
+ * OSRM Travel Time Matrix — ดึงระยะเวลาเดินทางจริง (road network) จาก OSRM (รองรับได้สูงสุด 100 จุด)
  * Returns matrix[i][j] = travel time in seconds from point i to point j
  * Fallback: returns null if OSRM fails
  */
 async function fetchOsrmTravelTimeMatrix(points) {
   try {
-    if (points.length < 2 || points.length > 25) return null;
+    if (!points || points.length < 2) return null;
+    const maxPoints = Math.min(points.length, 100);
+    const targetPoints = points.slice(0, maxPoints);
 
-    const coordString = points.map(p => `${p.lng},${p.lat}`).join(';');
+    const coordString = targetPoints.map((p) => `${p.lng},${p.lat}`).join(";");
     const url = `https://router.project-osrm.org/table/v1/driving/${coordString}?annotations=duration`;
 
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 8000);
+    const timeoutId = setTimeout(() => controller.abort(), 12000);
 
     const res = await fetch(url, { signal: controller.signal });
     clearTimeout(timeoutId);
@@ -1644,147 +2277,189 @@ async function fetchOsrmTravelTimeMatrix(points) {
     if (!res.ok) return null;
     const data = await res.json();
 
-    if (data.code === 'Ok' && data.durations) {
+    if (data.code === "Ok" && data.durations) {
       return data.durations; // matrix[i][j] = seconds
     }
     return null;
   } catch (err) {
-    console.warn('OSRM Table API fallback:', err.message || err);
+    console.warn("OSRM Table API fallback:", err.message || err);
     return null;
   }
 }
 
 // POST /api/optimoroute/auto-route
 // ระบบคำนวณจัดสายรถอัตโนมัติ (Haversine + K-means Clustering + 2-opt + OSRM Travel Time)
-router.post('/auto-route', authenticateToken, async (req, res) => {
+router.post("/auto-route", authenticateToken, async (req, res) => {
   try {
-    const { query } = require('../config/db');
+    const { query } = require("../config/db");
     const {
       date,
-      strategy = 'shortest_distance',
+      strategy = "shortest_distance",
       maxLoadPerVehicle = 100,
       maxStopsPerVehicle = 15,
       selectedVehicleIds = [],
-      customCapacities = {}
+      customCapacities = {},
     } = req.body;
 
     const targetDate = date || new Date().toISOString().slice(0, 10);
-    const DEPOT = { lat: 17.1266642, lng: 102.9635667, name: 'คลังสินค้าเริ่มต้น' };
+    const DEPOT = {
+      lat: 17.1266642,
+      lng: 102.9635667,
+      name: "คลังสินค้าเริ่มต้น",
+    };
 
     // 1. ดึงรายการจุดจัดส่งที่ยังไม่จัดสาย (group_store_id IS NULL)
     const unassignedRows = await query(
-      `SELECT ls.list_id, ls.store_id, ls.data_store_no, ls.sum_quantity, ls.lat_long, ls.store_name_result, s.store_name, s.store_location
+      `SELECT ls.list_id, ls.store_id, ls.data_store_no, ls.sum_quantity, s.store_name, s.store_location
        FROM list_store ls
        LEFT JOIN store s ON ls.store_id = s.store_id
        WHERE (ls.group_store_id IS NULL OR ls.group_store_id = 0)
          AND (DATE_FORMAT(ls.created_at, '%Y-%m-%d') = ? OR ? IS NULL)`,
-      [targetDate, targetDate]
+      [targetDate, targetDate],
     );
 
     if (!unassignedRows || unassignedRows.length === 0) {
-      return res.status(400).json({ success: false, message: 'ไม่พบรายการรอจัดสายเพื่อคำนวณเส้นทาง' });
+      return res.status(400).json({
+        success: false,
+        message: "ไม่พบรายการรอจัดสายเพื่อคำนวณเส้นทาง",
+      });
     }
 
     const items = unassignedRows.map((r) => {
       let lat = 13.7563;
       let lng = 100.5018;
-      const locStr = r.lat_long || r.store_location;
-      if (locStr && typeof locStr === 'string' && locStr.includes(',')) {
-        const parts = locStr.split(',');
+      const locStr = r.store_location;
+      if (locStr && typeof locStr === "string" && locStr.includes(",")) {
+        const parts = locStr.split(",");
         lat = parseFloat(parts[0]) || lat;
         lng = parseFloat(parts[1]) || lng;
       }
       return {
         list_id: r.list_id,
         quantity: parseInt(r.sum_quantity || 1, 10),
-        store_name: r.store_name_result || r.store_name || r.store_id,
+        store_name: r.store_name || r.store_id,
         lat,
         lng,
-        assigned: false
+        assigned: false,
       };
     });
 
-    const totalUnassignedQuantity = items.reduce((sum, i) => sum + i.quantity, 0);
+    const totalUnassignedQuantity = items.reduce(
+      (sum, i) => sum + i.quantity,
+      0,
+    );
 
     // 1.5. ดึงพื้นที่ห้ามผ่าน (Avoid Zones) ที่เปิดใช้งาน
     let activeAvoidZones = [];
     try {
       const azRows = await query(
-        `SELECT zone_id, zone_name, zone_type, coordinates FROM avoid_zone WHERE is_active = 1`
+        `SELECT zone_id, zone_name, zone_type, coordinates FROM avoid_zone WHERE is_active = 1`,
       );
-      activeAvoidZones = (azRows || []).map((z) => {
-        let coords = z.coordinates;
-        if (typeof coords === 'string') {
-          try { coords = JSON.parse(coords); } catch (e) { coords = []; }
-        }
-        return { ...z, coordinates: coords };
-      }).filter((z) => z.coordinates && z.coordinates.length >= 3);
+      activeAvoidZones = (azRows || [])
+        .map((z) => {
+          let coords = z.coordinates;
+          if (typeof coords === "string") {
+            try {
+              coords = JSON.parse(coords);
+            } catch (e) {
+              coords = [];
+            }
+          }
+          return { ...z, coordinates: coords };
+        })
+        .filter((z) => z.coordinates && z.coordinates.length >= 3);
     } catch (azErr) {
-      console.warn('Fetch avoid zones for auto-route skipped:', azErr.message || azErr);
+      console.warn(
+        "Fetch avoid zones for auto-route skipped:",
+        azErr.message || azErr,
+      );
     }
 
     // 2. ตรวจสอบรถที่ถูกใช้งานไปแล้วในวันนี้ (ห้ามใช้ซ้ำวัน)
     const assignedRows = await query(
       `SELECT car_id FROM group_store WHERE (DATE_FORMAT(date, '%Y-%m-%d') = ? OR DATE_FORMAT(created_at, '%Y-%m-%d') = ?) AND car_id IS NOT NULL AND car_id != ''`,
-      [targetDate, targetDate]
+      [targetDate, targetDate],
     );
-    const alreadyAssignedCarIds = new Set((assignedRows || []).map((r) => String(r.car_id)));
+    const alreadyAssignedCarIds = new Set(
+      (assignedRows || []).map((r) => String(r.car_id)),
+    );
 
     const availableVehicleIds = (selectedVehicleIds || []).filter(
-      (id) => !alreadyAssignedCarIds.has(String(id))
+      (id) => !alreadyAssignedCarIds.has(String(id)),
     );
 
     if (availableVehicleIds.length === 0) {
       return res.status(400).json({
         success: false,
-        message: 'กรุณาเลือกรถขนส่งสำหรับคำนวณจัดสาย (รถที่เลือกถูกนำไปจัดสายในวันนี้แล้ว)'
+        message:
+          "กรุณาเลือกรถขนส่งสำหรับคำนวณจัดสาย (รถที่เลือกถูกนำไปจัดสายในวันนี้แล้ว)",
       });
     }
 
     let selectedVehicles = [];
     try {
-      const placeholders = availableVehicleIds.map(() => '?').join(',');
+      const placeholders = availableVehicleIds.map(() => "?").join(",");
       const cars = await query(
         `SELECT * FROM car WHERE car_id IN (${placeholders})`,
-        availableVehicleIds
+        availableVehicleIds,
       );
       selectedVehicles = (cars || []).map((c) => {
         const cId = String(c.car_id);
-        const customCap = customCapacities && customCapacities[cId] !== undefined && customCapacities[cId] !== null ? parseInt(customCapacities[cId], 10) : NaN;
-        const defaultCap = parseInt(c.quantity || c.max_load || c.car_load || maxLoadPerVehicle || 100, 10);
+        const customCap =
+          customCapacities &&
+          customCapacities[cId] !== undefined &&
+          customCapacities[cId] !== null
+            ? parseInt(customCapacities[cId], 10)
+            : NaN;
+        const defaultCap = parseInt(
+          c.quantity || c.max_load || c.car_load || maxLoadPerVehicle || 100,
+          10,
+        );
         return {
           car_id: c.car_id,
           license_plate: c.license_plate || c.car_id,
-          capacity: !isNaN(customCap) && customCap > 0 ? customCap : defaultCap
+          capacity: !isNaN(customCap) && customCap > 0 ? customCap : defaultCap,
         };
       });
     } catch (eCars) {
       selectedVehicles = availableVehicleIds.map((id) => {
         const cId = String(id);
-        const customCap = customCapacities && customCapacities[cId] !== undefined && customCapacities[cId] !== null ? parseInt(customCapacities[cId], 10) : NaN;
+        const customCap =
+          customCapacities &&
+          customCapacities[cId] !== undefined &&
+          customCapacities[cId] !== null
+            ? parseInt(customCapacities[cId], 10)
+            : NaN;
         return {
           car_id: id,
           license_plate: id,
-          capacity: !isNaN(customCap) && customCap > 0 ? customCap : (maxLoadPerVehicle || 100)
+          capacity:
+            !isNaN(customCap) && customCap > 0
+              ? customCap
+              : maxLoadPerVehicle || 100,
         };
       });
     }
 
-    const totalSelectedCapacity = selectedVehicles.reduce((sum, v) => sum + v.capacity, 0);
+    const totalSelectedCapacity = selectedVehicles.reduce(
+      (sum, v) => sum + v.capacity,
+      0,
+    );
 
     // 3. แจ้งเตือนหากความจุรถไม่พอ
     if (totalUnassignedQuantity > totalSelectedCapacity) {
       return res.status(400).json({
         success: false,
-        message: `รถที่เลือก รับได้ไม่พอ! (ต้องการบรรจุ ${totalUnassignedQuantity} ลัง แต่รถที่เลือกรองรับได้รวม ${totalSelectedCapacity} ลัง) กรุณาเลือกรถเพิ่มอีก`
+        message: `รถที่เลือก รับได้ไม่พอ! (ต้องการบรรจุ ${totalUnassignedQuantity} ลัง แต่รถที่เลือกรองรับได้รวม ${totalSelectedCapacity} ลัง) กรุณาเลือกรถเพิ่มอีก`,
       });
     }
 
-    const effectivePriority = req.body.priorityStrategy || req.body.strategy || 'fastest_time';
+    const effectivePriority =
+      req.body.priorityStrategy || req.body.strategy || "fastest_time";
     const bufferTimeMins = parseInt(req.body.bufferTimePerRoute || 0, 10);
 
     // จัดลำดับรถตาม strategy
-    if (effectivePriority === 'max_load_first') {
+    if (effectivePriority === "max_load_first") {
       selectedVehicles.sort((a, b) => b.capacity - a.capacity);
     }
 
@@ -1793,11 +2468,19 @@ router.post('/auto-route', authenticateToken, async (req, res) => {
     const numVehicles = selectedVehicles.length;
     let clusteredItems;
 
-    if (effectivePriority === 'order_fifo') {
+    if (effectivePriority === "order_fifo") {
       // FIFO ไม่ต้อง cluster — ใช้ลำดับเดิม
-      clusteredItems = items.map((item, idx) => ({ ...item, cluster: Math.floor(idx / Math.ceil(items.length / numVehicles)) }));
+      clusteredItems = items.map((item, idx) => ({
+        ...item,
+        cluster: Math.floor(idx / Math.ceil(items.length / numVehicles)),
+      }));
     } else if (numVehicles >= 2 && items.length >= numVehicles * 2) {
-      clusteredItems = kMeansCluster(items, numVehicles);
+      clusteredItems = optimoRouteSectorCluster(
+        items,
+        numVehicles,
+        DEPOT,
+        activeAvoidZones,
+      );
     } else {
       clusteredItems = items.map((item) => ({ ...item, cluster: 0 }));
     }
@@ -1810,45 +2493,71 @@ router.post('/auto-route', authenticateToken, async (req, res) => {
     });
 
     // จับคู่ cluster กับ vehicle (เรียงตาม cluster ID)
-    const clusterKeys = Object.keys(clusterGroups).sort((a, b) => Number(a) - Number(b));
+    const clusterKeys = Object.keys(clusterGroups).sort(
+      (a, b) => Number(a) - Number(b),
+    );
 
-    // ถ้ามี cluster มากกว่ารถ ให้ merge cluster ที่มีน้อยที่สุดเข้ากัน
+    // ถ้ามี cluster มากกว่ารถ ให้ merge cluster ที่มีน้อยที่สุดเข้ากัน (เช็ค Avoid Zone ระหว่าง cluster ด้วย)
     while (clusterKeys.length > numVehicles && clusterKeys.length > 1) {
       // หา 2 cluster ที่ centroid ใกล้กันที่สุด แล้ว merge
       let minPairDist = Infinity;
-      let mergeA = 0, mergeB = 1;
+      let mergeA = 0,
+        mergeB = 1;
       for (let i = 0; i < clusterKeys.length; i++) {
         for (let j = i + 1; j < clusterKeys.length; j++) {
           const groupA = clusterGroups[clusterKeys[i]];
           const groupB = clusterGroups[clusterKeys[j]];
-          const centA = { lat: groupA.reduce((s, m) => s + m.lat, 0) / groupA.length, lng: groupA.reduce((s, m) => s + m.lng, 0) / groupA.length };
-          const centB = { lat: groupB.reduce((s, m) => s + m.lat, 0) / groupB.length, lng: groupB.reduce((s, m) => s + m.lng, 0) / groupB.length };
-          const d = haversineKm(centA.lat, centA.lng, centB.lat, centB.lng);
-          if (d < minPairDist) { minPairDist = d; mergeA = i; mergeB = j; }
+          const centA = {
+            lat: groupA.reduce((s, m) => s + m.lat, 0) / groupA.length,
+            lng: groupA.reduce((s, m) => s + m.lng, 0) / groupA.length,
+          };
+          const centB = {
+            lat: groupB.reduce((s, m) => s + m.lat, 0) / groupB.length,
+            lng: groupB.reduce((s, m) => s + m.lng, 0) / groupB.length,
+          };
+          let d = haversineKm(centA.lat, centA.lng, centB.lat, centB.lng);
+          if (activeAvoidZones && activeAvoidZones.length > 0) {
+            d *= avoidZonePenalty(
+              centA.lat,
+              centA.lng,
+              centB.lat,
+              centB.lng,
+              activeAvoidZones,
+            );
+          }
+          if (d < minPairDist) {
+            minPairDist = d;
+            mergeA = i;
+            mergeB = j;
+          }
         }
       }
-      clusterGroups[clusterKeys[mergeA]].push(...clusterGroups[clusterKeys[mergeB]]);
+      clusterGroups[clusterKeys[mergeA]].push(
+        ...clusterGroups[clusterKeys[mergeB]],
+      );
       delete clusterGroups[clusterKeys[mergeB]];
       clusterKeys.splice(mergeB, 1);
     }
 
     // ─── Phase 3: OSRM Travel Time Matrix (Best-effort) ───
-    // สร้าง travel time matrix จาก OSRM สำหรับทุกจุด (depot + items)
+    // สร้าง travel time matrix จาก OSRM สำหรับทุกจุด (depot + items) รองรับสูงสุด 100 จุด
     let osrmMatrix = null;
     let osrmPointsMap = null; // map from list_id -> index in matrix
     try {
       const allPoints = [DEPOT, ...items];
-      if (allPoints.length <= 25) {
+      if (allPoints.length <= 100) {
         const matrix = await fetchOsrmTravelTimeMatrix(allPoints);
         if (matrix) {
           osrmMatrix = matrix;
           osrmPointsMap = new Map();
-          osrmPointsMap.set('DEPOT', 0);
-          items.forEach((item, idx) => osrmPointsMap.set(String(item.list_id), idx + 1));
+          osrmPointsMap.set("DEPOT", 0);
+          items.forEach((item, idx) =>
+            osrmPointsMap.set(String(item.list_id), idx + 1),
+          );
         }
       }
     } catch (osrmErr) {
-      console.warn('OSRM matrix fetch skipped:', osrmErr.message || osrmErr);
+      console.warn("OSRM matrix fetch skipped:", osrmErr.message || osrmErr);
     }
 
     /**
@@ -1860,7 +2569,8 @@ router.post('/auto-route', authenticateToken, async (req, res) => {
       if (
         (fromId && fromId === toId) ||
         (fromLat === toLat && fromLng === toLng) ||
-        (Math.abs(fromLat - toLat) < 0.00002 && Math.abs(fromLng - toLng) < 0.00002)
+        (Math.abs(fromLat - toLat) < 0.00002 &&
+          Math.abs(fromLng - toLng) < 0.00002)
       ) {
         return 0;
       }
@@ -1883,20 +2593,35 @@ router.post('/auto-route', authenticateToken, async (req, res) => {
 
       // Apply avoid zone penalty if line segment intersects any active avoid zone
       const baseVal = Math.max(1, mins);
-      const penalty = avoidZonePenalty(fromLat, fromLng, toLat, toLng, activeAvoidZones);
+      const penalty = avoidZonePenalty(
+        fromLat,
+        fromLng,
+        toLat,
+        toLng,
+        activeAvoidZones,
+      );
       return baseVal * penalty;
     }
 
     // ─── Phase 1+2: Build Routes with Nearest Neighbor + 2-opt + Clustering ───
-    const colors = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#64748b'];
-    
+    const colors = [
+      "#3b82f6",
+      "#10b981",
+      "#f59e0b",
+      "#ef4444",
+      "#8b5cf6",
+      "#ec4899",
+      "#06b6d4",
+      "#64748b",
+    ];
+
     // Track vehicle route states
     const vehicleRouteStates = selectedVehicles.map((vehicle) => ({
       vehicle,
       vehicleCap: vehicle.capacity,
       routeStops: [],
       currentLoad: 0,
-      currentPos: { lat: DEPOT.lat, lng: DEPOT.lng }
+      currentPos: { lat: DEPOT.lat, lng: DEPOT.lng },
     }));
 
     const assignedItemIds = new Set();
@@ -1909,15 +2634,20 @@ router.post('/auto-route', authenticateToken, async (req, res) => {
         clusterItems = clusterGroups[clusterKeys[vIdx]] || [];
       }
 
-      let remainingClusterItems = clusterItems.filter((i) => !assignedItemIds.has(i.list_id));
+      let remainingClusterItems = clusterItems.filter(
+        (i) => !assignedItemIds.has(i.list_id),
+      );
 
       while (remainingClusterItems.length > 0) {
         let nearestIdx = -1;
         let minMetric = Infinity;
 
-        if (effectivePriority === 'order_fifo') {
+        if (effectivePriority === "order_fifo") {
           for (let i = 0; i < remainingClusterItems.length; i++) {
-            if (state.currentLoad + remainingClusterItems[i].quantity <= state.vehicleCap) {
+            if (
+              state.currentLoad + remainingClusterItems[i].quantity <=
+              state.vehicleCap
+            ) {
               nearestIdx = i;
               break;
             }
@@ -1927,17 +2657,46 @@ router.post('/auto-route', authenticateToken, async (req, res) => {
             const item = remainingClusterItems[i];
             if (state.currentLoad + item.quantity <= state.vehicleCap) {
               let metric;
-              if (effectivePriority === 'fastest_time') {
+              if (effectivePriority === "fastest_time") {
+                // Note: getTravelMinutes already includes avoidZonePenalty(from -> item)
                 metric = getTravelMinutes(
-                  state.routeStops.length === 0 ? 'DEPOT' : String(state.routeStops[state.routeStops.length - 1].list_id),
-                  state.currentPos.lat, state.currentPos.lng,
-                  String(item.list_id), item.lat, item.lng
+                  state.routeStops.length === 0
+                    ? "DEPOT"
+                    : String(
+                        state.routeStops[state.routeStops.length - 1].list_id,
+                      ),
+                  state.currentPos.lat,
+                  state.currentPos.lng,
+                  String(item.list_id),
+                  item.lat,
+                  item.lng,
                 );
               } else {
-                metric = haversineKm(state.currentPos.lat, state.currentPos.lng, item.lat, item.lng);
+                metric = haversineKm(
+                  state.currentPos.lat,
+                  state.currentPos.lng,
+                  item.lat,
+                  item.lng,
+                );
+                metric *= avoidZonePenalty(
+                  state.currentPos.lat,
+                  state.currentPos.lng,
+                  item.lat,
+                  item.lng,
+                  activeAvoidZones,
+                );
               }
-              // Apply avoid zone penalty
-              metric *= avoidZonePenalty(state.currentPos.lat, state.currentPos.lng, item.lat, item.lng, activeAvoidZones);
+
+              // Also factor in return to Depot penalty check to prevent choosing a stop that blocks returning to Depot
+              const returnPenalty = avoidZonePenalty(
+                item.lat,
+                item.lng,
+                DEPOT.lat,
+                DEPOT.lng,
+                activeAvoidZones,
+              );
+              metric *= returnPenalty;
+
               if (metric < minMetric) {
                 minMetric = metric;
                 nearestIdx = i;
@@ -1974,9 +2733,30 @@ router.post('/auto-route', authenticateToken, async (req, res) => {
           for (let i = 0; i < leftoverItems.length; i++) {
             const item = leftoverItems[i];
             if (state.currentLoad + item.quantity <= state.vehicleCap) {
-              let metric = haversineKm(state.currentPos.lat, state.currentPos.lng, item.lat, item.lng);
-              // Apply avoid zone penalty
-              metric *= avoidZonePenalty(state.currentPos.lat, state.currentPos.lng, item.lat, item.lng, activeAvoidZones);
+              let metric = haversineKm(
+                state.currentPos.lat,
+                state.currentPos.lng,
+                item.lat,
+                item.lng,
+              );
+              // Apply avoid zone penalty from current position to item
+              metric *= avoidZonePenalty(
+                state.currentPos.lat,
+                state.currentPos.lng,
+                item.lat,
+                item.lng,
+                activeAvoidZones,
+              );
+              // Factor in return to Depot penalty
+              const returnPenalty = avoidZonePenalty(
+                item.lat,
+                item.lng,
+                DEPOT.lat,
+                DEPOT.lng,
+                activeAvoidZones,
+              );
+              metric *= returnPenalty;
+
               if (metric < minMetric) {
                 minMetric = metric;
                 bestIdx = i;
@@ -2000,9 +2780,14 @@ router.post('/auto-route', authenticateToken, async (req, res) => {
     // Pass 3: Safety Fallback for any remaining item if total capacity is sufficient
     if (leftoverItems.length > 0) {
       for (const item of leftoverItems) {
-        const bestVehicleState = vehicleRouteStates.reduce((prev, curr) =>
-          curr.vehicleCap - curr.currentLoad > prev.vehicleCap - prev.currentLoad ? curr : prev
-        , vehicleRouteStates[0]);
+        const bestVehicleState = vehicleRouteStates.reduce(
+          (prev, curr) =>
+            curr.vehicleCap - curr.currentLoad >
+            prev.vehicleCap - prev.currentLoad
+              ? curr
+              : prev,
+          vehicleRouteStates[0],
+        );
 
         if (bestVehicleState) {
           bestVehicleState.routeStops.push(item);
@@ -2025,47 +2810,76 @@ router.post('/auto-route', authenticateToken, async (req, res) => {
       // ─── 2-opt Route Improvement ───
       // ไม่ทำ 2-opt สำหรับ FIFO mode (ต้องรักษาลำดับเดิม)
       let optimizedStops = routeStops;
-      if (effectivePriority !== 'order_fifo' && routeStops.length >= 3) {
-        optimizedStops = twoOptImprove(routeStops, DEPOT, activeAvoidZones);
+      if (effectivePriority !== "order_fifo" && routeStops.length >= 3) {
+        optimizedStops = twoOptImprove(
+          routeStops,
+          DEPOT,
+          getTravelMinutes,
+          activeAvoidZones,
+        );
       }
 
       // ─── Save to DB ───
-      const groupName = `Auto-Route${String(createdRoutes.length + 1).padStart(3, '0')}`;
+      const groupName = `Auto-Route${String(createdRoutes.length + 1).padStart(3, "0")}`;
       const groupColor = colors[createdRoutes.length % colors.length];
 
       const groupRes = await query(
         `INSERT INTO group_store (group_store_name, group_color, car_id, load1, date, created_at)
          VALUES (?, ?, ?, ?, ?, NOW())`,
-        [groupName, groupColor, vehicle.car_id, currentLoad, targetDate]
+        [groupName, groupColor, vehicle.car_id, currentLoad, targetDate],
       );
       const newGroupId = groupRes.insertId;
 
       // ─── Calculate ETAs (ใช้ OSRM duration หรือ Haversine + variable speed) ───
       let currentMinutes = 8 * 60; // default 08:00
-      if (req.body.depotStartTime && typeof req.body.depotStartTime === 'string' && req.body.depotStartTime.includes(':')) {
-        const parts = req.body.depotStartTime.split(':');
-        currentMinutes = (parseInt(parts[0], 10) || 8) * 60 + (parseInt(parts[1], 10) || 0);
+      if (
+        req.body.depotStartTime &&
+        typeof req.body.depotStartTime === "string" &&
+        req.body.depotStartTime.includes(":")
+      ) {
+        const parts = req.body.depotStartTime.split(":");
+        currentMinutes =
+          (parseInt(parts[0], 10) || 8) * 60 + (parseInt(parts[1], 10) || 0);
       }
 
       // เพิ่ม buffer time ก่อนออกเดินทาง (เวลาเตรียมตัวรถ)
       currentMinutes += bufferTimeMins;
 
       const serviceTimeMins = parseInt(req.body.serviceTimeMinutes || 10, 10);
-      let prevId = 'DEPOT';
+      let prevId = "DEPOT";
       let prevPos = { lat: DEPOT.lat, lng: DEPOT.lng };
       let totalDistKm = 0;
 
-      for (let orderIndex = 0; orderIndex < optimizedStops.length; orderIndex++) {
+      for (
+        let orderIndex = 0;
+        orderIndex < optimizedStops.length;
+        orderIndex++
+      ) {
         const item = optimizedStops[orderIndex];
 
-        const travelMins = getTravelMinutes(prevId, prevPos.lat, prevPos.lng, String(item.list_id), item.lat, item.lng);
-        const legDistKm = haversineKm(prevPos.lat, prevPos.lng, item.lat, item.lng);
+        const travelMins = getTravelMinutes(
+          prevId,
+          prevPos.lat,
+          prevPos.lng,
+          String(item.list_id),
+          item.lat,
+          item.lng,
+        );
+        const legDistKm = haversineKm(
+          prevPos.lat,
+          prevPos.lng,
+          item.lat,
+          item.lng,
+        );
         totalDistKm += legDistKm;
 
         currentMinutes += travelMins;
 
-        const hh = String(Math.floor(currentMinutes / 60) % 24).padStart(2, '0');
-        const mm = String(currentMinutes % 60).padStart(2, '0');
+        const hh = String(Math.floor(currentMinutes / 60) % 24).padStart(
+          2,
+          "0",
+        );
+        const mm = String(currentMinutes % 60).padStart(2, "0");
         const scheduledTimeStr = `${hh}:${mm}:00`;
 
         await query(
@@ -2076,7 +2890,7 @@ router.post('/auto-route', authenticateToken, async (req, res) => {
                priority = COALESCE(priority, 'medium'),
                status = 'in_progress'
            WHERE list_id = ?`,
-          [newGroupId, orderIndex + 1, scheduledTimeStr, item.list_id]
+          [newGroupId, orderIndex + 1, scheduledTimeStr, item.list_id],
         );
 
         currentMinutes += serviceTimeMins;
@@ -2085,12 +2899,27 @@ router.post('/auto-route', authenticateToken, async (req, res) => {
       }
 
       // คำนวณเวลากลับ Depot
-      const returnTravelMins = getTravelMinutes(prevId, prevPos.lat, prevPos.lng, 'DEPOT', DEPOT.lat, DEPOT.lng);
-      const returnDistKm = haversineKm(prevPos.lat, prevPos.lng, DEPOT.lat, DEPOT.lng);
+      const returnTravelMins = getTravelMinutes(
+        prevId,
+        prevPos.lat,
+        prevPos.lng,
+        "DEPOT",
+        DEPOT.lat,
+        DEPOT.lng,
+      );
+      const returnDistKm = haversineKm(
+        prevPos.lat,
+        prevPos.lng,
+        DEPOT.lat,
+        DEPOT.lng,
+      );
       totalDistKm += returnDistKm;
       const estReturnMinutes = currentMinutes + returnTravelMins;
-      const returnHh = String(Math.floor(estReturnMinutes / 60) % 24).padStart(2, '0');
-      const returnMm = String(estReturnMinutes % 60).padStart(2, '0');
+      const returnHh = String(Math.floor(estReturnMinutes / 60) % 24).padStart(
+        2,
+        "0",
+      );
+      const returnMm = String(estReturnMinutes % 60).padStart(2, "0");
 
       createdRoutes.push({
         group_store_id: newGroupId,
@@ -2100,12 +2929,17 @@ router.post('/auto-route', authenticateToken, async (req, res) => {
         totalQuantity: currentLoad,
         totalDistanceKm: Math.round(totalDistKm * 10) / 10,
         estimatedReturnTime: `${returnHh}:${returnMm}`,
-        usedOsrm: !!osrmMatrix
+        usedOsrm: !!osrmMatrix,
       });
     }
 
-    const totalDist = createdRoutes.reduce((s, r) => s + (r.totalDistanceKm || 0), 0);
-    const algorithmUsed = osrmMatrix ? 'K-means + Nearest Neighbor + 2-opt + OSRM' : 'K-means + Nearest Neighbor + 2-opt + Haversine';
+    const totalDist = createdRoutes.reduce(
+      (s, r) => s + (r.totalDistanceKm || 0),
+      0,
+    );
+    const algorithmUsed = osrmMatrix
+      ? "K-means + Nearest Neighbor + 2-opt + OSRM"
+      : "K-means + Nearest Neighbor + 2-opt + Haversine";
 
     res.json({
       success: true,
@@ -2116,11 +2950,11 @@ router.post('/auto-route', authenticateToken, async (req, res) => {
         totalDistanceKm: Math.round(totalDist * 10) / 10,
         algorithm: algorithmUsed,
         strategy: effectivePriority,
-        usedOsrm: !!osrmMatrix
-      }
+        usedOsrm: !!osrmMatrix,
+      },
     });
   } catch (err) {
-    console.error('POST /auto-route error:', err);
+    console.error("POST /auto-route error:", err);
     res.status(500).json({ success: false, message: err.message });
   }
 });

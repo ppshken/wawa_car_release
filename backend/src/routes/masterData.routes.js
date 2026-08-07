@@ -895,7 +895,7 @@ router.delete('/groups/:id', authenticateToken, async (req, res) => {
     
     // อัพเดท list_store ที่อยู่ในกลุ่มนี้ให้เป็น unassigned ก่อนลบ
     await query(
-      "UPDATE list_store SET group_store_id = NULL, row_order = NULL, status = 'unassigned' WHERE group_store_id = ?",
+      "UPDATE list_store SET group_store_id = NULL, row_order = NULL, status = 'unassigned', scheduled_time = NULL, start_service_time = NULL, end_service_time = NULL WHERE group_store_id = ?",
       [id]
     );
 
@@ -1099,7 +1099,7 @@ const ensurePositionProductTables = async () => {
 
     const cols1 = await query("SHOW COLUMNS FROM list_store LIKE 'position_product_id'");
     if (cols1.length === 0) {
-      await query("ALTER TABLE list_store ADD COLUMN position_product_id INT NULL AFTER store_name_result");
+      await query("ALTER TABLE list_store ADD COLUMN position_product_id INT NULL");
     }
     const cols2 = await query("SHOW COLUMNS FROM list_store LIKE 'position_production_order'");
     if (cols2.length === 0) {
