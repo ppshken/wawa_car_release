@@ -10,6 +10,9 @@ export interface AvoidZone {
   is_active: boolean;
   description?: string;
   created_at?: string;
+  polygon_points?: { lat: number; lng: number }[];
+  fill_color?: string;
+  color?: string;
 }
 
 interface AvoidZoneDrawerProps {

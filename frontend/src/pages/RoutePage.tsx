@@ -16,7 +16,7 @@ import {
   useMapEvents,
 } from "react-leaflet";
 import L from "leaflet";
-import api from "../services/api";
+import api, { fetchGpsDeviceLogs } from "../services/api";
 import { useToast } from "../context/ToastContext";
 import { AnimatedDrawer } from "../components/AnimatedDrawer";
 import { SearchableSelect } from "../components/SearchableSelect";
@@ -161,8 +161,12 @@ interface StopData {
   status: string;
   type: string;
   scheduled_time?: string;
+  scheduledTime?: string;
   start_service_time?: string;
+  startServiceTime?: string;
   end_service_time?: string;
+  endServiceTime?: string;
+  arrival_time?: string;
   priority?: "low" | "medium" | "high" | string;
   pod_image?: string;
   position_product_id?: number | string;
@@ -187,7 +191,30 @@ const getEarlyDelayBadge = (
   startServiceTime?: string,
 ) => {
   if (!scheduledTime) return null;
-  const formattedScheduled = scheduledTime.slice(0, 5);
+
+  let schedHour = 0;
+  let schedMin = 0;
+  let formattedScheduled = "";
+
+  if (typeof scheduledTime === "string") {
+    if (scheduledTime.includes("T")) {
+      const d = new Date(scheduledTime);
+      if (!isNaN(d.getTime())) {
+        schedHour = d.getHours();
+        schedMin = d.getMinutes();
+        formattedScheduled = `${String(schedHour).padStart(2, "0")}:${String(schedMin).padStart(2, "0")}`;
+      }
+    } else if (scheduledTime.includes(":")) {
+      const parts = scheduledTime.split(":");
+      schedHour = parseInt(parts[0], 10) || 0;
+      schedMin = parseInt(parts[1], 10) || 0;
+      formattedScheduled = `${String(schedHour).padStart(2, "0")}:${String(schedMin).padStart(2, "0")}`;
+    }
+  }
+
+  if (!formattedScheduled) {
+    formattedScheduled = String(scheduledTime).slice(0, 5);
+  }
 
   if (!startServiceTime) {
     return {
@@ -227,10 +254,7 @@ const getEarlyDelayBadge = (
     };
   }
 
-  const schedParts = scheduledTime.split(":");
-  const schedMins =
-    (parseInt(schedParts[0], 10) || 0) * 60 +
-    (parseInt(schedParts[1], 10) || 0);
+  const schedMins = schedHour * 60 + schedMin;
   const actMins = startHour * 60 + startMin;
   const diff = actMins - schedMins;
 
@@ -362,12 +386,13 @@ const ROUTE_COLORS = [
 
 // ─── Marker with status-based icons & teardrop shape ───
 function createStopMarker(
-  number: number,
+  number: number | string,
   color: string,
   isDepot: boolean,
   status?: string,
+  itemCount: number = 1,
 ) {
-  const size = isDepot ? 30 : 26;
+  const isMultiple = itemCount > 1;
   const isCompleted = status === "completed";
   const isProblem = status === "problem" || status === "failed";
 
@@ -390,24 +415,71 @@ function createStopMarker(
     circleFill = "#dc2626";
   }
 
-  const svg = isDepot
-    ? `<svg width="${size}" height="${size + 8}" viewBox="0 0 30 38" xmlns="http://www.w3.org/2000/svg">
+  let svg = "";
+
+  if (isDepot) {
+    svg = `<svg width="30" height="38" viewBox="0 0 30 38" xmlns="http://www.w3.org/2000/svg">
         <path d="M15 37 C15 37 28 22 28 14 C28 6.82 22.18 1 15 1 C7.82 1 2 6.82 2 14 C2 22 15 37 15 37Z" fill="${color}" stroke="white" stroke-width="2"/>
         <circle cx="15" cy="14" r="8" fill="white"/>
         <text x="15" y="18" text-anchor="middle" font-size="11" font-weight="900" fill="${color}" font-family="system-ui">★</text>
-      </svg>`
-    : `<svg width="${size}" height="${size + 6}" viewBox="0 0 26 32" xmlns="http://www.w3.org/2000/svg">
-        <path d="M13 31 C13 31 24 19 24 12 C24 5.92 19.08 1 13 1 C6.92 1 2 5.92 2 12 C2 19 13 31 13 31Z" fill="${pinColor}" stroke="white" stroke-width="1.5"/>
-        <circle cx="13" cy="12" r="7" fill="${circleFill}"/>
-        <text x="13" y="${isCompleted ? 15.5 : 16}" text-anchor="middle" font-size="${isCompleted || isProblem ? 11 : number >= 100 ? 8 : number >= 10 ? 9 : 11}" font-weight="900" fill="${textColor}" font-family="system-ui">${symbolText}</text>
       </svg>`;
+    return L.divIcon({
+      className: "custom-pin-marker",
+      html: svg,
+      iconSize: [30, 38],
+      iconAnchor: [15, 38],
+      popupAnchor: [0, -34],
+    });
+  }
+
+  if (isMultiple) {
+    // Multi-item pin: double stacked teardrops + vibrant top-right badge showing count
+    const badgeText = itemCount > 99 ? "99+" : String(itemCount);
+    const badgeWidth =
+      badgeText.length > 2 ? 20 : badgeText.length > 1 ? 17 : 14;
+    svg = `<svg width="34" height="38" viewBox="0 0 34 38" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <filter id="pinShadow" x="-20%" y="-20%" width="140%" height="140%">
+            <feDropShadow dx="0" dy="1.5" stdDeviation="1.2" flood-opacity="0.35"/>
+          </filter>
+        </defs>
+        <!-- Stacked back pin effect -->
+        <path d="M16 35 C16 35 27 23 27 16 C27 9.92 22.08 5 16 5 C9.92 5 5 9.92 5 16 C5 23 16 35 16 35Z" fill="${pinColor}" opacity="0.45" stroke="white" stroke-width="1.5" transform="translate(3, -3)"/>
+        
+        <!-- Main front pin -->
+        <path d="M13 33 C13 33 24 21 24 14 C24 7.92 19.08 3 13 3 C6.92 3 2 7.92 2 14 C2 21 13 33 13 33Z" fill="${pinColor}" stroke="white" stroke-width="1.8" filter="url(#pinShadow)"/>
+        <circle cx="13" cy="14" r="7" fill="${circleFill}"/>
+        <text x="13" y="${isCompleted ? 17.5 : 18}" text-anchor="middle" font-size="${isCompleted || isProblem ? 11 : symbolText.length >= 3 ? 8 : symbolText.length >= 2 ? 9 : 11}" font-weight="900" fill="${textColor}" font-family="system-ui">${symbolText}</text>
+        
+        <!-- Top-right Badge showing total delivery items at this pin -->
+        <g transform="translate(${24 - badgeWidth / 2}, 0)">
+          <rect x="0" y="0" width="${badgeWidth}" height="14" rx="7" fill="#f59e0b" stroke="white" stroke-width="1.5"/>
+          <text x="${badgeWidth / 2}" y="10.5" text-anchor="middle" font-size="9" font-weight="900" fill="white" font-family="system-ui">${badgeText}</text>
+        </g>
+      </svg>`;
+
+    return L.divIcon({
+      className: "custom-pin-marker custom-multi-pin",
+      html: svg,
+      iconSize: [34, 38],
+      iconAnchor: [13, 33],
+      popupAnchor: [0, -29],
+    });
+  }
+
+  // Single item pin
+  svg = `<svg width="26" height="32" viewBox="0 0 26 32" xmlns="http://www.w3.org/2000/svg">
+      <path d="M13 31 C13 31 24 19 24 12 C24 5.92 19.08 1 13 1 C6.92 1 2 5.92 2 12 C2 19 13 31 13 31Z" fill="${pinColor}" stroke="white" stroke-width="1.5"/>
+      <circle cx="13" cy="12" r="7" fill="${circleFill}"/>
+      <text x="13" y="${isCompleted ? 15.5 : 16}" text-anchor="middle" font-size="${isCompleted || isProblem ? 11 : symbolText.length >= 3 ? 8 : symbolText.length >= 2 ? 9 : 11}" font-weight="900" fill="${textColor}" font-family="system-ui">${symbolText}</text>
+    </svg>`;
 
   return L.divIcon({
     className: "custom-pin-marker",
     html: svg,
-    iconSize: [size, size + (isDepot ? 8 : 6)],
-    iconAnchor: [size / 2, size + (isDepot ? 8 : 6)],
-    popupAnchor: [0, -(size + (isDepot ? 8 : 6)) + 4],
+    iconSize: [26, 32],
+    iconAnchor: [13, 32],
+    popupAnchor: [0, -28],
   });
 }
 
@@ -531,7 +603,20 @@ function createGpsVehicleMarker(device: GpsDevice) {
   });
 }
 
-const DEPOT_COORD = { lat: 17.1266642, lng: 102.9635667 };
+const getDepotCoordFromEnv = (): { lat: number; lng: number } => {
+  const envVal = import.meta.env.VITE_HOME;
+  if (envVal && typeof envVal === "string" && envVal.includes(",")) {
+    const parts = envVal.split(",");
+    const lat = parseFloat(parts[0].trim());
+    const lng = parseFloat(parts[1].trim());
+    if (!isNaN(lat) && !isNaN(lng)) {
+      return { lat, lng };
+    }
+  }
+  return { lat: 17.128338, lng: 102.965199 };
+};
+
+const DEPOT_COORD = getDepotCoordFromEnv();
 
 // ─── OSRM Road Routing Helper ───
 async function fetchRoadGeometry(
@@ -719,6 +804,173 @@ export const RoutePage: React.FC = () => {
   const visibleColumnCount = routeTableColumns.filter(
     (col) => visibleColumns[col.id] !== false,
   ).length;
+
+  // Group stops by coordinates (latitude and longitude) & store_id to handle overlapping pins on map
+  const locationStopsGroupMap = useMemo(() => {
+    const map: Record<
+      string,
+      Array<{
+        stop: any;
+        routeId?: string | number;
+        routeColor?: string;
+        routeName?: string;
+        driverName?: string;
+        vehiclePlate?: string;
+        isUnassigned?: boolean;
+      }>
+    > = {};
+
+    const addStopToMap = (
+      key: string,
+      item: {
+        stop: any;
+        routeId?: string | number;
+        routeColor?: string;
+        routeName?: string;
+        driverName?: string;
+        vehiclePlate?: string;
+        isUnassigned?: boolean;
+      },
+    ) => {
+      if (!key) return;
+      if (!map[key]) {
+        map[key] = [];
+      }
+      const targetId = item.stop.list_id || item.stop.stopId || item.stop.id;
+      const targetOrderNo =
+        item.stop.orderNo ||
+        item.stop.data_store_no ||
+        item.stop.order_no ||
+        "";
+
+      const exists = map[key].some((existing) => {
+        const existingId =
+          existing.stop.list_id || existing.stop.stopId || existing.stop.id;
+        const existingOrderNo =
+          existing.stop.orderNo ||
+          existing.stop.data_store_no ||
+          existing.stop.order_no ||
+          "";
+
+        if (
+          existingId &&
+          targetId &&
+          String(existingId) === String(targetId)
+        ) {
+          return true;
+        }
+        if (
+          existingOrderNo &&
+          targetOrderNo &&
+          String(existingOrderNo) === String(targetOrderNo)
+        ) {
+          return true;
+        }
+        return false;
+      });
+
+      if (!exists) {
+        map[key].push(item);
+      }
+    };
+
+    // 1. Process Assigned Stops from Routes (include all routes so multi-item stores show complete info)
+    routes.forEach((route) => {
+      route.stops?.forEach((stop: any) => {
+        if (stop.type === "depot") return;
+        let lat = stop.lat;
+        let lng = stop.lng;
+        if ((!lat || !lng) && stop.lat_long && typeof stop.lat_long === "string") {
+          const parts = stop.lat_long.split(",").map((p: any) => parseFloat(p.trim()));
+          if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
+            lat = parts[0];
+            lng = parts[1];
+          }
+        }
+        if (!lat || !lng) return;
+
+        const stopObj = {
+          ...stop,
+          lat,
+          lng,
+          storeName: stop.storeName || stop.store_name || stop.store_name_result || "",
+          address: stop.address || stop.store_address || "",
+          orderNo: stop.orderNo || stop.data_store_no || stop.order_no || "",
+          quantity: stop.quantity || stop.sum_quantity || 1,
+        };
+
+        const itemWrapper = {
+          stop: stopObj,
+          routeId: route.routeId,
+          routeColor: route.color || "#3b82f6",
+          routeName: route.groupStoreName || (route.driverName ? `สาย ${route.driverName}` : `สาย #${route.routeId}`),
+          driverName: route.driverName || "-",
+          vehiclePlate: route.vehiclePlate || "-",
+          isUnassigned: false,
+        };
+
+        const coordKey = `${Number(lat).toFixed(5)}_${Number(lng).toFixed(5)}`;
+        addStopToMap(coordKey, itemWrapper);
+
+        const storeId = stop.store_id || stop.locationNo;
+        if (storeId) {
+          addStopToMap(
+            `store_${String(storeId).trim().toLowerCase()}`,
+            itemWrapper,
+          );
+        }
+      });
+    });
+
+    // 2. Process Unassigned Stops
+    unassignedStops.forEach((stop: any) => {
+      let lat = stop.lat;
+      let lng = stop.lng;
+      if ((!lat || !lng) && stop.lat_long && typeof stop.lat_long === "string") {
+        const parts = stop.lat_long.split(",").map((p: any) => parseFloat(p.trim()));
+        if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
+          lat = parts[0];
+          lng = parts[1];
+        }
+      }
+      if (!lat || !lng) return;
+
+      const stopObj = {
+        ...stop,
+        lat,
+        lng,
+        stopId: stop.list_id || stop.id,
+        storeName: stop.store_name_result || stop.store_name || stop.storeName || "",
+        address: stop.store_address || stop.address || "",
+        orderNo: stop.data_store_no || stop.order_no || stop.orderNo || "",
+        quantity: stop.sum_quantity || stop.quantity || 1,
+        rowOrder: stop.row_order || stop.rowOrder || 1,
+        status: stop.status || "unassigned",
+      };
+
+      const itemWrapper = {
+        stop: stopObj,
+        routeColor: "#9ca3af",
+        routeName: "ยังไม่จัดสาย",
+        driverName: "-",
+        vehiclePlate: "-",
+        isUnassigned: true,
+      };
+
+      const coordKey = `${Number(lat).toFixed(5)}_${Number(lng).toFixed(5)}`;
+      addStopToMap(coordKey, itemWrapper);
+
+      const storeId = stop.store_id || stop.locationNo;
+      if (storeId) {
+        addStopToMap(
+          `store_${String(storeId).trim().toLowerCase()}`,
+          itemWrapper,
+        );
+      }
+    });
+
+    return map;
+  }, [routes, unassignedStops]);
   const [unassignedLoads, setUnassignedLoads] = useState<
     Record<number, number>
   >({});
@@ -858,6 +1110,78 @@ export const RoutePage: React.FC = () => {
   >("unpaved");
   const [newZoneDescription, setNewZoneDescription] = useState("");
   const [savingAvoidZone, setSavingAvoidZone] = useState(false);
+
+  // OpenStreetMap Options & Map Controls State
+  const [mapTileStyle, setMapTileStyle] = useState<
+    "osm" | "satellite" | "topo" | "dark" | "light"
+  >("osm");
+
+  const [myLocation, setMyLocation] = useState<[number, number] | null>(null);
+  const [isLocating, setIsLocating] = useState(false);
+
+  const tileLayerConfig = useMemo(() => {
+    switch (mapTileStyle) {
+      case "satellite":
+        return {
+          url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+          attribution: "&copy; Esri World Imagery, Earthstar Geographics",
+          maxZoom: 19,
+        };
+      case "topo":
+        return {
+          url: "https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png",
+          attribution: "&copy; OpenTopoMap & OpenStreetMap contributors",
+          maxZoom: 17,
+        };
+      case "dark":
+        return {
+          url: "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
+          attribution: "&copy; CARTO & OpenStreetMap contributors",
+          maxZoom: 19,
+        };
+      case "light":
+        return {
+          url: "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png",
+          attribution: "&copy; CARTO & OpenStreetMap contributors",
+          maxZoom: 19,
+        };
+      case "osm":
+      default:
+        return {
+          url: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+          attribution: "&copy; OpenStreetMap contributors",
+          maxZoom: 19,
+        };
+    }
+  }, [mapTileStyle]);
+
+  const handleLocateMe = useCallback(() => {
+    if (!navigator.geolocation) {
+      showError("เบราว์เซอร์ของคุณไม่รองรับ Geolocation");
+      return;
+    }
+    setIsLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setIsLocating(false);
+        const coords: [number, number] = [
+          pos.coords.latitude,
+          pos.coords.longitude,
+        ];
+        setMyLocation(coords);
+        setActiveStop(null);
+        setActiveGpsTarget({ lat: coords[0], lng: coords[1] });
+        showSuccess(
+          `พบตำแหน่งปัจจุบันของคุณ (${coords[0].toFixed(4)}, ${coords[1].toFixed(4)})`,
+        );
+      },
+      (err) => {
+        setIsLocating(false);
+        showError(`ไม่สามารถระบุตำแหน่งได้: ${err.message}`);
+      },
+      { enableHighAccuracy: true, timeout: 10000 },
+    );
+  }, [showSuccess, showError]);
 
   // Store business hours cache for drawer alerts
   const [storeHoursCache, setStoreHoursCache] = useState<Record<string, any[]>>(
@@ -1165,16 +1489,59 @@ export const RoutePage: React.FC = () => {
     }
   };
 
-  const handleDeleteAvoidZone = async (zoneId: number) => {
-    if (!window.confirm("คุณต้องการลบพื้นที่ห้ามผ่านนี้ใช่หรือไม่?")) return;
+  // Avoid Zone Deletion Confirmation State
+  const [avoidZoneToDelete, setAvoidZoneToDelete] = useState<AvoidZone | null>(
+    null,
+  );
+  const [
+    isConfirmDeleteAvoidZoneModalOpen,
+    setIsConfirmDeleteAvoidZoneModalOpen,
+  ] = useState(false);
+  const [deletingAvoidZone, setDeletingAvoidZone] = useState(false);
+
+  const handleRequestDeleteAvoidZone = (zoneIdOrObj: number | AvoidZone) => {
+    let targetZone: AvoidZone | null = null;
+    if (typeof zoneIdOrObj === "object" && zoneIdOrObj !== null) {
+      targetZone = zoneIdOrObj;
+    } else {
+      targetZone =
+        avoidZones.find((z) => Number(z.zone_id) === Number(zoneIdOrObj)) ||
+        null;
+    }
+
+    if (targetZone) {
+      setAvoidZoneToDelete(targetZone);
+    } else {
+      setAvoidZoneToDelete({
+        zone_id: Number(zoneIdOrObj),
+        zone_name: `เขตห้ามผ่าน #${zoneIdOrObj}`,
+      } as AvoidZone);
+    }
+    setIsConfirmDeleteAvoidZoneModalOpen(true);
+  };
+
+  const handleConfirmDeleteAvoidZone = async () => {
+    if (!avoidZoneToDelete) return;
+    setDeletingAvoidZone(true);
     try {
-      const res = await api.delete(`/master/avoid-zones/${zoneId}`);
+      const res = await api.delete(
+        `/master/avoid-zones/${avoidZoneToDelete.zone_id}`,
+      );
       if (res.data.success) {
-        showSuccess("ลบพื้นที่ห้ามผ่านเรียบร้อยแล้ว");
+        showSuccess(res.data.message || "ลบพื้นที่ห้ามผ่านเรียบร้อยแล้ว");
         fetchAvoidZones();
+        setIsConfirmDeleteAvoidZoneModalOpen(false);
+        setAvoidZoneToDelete(null);
+      } else {
+        showError(res.data.message || "เกิดข้อผิดพลาดในการลบพื้นที่ห้ามผ่าน");
       }
     } catch (err: any) {
-      showError("เกิดข้อผิดพลาดในการลบพื้นที่");
+      showError(
+        err?.response?.data?.message ||
+          "เกิดข้อผิดพลาดในการลบพื้นที่ห้ามผ่าน",
+      );
+    } finally {
+      setDeletingAvoidZone(false);
     }
   };
 
@@ -1813,9 +2180,17 @@ export const RoutePage: React.FC = () => {
   const [gpsLoading, setGpsLoading] = useState(false);
   const [lastGpsUpdate, setLastGpsUpdate] = useState<string>("");
 
+  // GPS Historical Track State
+  const [showGpsHistory, setShowGpsHistory] = useState(true);
+  const [gpsHistories, setGpsHistories] = useState<
+    Record<string, [number, number][]>
+  >({});
+  const [gpsHistoryLoading, setGpsHistoryLoading] = useState(false);
+
   // Left Sidebar Collapsible Sections State
   const [isRoutesSectionOpen, setIsRoutesSectionOpen] = useState(true);
   const [isGpsSectionOpen, setIsGpsSectionOpen] = useState(false);
+  const [isAvoidZonesSectionOpen, setIsAvoidZonesSectionOpen] = useState(true);
   const [activeGpsTarget, setActiveGpsTarget] = useState<{
     lat: number;
     lng: number;
@@ -1837,6 +2212,48 @@ export const RoutePage: React.FC = () => {
     }
   }, []);
 
+  // todo: ดึงประวัติเส้นทาง GPS ของรถแต่ละคันประจำวันที่เลือก
+  const fetchGpsHistories = useCallback(async () => {
+    if (!showGpsVehicles || !gpsDevices || gpsDevices.length === 0) return;
+
+    setGpsHistoryLoading(true);
+    try {
+      const dateStr = selectedDate || new Date().toISOString().slice(0, 10);
+      const start = `${dateStr} 00:00:00`;
+      const end = `${dateStr} 23:59:59`;
+
+      const historyMap: Record<string, [number, number][]> = {};
+
+      await Promise.all(
+        gpsDevices.map(async (device) => {
+          if (!device.id) return;
+          try {
+            const data = await fetchGpsDeviceLogs(device.id, start, end, 0);
+            if (data && data.success && Array.isArray(data.logs)) {
+              const coords: [number, number][] = data.logs
+                .filter((l) => l.latitude && l.longitude)
+                .map((l) => [l.latitude, l.longitude] as [number, number]);
+              if (coords.length > 0) {
+                historyMap[String(device.id)] = coords;
+              }
+            }
+          } catch (errDev) {
+            console.warn(
+              `Fetch GPS history for device ${device.id} warning:`,
+              errDev,
+            );
+          }
+        }),
+      );
+
+      setGpsHistories(historyMap);
+    } catch (err) {
+      console.warn("Fetch GPS histories error:", err);
+    } finally {
+      setGpsHistoryLoading(false);
+    }
+  }, [gpsDevices, selectedDate, showGpsVehicles]);
+
   // todo: ดึงข้อมูล GPS Devices
   useEffect(() => {
     fetchGpsDevices();
@@ -1846,6 +2263,19 @@ export const RoutePage: React.FC = () => {
 
     return () => clearInterval(interval);
   }, [fetchGpsDevices]);
+
+  // todo: ดึงประวัติเส้นทาง GPS เมื่อเปิดแสดง หรือเปลี่ยนวันที่/อิมพอร์ตสายรถ
+  useEffect(() => {
+    if (showGpsHistory && showGpsVehicles && gpsDevices.length > 0) {
+      fetchGpsHistories();
+    }
+  }, [
+    fetchGpsHistories,
+    showGpsHistory,
+    showGpsVehicles,
+    gpsDevices.length,
+    selectedDate,
+  ]);
 
   // todo: Load Real Road Geometries for Routes (OSRM Road Routing)
   useEffect(() => {
@@ -2120,18 +2550,6 @@ export const RoutePage: React.FC = () => {
     },
     [getLoadValueByType, loadingTypesList, selectedDate],
   );
-
-  // todo: ส่งออกข้อมูลเส้นทางการจัดส่ง
-  const selectedGroupRouteObj = useMemo(() => {
-    if (!formStopGroupId) return null;
-    return (
-      routes.find(
-        (r) =>
-          String(r.groupStoreId || r.routeId.replace("ROUTE-", "")) ===
-          String(formStopGroupId),
-      ) || null
-    );
-  }, [routes, formStopGroupId]);
 
   // Find previous stop in the same group to compare scheduled_time
   const previousStopInGroup = useMemo(() => {
@@ -2867,7 +3285,7 @@ export const RoutePage: React.FC = () => {
 
   // ขอบเขตแผนที่ (Map Bounds)
   const mapBounds = useMemo(() => {
-    const coords: [number, number][] = [[17.1266642, 102.9635667]];
+    const coords: [number, number][] = [[17.128338, 102.965199]];
     routes.forEach((r) => {
       if (isRouteVisibleOnMap(r.routeId)) {
         r.stops.forEach((s) => {
@@ -2925,6 +3343,8 @@ export const RoutePage: React.FC = () => {
     return stops;
   }, [routes, selectedRouteId]);
 
+
+
   // จำนวนจุดจัดส่งทั้งหมดในกลุ่ม
   const scopeTotalCount = scopeStops.length;
   // จำนวนจุดจัดส่งที่เสร็จสิ้นแล้ว
@@ -2968,6 +3388,7 @@ export const RoutePage: React.FC = () => {
     return filtered;
   }, [scopeStops, bottomTab, searchText]);
 
+  // todo: ส่งออกข้อมูลเส้นทางการจัดส่ง
   const routeExportData = useMemo(() => {
     return tableStops.map((s) => ({
       ...s,
@@ -3052,11 +3473,23 @@ export const RoutePage: React.FC = () => {
                 className={`w-2 h-2 rounded-full ${gpsLoading ? "bg-amber-400 animate-ping" : showGpsVehicles ? "bg-emerald-500" : "bg-slate-400"}`}
               />
               <span>GPS สด ({gpsDevices.length})</span>
-              {lastGpsUpdate && (
-                <span className="text-[9px] opacity-75 font-mono">
-                  ({lastGpsUpdate})
-                </span>
-              )}
+            </button>
+
+            <button
+              onClick={() => setShowGpsHistory((prev) => !prev)}
+              title="คลิกเพื่อ เปิด/ปิด การแสดงเส้นประวัติการวิ่งจริงของรถ GPS บนแผนที่"
+              className={`flex items-center gap-1.5 px-2 py-1 rounded-md text-[11px] font-semibold border transition-all ${
+                showGpsHistory
+                  ? "bg-cyan-50 text-cyan-700 border-cyan-300 hover:bg-cyan-100 shadow-2xs"
+                  : "bg-slate-100 text-slate-500 border-slate-200 hover:bg-slate-200"
+              }`}
+            >
+              <Route
+                className={`w-3.5 h-3.5 ${gpsHistoryLoading ? "animate-spin text-cyan-600" : "text-cyan-600"}`}
+              />
+              <span>
+                เส้นประวัติ GPS ({Object.keys(gpsHistories).length})
+              </span>
             </button>
           </div>
         </div>
@@ -3582,52 +4015,223 @@ export const RoutePage: React.FC = () => {
                   </div>
                 )}
               </div>
+
+              {/* ── SECTION 3: พื้นที่ห้ามผ่าน (Avoid Zones List) ── */}
+              <div className="flex flex-col">
+                {/* Header with + button on the right */}
+                <div className="w-full bg-slate-100/90 hover:bg-slate-200/80 px-2.5 py-1.5 flex items-center justify-between transition-colors select-none sticky top-0 z-10 border-b border-slate-200/60">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setIsAvoidZonesSectionOpen(!isAvoidZonesSectionOpen)
+                    }
+                    className="flex items-center gap-1.5 flex-1 text-left cursor-pointer min-w-0"
+                  >
+                    <ShieldAlert className="w-3.5 h-3.5 text-rose-600 shrink-0" />
+                    <span className="font-extrabold text-slate-800 text-xs truncate">
+                      พื้นที่ห้ามผ่าน
+                    </span>
+                    <span className="bg-rose-100 text-rose-800 font-bold px-1.5 py-0.2 rounded-full text-[10px] shrink-0">
+                      {avoidZones.filter((z) => z.is_active).length}
+                    </span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setIsDrawingAvoidZone(true)}
+                    className="px-2 py-0.5 rounded bg-rose-600 hover:bg-rose-700 text-white font-bold text-[11px] flex items-center gap-1 shadow-2xs transition-colors cursor-pointer shrink-0 ml-1.5"
+                    title="คลิกเพื่อเริ่มวาดพื้นที่ห้ามผ่านใหม่บนแผนที่ (+ วาดเขต)"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>วาดเขต</span>
+                  </button>
+
+                  {isAvoidZonesSectionOpen ? (
+                      <ChevronUp className="w-4 h-4 text-slate-500 shrink-0 ml-1" />
+                    ) : (
+                      <ChevronDown className="w-4 h-4 text-slate-500 shrink-0 ml-1" />
+                    )}
+                </div>
+
+                {/* Body */}
+                {isAvoidZonesSectionOpen && (
+                  <div className="divide-y divide-slate-100 bg-white">
+                    {avoidZones.length === 0 ? (
+                      <div className="p-3 text-center text-slate-400 text-xs flex flex-col items-center gap-1">
+                        <ShieldAlert className="w-5 h-5 text-slate-300" />
+                        <span>ยังไม่มีพื้นที่ห้ามผ่าน</span>
+                        <button
+                          type="button"
+                          onClick={() => setIsDrawingAvoidZone(true)}
+                          className="text-[11px] font-bold text-rose-600 hover:underline mt-1 cursor-pointer"
+                        >
+                          + คลิกเพื่อวาดเขตแรก
+                        </button>
+                      </div>
+                    ) : (
+                      avoidZones.map((zone) => {
+                        const pointCount =
+                          zone.polygon_points?.length ||
+                          zone.coordinates?.length ||
+                          0;
+                        const firstPt = zone.polygon_points?.[0]
+                          ? zone.polygon_points[0]
+                          : zone.coordinates?.[0]
+                            ? {
+                                lat: zone.coordinates[0][0],
+                                lng: zone.coordinates[0][1],
+                              }
+                            : null;
+
+                        return (
+                          <div
+                            key={`sidebar-avoidzone-${zone.zone_id}`}
+                            className={`p-2 hover:bg-rose-50/50 transition-colors flex items-center justify-between gap-2 ${
+                              zone.is_active
+                                ? "bg-white"
+                                : "bg-slate-50/70 opacity-60"
+                            }`}
+                          >
+                            <div
+                              className="flex-1 min-w-0 cursor-pointer"
+                              onClick={() => {
+                                if (firstPt) {
+                                  setActiveGpsTarget({
+                                    lat: firstPt.lat,
+                                    lng: firstPt.lng,
+                                  });
+                                }
+                              }}
+                              title="คลิกเพื่อเลื่อนแผนที่ไปยังเขตนี้"
+                            >
+                              <div className="flex items-center gap-1.5">
+                                <div
+                                  className="w-2.5 h-2.5 rounded-full shrink-0 border"
+                                  style={{
+                                    backgroundColor:
+                                      zone.fill_color || "#f43f5e",
+                                    borderColor: zone.color || "#e11d48",
+                                  }}
+                                />
+                                <span className="font-bold text-slate-800 text-xs truncate">
+                                  {zone.zone_name ||
+                                    `เขตห้ามผ่าน #${zone.zone_id}`}
+                                </span>
+                                {!zone.is_active && (
+                                  <span className="text-[9px] font-bold text-slate-400 bg-slate-200 px-1 py-0.2 rounded">
+                                    ปิดใช้
+                                  </span>
+                                )}
+                              </div>
+
+                              <div className="text-[10px] text-slate-500 font-mono mt-0.5 flex items-center gap-2">
+                                <span>{pointCount} จุดพิกัด</span>
+                                {zone.zone_type && (
+                                  <span className="text-slate-400">
+                                    • {zone.zone_type}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* Action Buttons: Toggle Active, Delete */}
+                            <div className="flex items-center gap-1 shrink-0">
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  handleToggleAvoidZoneActive(zone)
+                                }
+                                className={`p-1 rounded transition-colors cursor-pointer ${
+                                  zone.is_active
+                                    ? "text-emerald-600 hover:bg-emerald-50"
+                                    : "text-slate-400 hover:bg-slate-200"
+                                }`}
+                                title={
+                                  zone.is_active
+                                    ? "ปิดใช้งานเขตนี้"
+                                    : "เปิดใช้งานเขตนี้"
+                                }
+                              >
+                                {zone.is_active ? (
+                                  <Eye className="w-3.5 h-3.5" />
+                                ) : (
+                                  <EyeOff className="w-3.5 h-3.5" />
+                                )}
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  handleRequestDeleteAvoidZone(zone)
+                                }
+                                className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded transition-colors cursor-pointer"
+                                title="ลบพื้นที่ห้ามผ่านนี้"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
           )}
         </div>
 
         <div className="flex-1 flex flex-col overflow-hidden relative">
-          {/* Floating Avoid Zone Toolbar Overlay on Map */}
-          <div className="absolute top-3 right-3 z-[1000] flex items-center gap-2 bg-white/95 backdrop-blur-xs p-1.5 rounded-xl border border-slate-200 shadow-md">
-            {!isDrawingAvoidZone ? (
-              <>
-                <button
-                  type="button"
-                  onClick={() => setIsDrawingAvoidZone(true)}
-                  className="px-2.5 py-1.5 rounded-lg text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white flex items-center gap-1.5 transition-colors shadow-2xs cursor-pointer"
-                  title="วาดเส้นกรอบ Polygon บล็อกทางดินเลน/สะพานจำกัดความสูง บนแผนที่"
-                >
-                  <Pentagon className="w-4 h-4" />
-                  <span>วาดพื้นที่ห้ามผ่าน</span>
-                </button>
+          {/* Floating Map Controls & Avoid Zone Toolbar Overlay on Map (Mobile Responsive) */}
+          <div className="absolute top-2 right-2 sm:top-3 sm:right-3 z-[1000] flex flex-wrap items-center justify-end gap-1.5 bg-white/95 backdrop-blur-xs p-1 sm:p-1.5 rounded-xl border border-slate-200 shadow-md max-w-[calc(100vw-1rem)] sm:max-w-none pointer-events-auto">
+            {/* Map Style Selector */}
+            <div className="flex items-center gap-1 bg-slate-100 p-0.5 rounded-lg border border-slate-200 text-xs shrink-0">
+              <Layers className="w-3.5 h-3.5 text-slate-500 ml-1 shrink-0" />
+              <select
+                value={mapTileStyle}
+                onChange={(e: any) => setMapTileStyle(e.target.value)}
+                className="bg-transparent text-[11px] sm:text-xs font-semibold text-slate-700 pr-1.5 py-1 focus:outline-none cursor-pointer max-w-[110px] sm:max-w-none truncate"
+                title="เลือกรูปแบบแผนที่ OpenStreetMap / Satellite / Topo / Dark / Light"
+              >
+                <option value="osm">แผนที่ (OSM)</option>
+                <option value="satellite">ดาวเทียม (Satellite)</option>
+                <option value="topo">ภูมิประเทศ (Topo)</option>
+                <option value="dark">มืด (Dark)</option>
+                <option value="light">สว่าง (Light)</option>
+              </select>
+            </div>
 
-                <button
-                  type="button"
-                  onClick={() => setIsAvoidZoneDrawerOpen(true)}
-                  className="px-2.5 py-1.5 rounded-lg text-xs font-bold bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 flex items-center gap-1.5 transition-colors cursor-pointer"
-                  title="ดูและจัดการพื้นที่ห้ามผ่านทั้งหมด"
-                >
-                  <ShieldAlert className="w-4 h-4 text-rose-600" />
-                  <span>
-                    พื้นที่ห้ามผ่าน (
-                    {avoidZones.filter((z) => z.is_active).length})
-                  </span>
-                </button>
-              </>
-            ) : (
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-bold text-rose-700 px-2.5 py-1 bg-rose-50 rounded-lg border border-rose-200 animate-pulse">
-                  📍 กำลังวาด ({drawingPoints.length} จุด) - คลิกปักจุดบนแผนที่
+            {/* Locate Me / My Location Button */}
+            <button
+              type="button"
+              onClick={handleLocateMe}
+              disabled={isLocating}
+              className="px-2 sm:px-2.5 py-1 sm:py-1.5 rounded-lg text-[11px] sm:text-xs font-bold bg-white hover:bg-blue-50 text-blue-700 border border-blue-200 flex items-center gap-1 transition-colors cursor-pointer shadow-2xs shrink-0"
+              title="ค้นหาตำแหน่งปัจจุบันของคุณบนแผนที่ (GPS Current Location)"
+            >
+              {isLocating ? (
+                <Loader2 className="w-3.5 h-3.5 text-blue-600 animate-spin" />
+              ) : (
+                <LocateFixed className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+              )}
+              <span className="hidden min-[420px]:inline">ตำแหน่งของฉัน</span>
+              <span className="inline min-[420px]:hidden">ตำแหน่ง</span>
+            </button>
+
+            {isDrawingAvoidZone && (
+              <div className="flex items-center gap-1.5 flex-wrap justify-end">
+                <span className="text-[11px] sm:text-xs font-bold text-rose-700 px-2 py-0.5 bg-rose-50 rounded-lg border border-rose-200 animate-pulse shrink-0">
+                  📍 กำลังวาด ({drawingPoints.length} จุด)
                 </span>
 
                 {drawingPoints.length > 0 && (
                   <button
                     type="button"
                     onClick={handleUndoLastPoint}
-                    className="px-2 py-1 rounded-lg text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 flex items-center gap-1 cursor-pointer"
+                    className="px-2 py-1 rounded-lg text-[11px] font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 flex items-center gap-1 cursor-pointer shrink-0"
                   >
                     <Undo2 className="w-3.5 h-3.5" />
-                    <span>ยกเลิกจุดล่าสุด</span>
+                    <span>ยกเลิกจุด</span>
                   </button>
                 )}
 
@@ -3635,22 +4239,22 @@ export const RoutePage: React.FC = () => {
                   type="button"
                   onClick={handleFinishDrawing}
                   disabled={drawingPoints.length < 3}
-                  className={`px-2.5 py-1.5 rounded-lg text-xs font-bold text-white flex items-center gap-1 shadow-2xs ${
+                  className={`px-2 py-1 rounded-lg text-[11px] font-bold text-white flex items-center gap-1 shadow-2xs shrink-0 ${
                     drawingPoints.length >= 3
                       ? "bg-emerald-600 hover:bg-emerald-700 cursor-pointer"
                       : "bg-slate-300 cursor-not-allowed"
                   }`}
                 >
-                  <Check className="w-4 h-4" />
-                  <span>เสร็จสิ้น & บันทึก</span>
+                  <Check className="w-3.5 h-3.5" />
+                  <span>บันทึก</span>
                 </button>
 
                 <button
                   type="button"
                   onClick={handleCancelDrawing}
-                  className="px-2 py-1.5 rounded-lg text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-600 flex items-center gap-1 cursor-pointer"
+                  className="px-2 py-1 rounded-lg text-[11px] font-bold bg-slate-100 hover:bg-slate-200 text-slate-600 flex items-center gap-1 cursor-pointer shrink-0"
                 >
-                  <X className="w-4 h-4" />
+                  <X className="w-3.5 h-3.5" />
                   <span>ยกเลิก</span>
                 </button>
               </div>
@@ -3667,8 +4271,10 @@ export const RoutePage: React.FC = () => {
               zoomControl={true}
             >
               <TileLayer
-                attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a>'
-                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                key={mapTileStyle}
+                attribution={tileLayerConfig.attribution}
+                url={tileLayerConfig.url}
+                maxZoom={tileLayerConfig.maxZoom}
               />
               <FitBounds bounds={mapBounds} />
               <FlyToTarget
@@ -3678,6 +4284,34 @@ export const RoutePage: React.FC = () => {
                     : activeGpsTarget
                 }
               />
+
+              {/* Current My Location Marker (ตำแหน่งของฉัน) */}
+              {myLocation && (
+                <Marker
+                  position={myLocation}
+                  icon={L.divIcon({
+                    className: "custom-my-location-marker",
+                    html: `<div style="position:relative; width:28px; height:28px;">
+                            <div style="position:absolute; inset:0; background:#3b82f6; opacity:0.4; border-radius:50%; animation:ping 1.5s cubic-bezier(0, 0, 0.2, 1) infinite;"></div>
+                            <div style="position:absolute; inset:4px; background:#2563eb; border:3px solid #ffffff; border-radius:50%; box-shadow:0 3px 6px rgba(0,0,0,0.3);"></div>
+                           </div>`,
+                    iconSize: [28, 28],
+                    iconAnchor: [14, 14],
+                  })}
+                >
+                  <Popup maxWidth={220}>
+                    <div className="text-xs p-1 space-y-1">
+                      <div className="font-bold text-blue-700 flex items-center gap-1">
+                        <span>🎯 ตำแหน่งปัจจุบันของคุณ</span>
+                      </div>
+                      <div className="text-[10px] text-slate-500 font-mono">
+                        พิกัด: {myLocation[0].toFixed(5)},{" "}
+                        {myLocation[1].toFixed(5)}
+                      </div>
+                    </div>
+                  </Popup>
+                </Marker>
+              )}
 
               {/* Avoid Zone Polygons */}
               {avoidZones.map((zone) => {
@@ -3794,9 +4428,9 @@ export const RoutePage: React.FC = () => {
                 onAddPoint={handleAddDrawingPoint}
               />
 
-              {/* Starting Depot Marker (17.1266642, 102.9635667) */}
+              {/* Starting Depot Marker */}
               <Marker
-                position={[17.1266642, 102.9635667]}
+                position={[DEPOT_COORD.lat, DEPOT_COORD.lng]}
                 icon={createStopMarker(0, "#d97706", true, "planned")}
               >
                 <Popup maxWidth={280} autoPan={false}>
@@ -3821,7 +4455,7 @@ export const RoutePage: React.FC = () => {
                       </strong>
                     </div>
                     <div style={{ color: "#475569", fontWeight: 600 }}>
-                      พิกัด: 17.1266642, 102.9635667
+                      พิกัด: {DEPOT_COORD.lat}, {DEPOT_COORD.lng}
                     </div>
                     <div
                       style={{ color: "#64748b", fontSize: 11, marginTop: 4 }}
@@ -3835,11 +4469,11 @@ export const RoutePage: React.FC = () => {
               {routes.map((route) => {
                 if (!isRouteVisibleOnMap(route.routeId)) return null;
                 const coords: [number, number][] = [
-                  [17.1266642, 102.9635667],
+                  [DEPOT_COORD.lat, DEPOT_COORD.lng],
                   ...route.stops
                     .filter((s) => s.lat && s.lng)
                     .map((s) => [s.lat, s.lng] as [number, number]),
-                  [17.1266642, 102.9635667],
+                  [DEPOT_COORD.lat, DEPOT_COORD.lng],
                 ];
 
                 const polylinePositions =
@@ -3859,6 +4493,17 @@ export const RoutePage: React.FC = () => {
                       if (!stop.lat || !stop.lng) return null;
                       const pinNumber =
                         stop.rowOrder ?? stop.row_order ?? stop.stopId;
+                      const locKey = `${Number(stop.lat).toFixed(5)}_${Number(stop.lng).toFixed(5)}`;
+                      const storeKey =
+                        stop.store_id || stop.locationNo
+                          ? `store_${String(stop.store_id || stop.locationNo).trim().toLowerCase()}`
+                          : "";
+                      const groupStops =
+                        locationStopsGroupMap[locKey] ||
+                        (storeKey ? locationStopsGroupMap[storeKey] : undefined) ||
+                        [];
+                      const itemCount = groupStops.length;
+
                       return (
                         <Marker
                           key={`${route.routeId}-${stop.stopId}-${sIdx}`}
@@ -3868,6 +4513,7 @@ export const RoutePage: React.FC = () => {
                             route.color,
                             stop.type === "depot",
                             stop.status,
+                            itemCount,
                           )}
                           eventHandlers={{
                             click: () =>
@@ -3880,73 +4526,227 @@ export const RoutePage: React.FC = () => {
                               }),
                           }}
                         >
-                          <Popup maxWidth={300} autoPan={false}>
-                            <div
-                              style={{
-                                fontFamily: "system-ui, sans-serif",
-                                fontSize: 12,
-                                lineHeight: 1.5,
-                              }}
-                            >
+                          <Popup maxWidth={320} autoPan={false}>
+                            {itemCount > 1 ? (
                               <div
                                 style={{
-                                  display: "flex",
-                                  alignItems: "center",
-                                  gap: 8,
-                                  marginBottom: 6,
+                                  fontFamily: "system-ui, sans-serif",
+                                  fontSize: 12,
+                                  lineHeight: 1.5,
                                 }}
                               >
                                 <div
                                   style={{
-                                    width: 12,
-                                    height: 12,
-                                    borderRadius: "50%",
-                                    background: route.color,
-                                    flexShrink: 0,
-                                  }}
-                                />
-                                <strong style={{ fontSize: 13 }}>
-                                  {stop.storeName}
-                                </strong>
-                              </div>
-                              <div
-                                style={{ color: "#64748b", marginBottom: 4 }}
-                              >
-                                {stop.address}
-                              </div>
-                              <div
-                                style={{
-                                  display: "flex",
-                                  gap: 12,
-                                  alignItems: "center",
-                                  marginBottom: 4,
-                                }}
-                              >
-                                <span>
-                                  🕐 {stop.arrivalTime}
-                                  {stop.departureTime
-                                    ? ` – ${stop.departureTime}`
-                                    : ""}
-                                </span>
-                                <span
-                                  style={{
-                                    fontSize: 10,
+                                    display: "flex",
+                                    alignItems: "center",
+                                    gap: 6,
+                                    background: "#fffbeb",
+                                    color: "#b45309",
+                                    padding: "4px 8px",
+                                    borderRadius: 6,
+                                    fontSize: 11,
                                     fontWeight: 700,
-                                    padding: "2px 8px",
-                                    borderRadius: 20,
-                                    background: getStatusColor(stop.status).bg,
-                                    color: getStatusColor(stop.status).text,
+                                    marginBottom: 8,
+                                    border: "1px solid #fde68a",
                                   }}
                                 >
-                                  {getStatusLabel(stop.status)}
-                                </span>
+                                  <span>
+                                    จุดนี้มี {itemCount} รายการจัดส่ง
+                                    (พิกัด/ร้านเดียวกัน)
+                                  </span>
+                                </div>
+                                <strong
+                                  style={{
+                                    fontSize: 13,
+                                    color: "#0f172a",
+                                    display: "block",
+                                    marginBottom: 2,
+                                  }}
+                                >
+                                  {stop.storeName}
+                                </strong>
+                                {stop.address && (
+                                  <div
+                                    style={{
+                                      color: "#64748b",
+                                      fontSize: 11,
+                                      marginBottom: 8,
+                                    }}
+                                  >
+                                    {stop.address}
+                                  </div>
+                                )}
+                                <div
+                                  style={{
+                                    maxHeight: 180,
+                                    overflowY: "auto",
+                                    display: "flex",
+                                    flexDirection: "column",
+                                    gap: 6,
+                                  }}
+                                >
+                                  {groupStops.map((item, gIdx) => {
+                                    const s = item.stop;
+                                    const sPinNum =
+                                      s.rowOrder ??
+                                      s.row_order ??
+                                      s.stopId ??
+                                      gIdx + 1;
+                                    return (
+                                      <div
+                                        key={gIdx}
+                                        style={{
+                                          padding: "6px 8px",
+                                          background: "#f8fafc",
+                                          borderRadius: 6,
+                                          borderLeft: `4px solid ${item.routeColor || "#9ca3af"}`,
+                                          fontSize: 11,
+                                        }}
+                                      >
+                                        <div
+                                          style={{
+                                            display: "flex",
+                                            alignItems: "center",
+                                            justifyContent: "space-between",
+                                            marginBottom: 2,
+                                          }}
+                                        >
+                                          <span
+                                            style={{
+                                              fontWeight: 700,
+                                              color: "#1e293b",
+                                            }}
+                                          >
+                                            รายการ #{gIdx + 1} (ลำดับ {sPinNum})
+                                          </span>
+                                          <span
+                                            style={{
+                                              fontSize: 10,
+                                              fontWeight: 700,
+                                              padding: "1px 6px",
+                                              borderRadius: 12,
+                                              background: item.isUnassigned
+                                                ? "#f1f5f9"
+                                                : getStatusColor(s.status).bg,
+                                              color: item.isUnassigned
+                                                ? "#475569"
+                                                : getStatusColor(s.status).text,
+                                            }}
+                                          >
+                                            {item.isUnassigned
+                                              ? "ยังไม่จัดสาย"
+                                              : getStatusLabel(s.status)}
+                                          </span>
+                                        </div>
+                                        <div
+                                          style={{
+                                            color: "#475569",
+                                            fontSize: 10,
+                                          }}
+                                        >
+                                          เลขที่:{" "}
+                                          <strong>
+                                            {s.orderNo || s.order_no || "-"}
+                                          </strong>
+                                          {s.arrivalTime &&
+                                            ` · 🕐 ${s.arrivalTime}`}
+                                          {s.quantity > 0 &&
+                                            ` · จำนวน: ${s.quantity}`}
+                                        </div>
+                                        <div
+                                          style={{
+                                            color: "#64748b",
+                                            fontSize: 10,
+                                            marginTop: 2,
+                                          }}
+                                        >
+                                          {item.isUnassigned ? (
+                                            <span style={{ color: "#94a3b8" }}>
+                                              ยังไม่จัดสาย
+                                            </span>
+                                          ) : (
+                                            <span>
+                                              สาย:{" "}
+                                              <strong>{item.routeName}</strong>{" "}
+                                              {item.driverName &&
+                                                `(${item.driverName})`}
+                                            </span>
+                                          )}
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
                               </div>
-                              <div style={{ color: "#94a3b8", fontSize: 10 }}>
-                                เลขที่: {stop.orderNo} · คนขับ:{" "}
-                                {route.driverName} · ทะเบียน:{" "}
-                                {route.vehiclePlate}
+                            ) : (
+                              <div
+                                style={{
+                                  fontFamily: "system-ui, sans-serif",
+                                  fontSize: 12,
+                                  lineHeight: 1.5,
+                                }}
+                              >
+                                <div
+                                  style={{
+                                    display: "flex",
+                                    alignItems: "center",
+                                    gap: 8,
+                                    marginBottom: 6,
+                                  }}
+                                >
+                                  <div
+                                    style={{
+                                      width: 12,
+                                      height: 12,
+                                      borderRadius: "50%",
+                                      background: route.color,
+                                      flexShrink: 0,
+                                    }}
+                                  />
+                                  <strong style={{ fontSize: 13 }}>
+                                    {stop.storeName}
+                                  </strong>
+                                </div>
+                                <div
+                                  style={{ color: "#64748b", marginBottom: 4 }}
+                                >
+                                  {stop.address}
+                                </div>
+                                <div
+                                  style={{
+                                    display: "flex",
+                                    gap: 12,
+                                    alignItems: "center",
+                                    marginBottom: 4,
+                                  }}
+                                >
+                                  <span>
+                                     {stop.arrivalTime}
+                                    {stop.departureTime
+                                      ? ` – ${stop.departureTime}`
+                                      : ""}
+                                  </span>
+                                  <span
+                                    style={{
+                                      fontSize: 10,
+                                      fontWeight: 700,
+                                      padding: "2px 8px",
+                                      borderRadius: 20,
+                                      background: getStatusColor(stop.status)
+                                        .bg,
+                                      color: getStatusColor(stop.status).text,
+                                    }}
+                                  >
+                                    {getStatusLabel(stop.status)}
+                                  </span>
+                                </div>
+                                <div style={{ color: "#94a3b8", fontSize: 10 }}>
+                                  เลขที่: {stop.orderNo} · คนขับ:{" "}
+                                  {route.driverName} · ทะเบียน:{" "}
+                                  {route.vehiclePlate}
+                                </div>
                               </div>
-                            </div>
+                            )}
                           </Popup>
                         </Marker>
                       );
@@ -3958,87 +4758,257 @@ export const RoutePage: React.FC = () => {
               {/* Unassigned Stops (สีเทา) */}
               {unassignedStops
                 .filter((stop) => stop.lat && stop.lng)
-                .map((stop, idx) => (
-                  <Marker
-                    key={`unassigned-${stop.list_id || idx}`}
-                    position={[stop.lat, stop.lng]}
-                    icon={createStopMarker(
-                      idx + 1,
-                      "#9ca3af",
-                      false,
-                      "unassigned",
-                    )}
-                  >
-                    <Popup maxWidth={300} autoPan={false}>
-                      <div
-                        style={{
-                          fontFamily: "system-ui, sans-serif",
-                          fontSize: 12,
-                          lineHeight: 1.5,
-                        }}
-                      >
-                        <div
-                          style={{
-                            display: "flex",
-                            alignItems: "center",
-                            gap: 8,
-                            marginBottom: 6,
-                          }}
-                        >
+                .map((stop, idx) => {
+                  const locKey = `${Number(stop.lat).toFixed(5)}_${Number(stop.lng).toFixed(5)}`;
+                  const storeKey =
+                    stop.store_id || stop.locationNo
+                      ? `store_${String(stop.store_id || stop.locationNo).trim().toLowerCase()}`
+                      : "";
+                  const groupStops =
+                    locationStopsGroupMap[locKey] ||
+                    (storeKey ? locationStopsGroupMap[storeKey] : undefined) ||
+                    [];
+                  const itemCount = groupStops.length;
+
+                  return (
+                    <Marker
+                      key={`unassigned-${stop.list_id || idx}`}
+                      position={[stop.lat, stop.lng]}
+                      icon={createStopMarker(
+                        idx + 1,
+                        "#9ca3af",
+                        false,
+                        "unassigned",
+                        itemCount,
+                      )}
+                    >
+                      <Popup maxWidth={320} autoPan={false}>
+                        {itemCount > 1 ? (
                           <div
                             style={{
-                              width: 12,
-                              height: 12,
-                              borderRadius: "50%",
-                              background: "#9ca3af",
-                              flexShrink: 0,
-                            }}
-                          />
-                          <strong style={{ fontSize: 13 }}>
-                            {stop.storeName}
-                          </strong>
-                        </div>
-                        {stop.address && (
-                          <div style={{ color: "#64748b", marginBottom: 4 }}>
-                            {stop.address}
-                          </div>
-                        )}
-                        <div
-                          style={{
-                            display: "flex",
-                            gap: 12,
-                            alignItems: "center",
-                            marginBottom: 4,
-                          }}
-                        >
-                          <span
-                            style={{
-                              fontSize: 10,
-                              fontWeight: 700,
-                              padding: "2px 8px",
-                              borderRadius: 20,
-                              background: "#f1f5f9",
-                              color: "#475569",
+                              fontFamily: "system-ui, sans-serif",
+                              fontSize: 12,
+                              lineHeight: 1.5,
                             }}
                           >
-                            ยังไม่จัดสาย
-                          </span>
-                          {stop.quantity > 0 && (
-                            <span style={{ color: "#64748b", fontSize: 11 }}>
-                              จำนวน: {stop.quantity}
-                            </span>
-                          )}
-                        </div>
-                        <div style={{ color: "#94a3b8", fontSize: 10 }}>
-                          เลขที่: {stop.orderNo || "-"}
-                        </div>
-                      </div>
-                    </Popup>
-                  </Marker>
-                ))}
+                            <div
+                              style={{
+                                display: "flex",
+                                alignItems: "center",
+                                gap: 6,
+                                background: "#fffbeb",
+                                color: "#b45309",
+                                padding: "4px 8px",
+                                borderRadius: 6,
+                                fontSize: 11,
+                                fontWeight: 700,
+                                marginBottom: 8,
+                                border: "1px solid #fde68a",
+                              }}
+                            >
+                              <span>
+                                จุดนี้มี {itemCount} รายการจัดส่ง
+                                (พิกัด/ร้านเดียวกัน)
+                              </span>
+                            </div>
+                            <strong
+                              style={{
+                                fontSize: 13,
+                                color: "#0f172a",
+                                display: "block",
+                                marginBottom: 2,
+                              }}
+                            >
+                              {stop.storeName}
+                            </strong>
+                            {stop.address && (
+                              <div
+                                style={{
+                                  color: "#64748b",
+                                  fontSize: 11,
+                                  marginBottom: 8,
+                                }}
+                              >
+                                {stop.address}
+                              </div>
+                            )}
+                            <div
+                              style={{
+                                maxHeight: 180,
+                                overflowY: "auto",
+                                display: "flex",
+                                flexDirection: "column",
+                                gap: 6,
+                              }}
+                            >
+                              {groupStops.map((item, gIdx) => {
+                                const s = item.stop;
+                                const sPinNum =
+                                  s.rowOrder ??
+                                  s.row_order ??
+                                  s.stopId ??
+                                  gIdx + 1;
+                                return (
+                                  <div
+                                    key={gIdx}
+                                    style={{
+                                      padding: "6px 8px",
+                                      background: "#f8fafc",
+                                      borderRadius: 6,
+                                      borderLeft: `4px solid ${item.routeColor || "#9ca3af"}`,
+                                      fontSize: 11,
+                                    }}
+                                  >
+                                    <div
+                                      style={{
+                                        display: "flex",
+                                        alignItems: "center",
+                                        justifyContent: "space-between",
+                                        marginBottom: 2,
+                                      }}
+                                    >
+                                      <span
+                                        style={{
+                                          fontWeight: 700,
+                                          color: "#1e293b",
+                                        }}
+                                      >
+                                        รายการ #{gIdx + 1} (ลำดับ {sPinNum})
+                                      </span>
+                                      <span
+                                        style={{
+                                          fontSize: 10,
+                                          fontWeight: 700,
+                                          padding: "1px 6px",
+                                          borderRadius: 12,
+                                          background: item.isUnassigned
+                                            ? "#f1f5f9"
+                                            : getStatusColor(s.status).bg,
+                                          color: item.isUnassigned
+                                            ? "#475569"
+                                            : getStatusColor(s.status).text,
+                                        }}
+                                      >
+                                        {item.isUnassigned
+                                          ? "ยังไม่จัดสาย"
+                                          : getStatusLabel(s.status)}
+                                      </span>
+                                    </div>
+                                    <div
+                                      style={{
+                                        color: "#475569",
+                                        fontSize: 10,
+                                      }}
+                                    >
+                                      เลขที่:{" "}
+                                      <strong>
+                                        {s.orderNo || s.order_no || "-"}
+                                      </strong>
+                                      {s.arrivalTime &&
+                                        ` · ${s.arrivalTime}`}
+                                      {s.quantity > 0 &&
+                                        ` · จำนวน: ${s.quantity}`}
+                                    </div>
+                                    <div
+                                      style={{
+                                        color: "#64748b",
+                                        fontSize: 10,
+                                        marginTop: 2,
+                                      }}
+                                    >
+                                      {item.isUnassigned ? (
+                                        <span style={{ color: "#94a3b8" }}>
+                                          ยังไม่จัดสาย
+                                        </span>
+                                      ) : (
+                                        <span>
+                                          สาย: <strong>{item.routeName}</strong>{" "}
+                                          {item.driverName &&
+                                            `(${item.driverName})`}
+                                        </span>
+                                      )}
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        ) : (
+                          <div
+                            style={{
+                              fontFamily: "system-ui, sans-serif",
+                              fontSize: 12,
+                              lineHeight: 1.5,
+                            }}
+                          >
+                            <div
+                              style={{
+                                display: "flex",
+                                alignItems: "center",
+                                gap: 8,
+                                marginBottom: 6,
+                              }}
+                            >
+                              <div
+                                style={{
+                                  width: 12,
+                                  height: 12,
+                                  borderRadius: "50%",
+                                  background: "#9ca3af",
+                                  flexShrink: 0,
+                                }}
+                              />
+                              <strong style={{ fontSize: 13 }}>
+                                {stop.storeName}
+                              </strong>
+                            </div>
+                            {stop.address && (
+                              <div
+                                style={{ color: "#64748b", marginBottom: 4 }}
+                              >
+                                {stop.address}
+                              </div>
+                            )}
+                            <div
+                              style={{
+                                display: "flex",
+                                gap: 12,
+                                alignItems: "center",
+                                marginBottom: 4,
+                              }}
+                            >
+                              <span
+                                style={{
+                                  fontSize: 10,
+                                  fontWeight: 700,
+                                  padding: "2px 8px",
+                                  borderRadius: 20,
+                                  background: "#f1f5f9",
+                                  color: "#475569",
+                                }}
+                              >
+                                ยังไม่จัดสาย
+                              </span>
+                              {stop.quantity > 0 && (
+                                <span
+                                  style={{ color: "#64748b", fontSize: 11 }}
+                                >
+                                  จำนวน: {stop.quantity}
+                                </span>
+                              )}
+                            </div>
+                            <div style={{ color: "#94a3b8", fontSize: 10 }}>
+                              เลขที่: {stop.orderNo || "-"}
+                            </div>
+                          </div>
+                        )}
+                      </Popup>
+                    </Marker>
+                  );
+                })}
 
               {/* Standalone Active Leaflet Popup on Pin Marker */}
-              {activeStop && (
+              {/* {activeStop && (
                 <Popup
                   position={[activeStop.lat, activeStop.lng]}
                   eventHandlers={{
@@ -4161,7 +5131,7 @@ export const RoutePage: React.FC = () => {
                     </div>
                   </div>
                 </Popup>
-              )}
+              )} */}
 
               {/* GPS Live Vehicle Markers */}
               {showGpsVehicles &&
@@ -4219,6 +5189,7 @@ export const RoutePage: React.FC = () => {
                       key={`gps-device-${device.id}`}
                       position={[device.latitude, device.longitude]}
                       icon={createGpsVehicleMarker(device)}
+                      zIndexOffset={2000}
                     >
                       <Popup maxWidth={320} autoPan={false}>
                         <div
@@ -4385,6 +5356,94 @@ export const RoutePage: React.FC = () => {
                         </div>
                       </Popup>
                     </Marker>
+                  );
+                })}
+
+              {/* GPS Historical Route Tracks (เส้นประวัติการเดินทางจริงของรถ) */}
+              {showGpsVehicles &&
+                showGpsHistory &&
+                gpsDevices.map((device) => {
+                  if (!device.id) return null;
+                  const historyCoords = gpsHistories[String(device.id)];
+                  if (!historyCoords || historyCoords.length < 2) return null;
+
+                  // If a route filter is active, only show the GPS history matching the selected vehicle!
+                  if (activeRouteVehicles && activeRouteVehicles.size > 0) {
+                    const devName = (device.name || "").toLowerCase().trim();
+                    const devNum = (device.number || "").toLowerCase().trim();
+                    const devDetail = (device.detail || "")
+                      .toLowerCase()
+                      .trim();
+                    const devId = String(device.id || "")
+                      .toLowerCase()
+                      .trim();
+
+                    const isMatch = Array.from(activeRouteVehicles).some(
+                      (target) => {
+                        if (!target) return false;
+                        return (
+                          target === devName ||
+                          target === devNum ||
+                          target === devId ||
+                          devName.includes(target) ||
+                          target.includes(devName) ||
+                          devDetail.includes(target)
+                        );
+                      },
+                    );
+
+                    if (!isMatch) return null;
+                  }
+
+                  const trackColor = "#0000FF";
+
+                  return (
+                    <React.Fragment key={`gps-history-${device.id}`}>
+                      <Polyline
+                        positions={historyCoords}
+                        pathOptions={{
+                          color: trackColor,
+                          weight: 4.5,
+                          opacity: 0.95,
+                          dashArray: "8, 6",
+                        }}
+                      >
+                        <Popup maxWidth={260} autoPan={false}>
+                          <div
+                            style={{
+                              fontFamily: "system-ui, sans-serif",
+                              fontSize: 12,
+                              lineHeight: 1.5,
+                            }}
+                          >
+                            <strong
+                              style={{
+                                color: "#0891b2",
+                                fontSize: 13,
+                                display: "block",
+                                marginBottom: 2,
+                              }}
+                            >
+                              🗺️ เส้นทางประวัติ GPS
+                            </strong>
+                            <div style={{ fontWeight: 700, color: "#0f172a" }}>
+                              {device.name ||
+                                device.number ||
+                                `ID ${device.id}`}
+                            </div>
+                            <div
+                              style={{
+                                color: "#64748b",
+                                fontSize: 11,
+                                marginTop: 4,
+                              }}
+                            >
+                              พิกัดประวัติการวิ่ง: {historyCoords.length} จุด
+                            </div>
+                          </div>
+                        </Popup>
+                      </Polyline>
+                    </React.Fragment>
                   );
                 })}
               {/* Floating Re-open Table Button when closed */}
@@ -4718,79 +5777,77 @@ export const RoutePage: React.FC = () => {
                 </div>
               </div>
 
-              {/* Table Unassigned */}
+              {/* Single Unified Table for Assigned and Unassigned Stops */}
               <div className="flex-1 overflow-auto custom-scrollbar">
-                {assignedTab === "unassigned" ? (
-                  <table className="w-full text-[11px] min-w-[1300px] border-collapse whitespace-nowrap text-slate-700">
-                    <thead className="sticky top-0 bg-slate-100/90 backdrop-blur-xs font-bold text-slate-700 border-b border-slate-200 shadow-2xs z-10">
-                      <tr className="text-left text-[11px] text-slate-700 font-semibold uppercase tracking-wider">
-                        {visibleColumns.status !== false && (
-                          <th className="px-2.5 py-1 w-28">สถานะ</th>
-                        )}
-                        {visibleColumns.order_no !== false && (
-                          <th className="px-2.5 py-1 w-28">รหัสออเดอร์</th>
-                        )}
-                        {visibleColumns.store_info !== false && (
-                          <th className="px-2.5 py-1 min-w-[200px]">
-                            ที่ตั้ง / ร้านค้า
-                          </th>
-                        )}
-                        {visibleColumns.route_vehicle !== false && (
-                          <th className="px-2.5 py-1 w-32">สายรถ / ทะเบียน</th>
-                        )}
-                        {visibleColumns.priority !== false && (
-                          <th className="px-2.5 py-1 w-20">ลำดับความสำคัญ</th>
-                        )}
-                        {visibleColumns.drop_point !== false && (
-                          <th className="px-2.5 py-1 text-center w-24">
-                            จุดวาง
-                          </th>
-                        )}
-                        {visibleColumns.scheduled_time !== false && (
-                          <th className="px-2.5 py-1 w-24">กำหนดเวลาไว้ที่</th>
-                        )}
-                        {visibleColumns.start_service !== false && (
-                          <th className="px-2.5 py-1 w-36">เริ่มบริการ</th>
-                        )}
-                        {visibleColumns.end_service !== false && (
-                          <th className="px-2.5 py-1 w-36">สิ้นสุดบริการ</th>
-                        )}
-                        {visibleColumns.actual_duration !== false && (
-                          <th className="px-2.5 py-1 w-24">ระยะเวลาจริง</th>
-                        )}
-                        {visibleColumns.tax !== false && (
-                          <th className="px-2.5 py-1 w-24">ใบกำกับภาษี</th>
-                        )}
-                        {visibleColumns.note !== false && (
-                          <th className="px-2.5 py-1 w-24">หมายเหตุ</th>
-                        )}
-                        {loadingTypesList.map(
-                          (lt) =>
-                            visibleColumns[
-                              `loading_type_${lt.loading_type_id}`
-                            ] !== false && (
-                              <th
-                                key={lt.loading_type_id}
-                                className="px-2.5 py-1 text-center w-20"
-                              >
-                                {lt.type_name}
-                              </th>
-                            ),
-                        )}
-                        {visibleColumns.total_quantity !== false && (
-                          <th className="px-2.5 py-1 text-center w-24">
-                            จำนวนทั้งหมด
-                          </th>
-                        )}
-                        {visibleColumns.actions !== false && (
-                          <th className="px-2.5 py-1 text-right w-16 sticky top-0 right-0 bg-white z-10">
-                            จัดการ
-                          </th>
-                        )}
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {unassignedStops.length === 0 ? (
+                <table className="w-full text-[11px] min-w-[1300px] border-collapse whitespace-nowrap text-slate-700">
+                  <thead className="sticky top-0 bg-slate-100/95 backdrop-blur-xs font-bold text-slate-700 border-b border-slate-200 shadow-2xs z-10">
+                    <tr className="text-left text-[11px] text-slate-700 font-semibold uppercase tracking-wider">
+                      {visibleColumns.status !== false && (
+                        <th className="px-2.5 py-1 w-28">สถานะ</th>
+                      )}
+                      {visibleColumns.order_no !== false && (
+                        <th className="px-2.5 py-1 w-28">รหัสออเดอร์</th>
+                      )}
+                      {visibleColumns.store_info !== false && (
+                        <th className="px-2.5 py-1 min-w-[200px]">
+                          ที่ตั้ง / ร้านค้า
+                        </th>
+                      )}
+                      {visibleColumns.route_vehicle !== false && (
+                        <th className="px-2.5 py-1 w-32">สายรถ / ทะเบียน</th>
+                      )}
+                      {visibleColumns.priority !== false && (
+                        <th className="px-2.5 py-1 w-20">ลำดับความสำคัญ</th>
+                      )}
+                      {visibleColumns.drop_point !== false && (
+                        <th className="px-2.5 py-1 text-center w-24">จุดวาง</th>
+                      )}
+                      {visibleColumns.scheduled_time !== false && (
+                        <th className="px-2.5 py-1 w-24">กำหนดเวลาไว้ที่</th>
+                      )}
+                      {visibleColumns.start_service !== false && (
+                        <th className="px-2.5 py-1 w-36">เริ่มบริการ</th>
+                      )}
+                      {visibleColumns.end_service !== false && (
+                        <th className="px-2.5 py-1 w-36">สิ้นสุดบริการ</th>
+                      )}
+                      {visibleColumns.actual_duration !== false && (
+                        <th className="px-2.5 py-1 w-24">ระยะเวลาจริง</th>
+                      )}
+                      {visibleColumns.tax !== false && (
+                        <th className="px-2.5 py-1 w-24">ใบกำกับภาษี</th>
+                      )}
+                      {visibleColumns.note !== false && (
+                        <th className="px-2.5 py-1 w-24">หมายเหตุ</th>
+                      )}
+                      {loadingTypesList.map(
+                        (lt) =>
+                          visibleColumns[
+                            `loading_type_${lt.loading_type_id}`
+                          ] !== false && (
+                            <th
+                              key={lt.loading_type_id}
+                              className="px-2.5 py-1 text-center w-20"
+                            >
+                              {lt.type_name}
+                            </th>
+                          ),
+                      )}
+                      {visibleColumns.total_quantity !== false && (
+                        <th className="px-2.5 py-1 text-center w-24">
+                          จำนวนทั้งหมด
+                        </th>
+                      )}
+                      {visibleColumns.actions !== false && (
+                        <th className="px-2.5 py-1 text-right w-16 sticky top-0 right-0 bg-white z-10">
+                          จัดการ
+                        </th>
+                      )}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {assignedTab === "unassigned" ? (
+                      unassignedStops.length === 0 ? (
                         <tr>
                           <td
                             colSpan={visibleColumnCount}
@@ -4972,14 +6029,14 @@ export const RoutePage: React.FC = () => {
                                 );
                               })}
 
-                              {/* 13. จำนวนทั้งหมด */}
+                              {/* 14. จำนวนทั้งหมด */}
                               {visibleColumns.total_quantity !== false && (
                                 <td className="px-2.5 py-1 text-center font-mono font-bold text-amber-700">
                                   {stop.sum_quantity ?? stop.quantity ?? 0}
                                 </td>
                               )}
 
-                              {/* 14. จัดการ */}
+                              {/* 15. การดำเนินการ */}
                               {visibleColumns.actions !== false && (
                                 <td className="px-2.5 py-1 text-right sticky right-0 bg-white z-10">
                                   <div className="flex items-center justify-end gap-1">
@@ -5006,80 +6063,19 @@ export const RoutePage: React.FC = () => {
                               )}
                             </tr>
                           ))
-                      )}
-                    </tbody>
-                  </table>
-                ) : (
-                  <table className="w-full text-[11px] min-w-[1300px] border-collapse whitespace-nowrap">
-                    <thead className="sticky top-0 bg-slate-100/95 font-bold text-slate-700 border-b border-slate-200 shadow-2xs z-10">
-                      <tr className="text-left text-[11px] text-slate-700 font-semibold uppercase tracking-wider">
-                        {visibleColumns.status !== false && (
-                          <th className="px-2.5 py-1 w-28">สถานะ</th>
-                        )}
-                        {visibleColumns.order_no !== false && (
-                          <th className="px-2.5 py-1 w-28">รหัสออเดอร์</th>
-                        )}
-                        {visibleColumns.store_info !== false && (
-                          <th className="px-2.5 py-1 min-w-[200px]">
-                            ที่ตั้ง / ร้านค้า
-                          </th>
-                        )}
-                        {visibleColumns.route_vehicle !== false && (
-                          <th className="px-2.5 py-1 w-32">สายรถ / ทะเบียน</th>
-                        )}
-                        {visibleColumns.priority !== false && (
-                          <th className="px-2.5 py-1 w-20">ลำดับความสำคัญ</th>
-                        )}
-                        {visibleColumns.drop_point !== false && (
-                          <th className="px-2.5 py-1 text-center w-24">
-                            จุดวาง
-                          </th>
-                        )}
-                        {visibleColumns.scheduled_time !== false && (
-                          <th className="px-2.5 py-1 w-24">กำหนดเวลาไว้ที่</th>
-                        )}
-                        {visibleColumns.start_service !== false && (
-                          <th className="px-2.5 py-1 w-36">เริ่มบริการ</th>
-                        )}
-                        {visibleColumns.end_service !== false && (
-                          <th className="px-2.5 py-1 w-36">สิ้นสุดบริการ</th>
-                        )}
-                        {visibleColumns.actual_duration !== false && (
-                          <th className="px-2.5 py-1 w-24">ระยะเวลาจริง</th>
-                        )}
-                        {visibleColumns.tax !== false && (
-                          <th className="px-2.5 py-1 w-24">ใบกำกับภาษี</th>
-                        )}
-                        {visibleColumns.note !== false && (
-                          <th className="px-2.5 py-1 w-24">หมายเหตุ</th>
-                        )}
-                        {loadingTypesList.map(
-                          (lt) =>
-                            visibleColumns[
-                              `loading_type_${lt.loading_type_id}`
-                            ] !== false && (
-                              <th
-                                key={lt.loading_type_id}
-                                className="px-2.5 py-1 text-center w-20"
-                              >
-                                {lt.type_name}
-                              </th>
-                            ),
-                        )}
-                        {visibleColumns.total_quantity !== false && (
-                          <th className="px-2.5 py-1 text-center w-24">
-                            จำนวนทั้งหมด
-                          </th>
-                        )}
-                        {visibleColumns.actions !== false && (
-                          <th className="px-2.5 py-1 text-right w-16 sticky right-0 bg-white z-10">
-                            จัดการ
-                          </th>
-                        )}
+                      )
+                    ) : tableStops.length === 0 ? (
+                      <tr>
+                        <td
+                          colSpan={visibleColumnCount}
+                          className="text-center py-6 text-slate-400"
+                        >
+                          <Package className="w-5 h-5 mx-auto mb-1 text-slate-300" />
+                          ไม่พบรายการจัดส่ง
+                        </td>
                       </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {tableStops.map((stop, idx) => {
+                    ) : (
+                      tableStops.map((stop, idx) => {
                         const sc = getStatusColor(stop.status);
                         const isDepot = stop.type === "depot";
                         const ed = getEarlyDelayBadge(
@@ -5138,9 +6134,14 @@ export const RoutePage: React.FC = () => {
                             {/* 3. ที่ตั้ง / ร้านค้า */}
                             {visibleColumns.store_info !== false && (
                               <td className="px-2.5 py-1">
-                                {stop.store_id && (
-                                  <span className="font-mono text-slate-500 text-[10px] mr-1">
-                                    [{stop.store_id}]
+                                {(stop.is_store_closed ||
+                                  stop.is_closed_today) && (
+                                  <span
+                                    className="inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded bg-rose-100 text-rose-700 border border-rose-200 shrink-0 shadow-2xs mr-1.5 animate-pulse"
+                                    title={`ร้านค้าปิดทำการในวันเลือกจัดส่ง (${selectedDate})`}
+                                  >
+                                    <AlertTriangle className="w-3.5 h-3.5 text-rose-600 shrink-0" />
+                                    ร้านปิดวันนี้
                                   </span>
                                 )}
                                 <span className="font-semibold text-slate-900">
@@ -5349,21 +6350,10 @@ export const RoutePage: React.FC = () => {
                             )}
                           </tr>
                         );
-                      })}
-                      {tableStops.length === 0 && (
-                        <tr>
-                          <td
-                            colSpan={visibleColumnCount}
-                            className="text-center py-6 text-slate-400"
-                          >
-                            <Package className="w-5 h-5 mx-auto mb-1 text-slate-300" />
-                            ไม่พบรายการจัดส่ง
-                          </td>
-                        </tr>
-                      )}
-                    </tbody>
-                  </table>
-                )}
+                      })
+                    )}
+                  </tbody>
+                </table>
               </div>
             </div>
           )}
@@ -8276,13 +9266,28 @@ export const RoutePage: React.FC = () => {
         isLoading={clearingUnassigned}
       />
 
+      {/* ─── DELETE AVOID ZONE CONFIRM MODAL ─── */}
+      <ConfirmModal
+        isOpen={isConfirmDeleteAvoidZoneModalOpen}
+        title="ยืนยันการลบพื้นที่ห้ามผ่าน"
+        message={`คุณแน่ใจหรือไม่ว่าต้องการลบพื้นที่ห้ามผ่าน "${avoidZoneToDelete?.zone_name || ""}" ออกจากระบบ? ข้อมูลพิกัดแนวเขตที่ตั้งไว้จะถูกลบและไม่นำมาคำนวณหลีกเลี่ยงเส้นทาง`}
+        confirmText={deletingAvoidZone ? "กำลังลบ..." : "ลบพื้นที่ห้ามผ่าน"}
+        cancelText="ยกเลิก"
+        onConfirm={handleConfirmDeleteAvoidZone}
+        onCancel={() => {
+          setIsConfirmDeleteAvoidZoneModalOpen(false);
+          setAvoidZoneToDelete(null);
+        }}
+        isLoading={deletingAvoidZone}
+      />
+
       {/* Avoid Zone Management Drawer */}
       <AvoidZoneDrawer
         isOpen={isAvoidZoneDrawerOpen}
         onClose={() => setIsAvoidZoneDrawerOpen(false)}
         zones={avoidZones}
         onToggleActive={handleToggleAvoidZoneActive}
-        onDeleteZone={handleDeleteAvoidZone}
+        onDeleteZone={handleRequestDeleteAvoidZone}
         onFocusZone={(zone) => {
           setIsAvoidZoneDrawerOpen(false);
           if (zone.coordinates && zone.coordinates.length > 0) {

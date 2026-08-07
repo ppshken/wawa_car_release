@@ -55,4 +55,43 @@ export const getImageUrl = (path?: string) => {
   return cleanPath;
 };
 
+export interface GpsLogItem {
+  time: string;
+  latitude: number;
+  longitude: number;
+  engined: boolean;
+  speed: number;
+  address?: string;
+}
+
+export interface GpsDeviceLogsResponse {
+  success: boolean;
+  message?: string;
+  device?: {
+    id: number;
+    name: string;
+    number: string;
+    speedLimit?: number;
+  };
+  start?: string;
+  end?: string;
+  logs: GpsLogItem[];
+  timestamp?: string;
+}
+
+export const fetchGpsDeviceLogs = async (
+  deviceId: string | number,
+  start?: string,
+  end?: string,
+  address?: number | string
+): Promise<GpsDeviceLogsResponse> => {
+  const params = new URLSearchParams();
+  if (start) params.append("start", start);
+  if (end) params.append("end", end);
+  if (address !== undefined && address !== null) params.append("address", String(address));
+
+  const response = await api.get(`/gps/device/log/${deviceId}?${params.toString()}`);
+  return response.data;
+};
+
 export default api;

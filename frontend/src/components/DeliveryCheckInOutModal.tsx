@@ -1229,7 +1229,7 @@ export const DeliveryCheckInOutDrawer: React.FC<
                 {/* Row 9: Start Service Time (เริ่มบริการ) */}
                 <div className="py-1.5  flex items-center justify-between gap-2 bg-white">
                   <span className="font-semibold text-slate-500 shrink-0 w-36 text-xs">
-                    เริ่มบริการ:
+                    เริ่มบริการ
                   </span>
                   <span className="font-mono font-bold text-slate-900 text-right text-xs">
                     {formatTimeString(startTimeVal)}
@@ -1269,6 +1269,13 @@ export const DeliveryCheckInOutDrawer: React.FC<
                   </span>
                 </div>
 
+                <div className="bg-slate-50 py-1.5 flex items-center justify-between">
+                  <div className="font-bold text-xs text-slate-900 flex items-center gap-1.5">
+                    <Layers className="w-4 h-4 text-purple-600" />
+                    <span>ข้อมูลการโหลดสินค้า</span>
+                  </div>
+                </div>
+
                 {/* Row 13: Cargo Loads Rows (รูปแบบเดียวกับข้อมูลร้านค้า) */}
                 {Array.isArray(storeItem.loads) &&
                 storeItem.loads.length > 0 ? (
@@ -1286,7 +1293,7 @@ export const DeliveryCheckInOutDrawer: React.FC<
                         className="py-1.5  flex items-center justify-between gap-2 bg-white"
                       >
                         <span className="font-semibold text-slate-500 shrink-0 w-36 text-xs">
-                          {typeName}:
+                          {typeName}
                         </span>
                         <span className="font-mono font-bold text-slate-900 text-right text-xs">
                           {qty}

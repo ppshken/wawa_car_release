@@ -17,19 +17,33 @@ import {
   AlertTriangle,
   LocateFixed,
 } from "lucide-react";
-import { getImageUrl } from "../services/api";
+import api, { fetchGpsDeviceLogs, getImageUrl } from "../services/api";
 
 interface ReleaseGpsMapTabProps {
   release: any;
   stores: any[];
 }
 
-const DEPOT_COORD = { lat: 17.1266642, lng: 102.9635667 };
+const getDepotCoordFromEnv = (): { lat: number; lng: number } => {
+  const envVal = import.meta.env.VITE_HOME;
+  if (envVal && typeof envVal === "string" && envVal.includes(",")) {
+    const parts = envVal.split(",");
+    const lat = parseFloat(parts[0].trim());
+    const lng = parseFloat(parts[1].trim());
+    if (!isNaN(lat) && !isNaN(lng)) {
+      return { lat, lng };
+    }
+  }
+  return { lat: 17.128338, lng: 102.965199 };
+};
+
+const DEPOT_COORD = getDepotCoordFromEnv();
 
 // ─── Custom Numbered & Status Marker ───
 function createStopMarker(number: number, isDepot: boolean, status?: string) {
   const size = isDepot ? 30 : 26;
-  const isCompleted = status === "completed";
+  const isCompleted =
+    status === "completed" || status === "success" || status === "delivered";
   const isProblem = status === "problem" || status === "failed";
 
   let pinColor = "#3b82f6"; // Blue default
@@ -272,10 +286,99 @@ export const ReleaseGpsMapTab: React.FC<ReleaseGpsMapTabProps> = ({
         if (isMounted) setLoadingRoad(false);
       });
 
+      return () => {
+        isMounted = false;
+      };
+    }, [validStops]);
+
+  // GPS Device History Tracks Effect
+  const [gpsHistoryCoords, setGpsHistoryCoords] = useState<[number, number][]>(
+    [],
+  );
+  const [loadingGpsHistory, setLoadingGpsHistory] = useState<boolean>(false);
+
+  useEffect(() => {
+    let isMounted = true;
+    const loadGpsHistory = async () => {
+      try {
+        setLoadingGpsHistory(true);
+        // 1. Fetch devices to match license_plate or car_id
+        const resDev = await api.get("/gps/devices");
+        if (!isMounted) return;
+        const devices = resDev.data?.devices || [];
+
+        const targetPlate = (release?.license_plate || "")
+          .toLowerCase()
+          .trim();
+        const targetCarId = String(release?.car_id || "")
+          .toLowerCase()
+          .trim();
+
+        const matchedDevice = devices.find((d: any) => {
+          const dName = (d.name || "").toLowerCase().trim();
+          const dNum = (d.number || "").toLowerCase().trim();
+          const dDetail = (d.detail || "").toLowerCase().trim();
+          const dId = String(d.id || "").toLowerCase().trim();
+
+          return (
+            (targetPlate &&
+              (dName.includes(targetPlate) ||
+                targetPlate.includes(dName) ||
+                dNum.includes(targetPlate) ||
+                dDetail.includes(targetPlate))) ||
+            (targetCarId && (dId === targetCarId || dName.includes(targetCarId)))
+          );
+        });
+
+        const deviceIdToFetch = matchedDevice?.id || release?.car_id;
+        if (deviceIdToFetch) {
+          const rawDate =
+            release?.release_date ||
+            release?.created_at ||
+            new Date().toISOString();
+          const dateStr =
+            typeof rawDate === "string"
+              ? rawDate.slice(0, 10)
+              : new Date().toISOString().slice(0, 10);
+          const start = `${dateStr} 00:00:00`;
+          const end = `${dateStr} 23:59:59`;
+
+          const logRes = await fetchGpsDeviceLogs(
+            deviceIdToFetch,
+            start,
+            end,
+            0,
+          );
+          if (
+            isMounted &&
+            logRes &&
+            logRes.success &&
+            Array.isArray(logRes.logs)
+          ) {
+            const coords: [number, number][] = logRes.logs
+              .filter((l) => l.latitude && l.longitude)
+              .map((l) => [l.latitude, l.longitude] as [number, number]);
+            setGpsHistoryCoords(coords);
+          }
+        }
+      } catch (err) {
+        console.warn(
+          "Fetch GPS device history in ReleaseGpsMapTab warning:",
+          err,
+        );
+      } finally {
+        if (isMounted) setLoadingGpsHistory(false);
+      }
+    };
+
+    if (release) {
+      loadGpsHistory();
+    }
+
     return () => {
       isMounted = false;
     };
-  }, [validStops]);
+  }, [release]);
 
   const mapBounds = useMemo(() => {
     const points: [number, number][] = [[DEPOT_COORD.lat, DEPOT_COORD.lng]];
@@ -285,12 +388,31 @@ export const ReleaseGpsMapTab: React.FC<ReleaseGpsMapTabProps> = ({
   }, [validStops]);
 
   const completedCount = validStops.filter(
-    (s) => s.status === "completed",
+    (s) =>
+      s.status === "completed" ||
+      s.status === "success" ||
+      s.status === "delivered" ||
+      (s.check_out_id !== undefined &&
+        s.check_out_id !== null &&
+        s.check_out_id !== 0 &&
+        s.check_out_id !== "0") ||
+      Boolean(s.date_time_check_out),
   ).length;
-  const problemCount = validStops.filter((s) => s.status === "problem").length;
-  const in_progressCount = validStops.filter(
-    (s) => s.status === "in_progress",
+
+  const problemCount = validStops.filter(
+    (s) =>
+      s.status === "problem" ||
+      s.status === "failed" ||
+      (s.problem_id !== undefined &&
+        s.problem_id !== null &&
+        s.problem_id !== 0 &&
+        s.problem_id !== "0"),
   ).length;
+
+  const in_progressCount = Math.max(
+    0,
+    validStops.length - completedCount - problemCount,
+  );
 
   return (
     <div className="space-y-3 font-sans text-xs">
@@ -332,7 +454,7 @@ export const ReleaseGpsMapTab: React.FC<ReleaseGpsMapTabProps> = ({
           </div>
         </div>
       </div>
-      
+
       <div className="hidden">
         <div className="flex items-center gap-2">
           <div className="w-8 h-8 rounded-lg bg-blue-600/30 border border-blue-500/40 text-blue-400 flex items-center justify-center shrink-0">
@@ -437,60 +559,111 @@ export const ReleaseGpsMapTab: React.FC<ReleaseGpsMapTabProps> = ({
             />
           )}
 
-          {/* Store Waypoint Markers */}
-          {validStops.map((st) => (
-            <Marker
-              key={st.list_id}
-              ref={(marker) => {
-                if (marker) markerRefs.current[String(st.list_id)] = marker;
+          {/* GPS Historical Breadcrumb Track Polyline (เส้นประวัติการวิ่งจริงของรถ) */}
+          {gpsHistoryCoords.length > 1 && (
+            <Polyline
+              positions={gpsHistoryCoords}
+              pathOptions={{
+                color: "#0000FF",
+                weight: 4.5,
+                opacity: 0.95,
+                dashArray: "8, 6",
               }}
-              position={[st.lat, st.lng]}
-              icon={createStopMarker(
-                st.order,
-                false,
-                st.problem_id
-                  ? "problem"
-                  : st.check_out_id
-                    ? "completed"
-                    : "pending",
-              )}
             >
               <Popup>
-                <div className="font-sans text-xs space-y-1">
-                  <div className="font-bold text-slate-900 border-b pb-1">
-                    #{st.order} {st.store_name_result || st.store_name}
-                  </div>
-                  <div className="text-[11px] text-slate-600">
-                    รหัสร้าน: {st.store_id || "-"}
-                  </div>
-                  <div className="text-[11px] text-slate-600">
-                    บิล: {st.data_store_no || "-"}
-                  </div>
-                  <div className="text-[11px] font-bold text-blue-700">
-                    จำนวนส่ง: {st.sum_quantity || 1} ลัง
-                  </div>
-                  <div className="text-[10px] font-bold mt-1">
-                    สถานะ:{" "}
-                    <span
-                      className={
-                        st.check_out_id
-                          ? "text-emerald-600"
-                          : st.check_in_id
-                            ? "text-blue-600"
-                            : "text-amber-600"
-                      }
-                    >
-                      {st.check_out_id
-                        ? "เช็คเอาท์แล้ว"
-                        : st.check_in_id
-                          ? "กำลังส่ง"
-                          : "รอส่ง"}
-                    </span>
+                <div className="font-sans text-xs">
+                  <strong className="text-cyan-700 block font-bold">
+                    🗺️ เส้นทางประวัติการเดินทางจริง GPS
+                  </strong>
+                  <span className="text-slate-700 text-[11px]">
+                    ทะเบียน: {release?.license_plate || "-"}
+                  </span>
+                  <div className="text-slate-500 text-[10px] mt-1 font-mono">
+                    พิกัดทั้งหมด: {gpsHistoryCoords.length} จุด
                   </div>
                 </div>
               </Popup>
-            </Marker>
-          ))}
+            </Polyline>
+          )}
+
+          {/* Store Waypoint Markers */}
+          {validStops.map((st) => {
+            const isCompleted =
+              st.status === "completed" ||
+              st.status === "success" ||
+              st.status === "delivered" ||
+              (st.check_out_id !== undefined &&
+                st.check_out_id !== null &&
+                st.check_out_id !== 0 &&
+                st.check_out_id !== "0") ||
+              Boolean(st.date_time_check_out);
+
+            const isProblem =
+              st.status === "problem" ||
+              st.status === "failed" ||
+              (st.problem_id !== undefined &&
+                st.problem_id !== null &&
+                st.problem_id !== 0 &&
+                st.problem_id !== "0");
+
+            const stopStatus = isProblem
+              ? "problem"
+              : isCompleted
+                ? "completed"
+                : st.check_in_id
+                  ? "in_progress"
+                  : "pending";
+
+            return (
+              <Marker
+                key={st.list_id}
+                ref={(marker) => {
+                  if (marker) markerRefs.current[String(st.list_id)] = marker;
+                }}
+                position={[st.lat, st.lng]}
+                icon={createStopMarker(st.order, false, stopStatus)}
+              >
+                <Popup>
+                  <div className="font-sans text-xs space-y-1">
+                    <div className="font-bold text-slate-900 border-b pb-1">
+                      #{st.order} {st.store_name_result || st.store_name}
+                    </div>
+                    <div className="text-[11px] text-slate-600">
+                      รหัสร้าน: {st.store_id || "-"}
+                    </div>
+                    <div className="text-[11px] text-slate-600">
+                      บิล: {st.data_store_no || "-"}
+                    </div>
+                    <div className="text-[11px] font-bold text-blue-700">
+                      จำนวนส่ง: {st.sum_quantity || 1} ลัง
+                    </div>
+                    <div className="text-[10px] font-bold mt-1">
+                      สถานะ:{" "}
+                      <span
+                        className={
+                          isProblem
+                            ? "text-rose-600 font-bold"
+                            : isCompleted
+                              ? "text-emerald-600 font-extrabold"
+                              : st.check_in_id
+                                ? "text-blue-600 font-bold"
+                                : "text-amber-600 font-bold"
+                        }
+                      >
+                        {isProblem
+                          ? "ติดปัญหา !"
+                          : isCompleted
+                            ? "ส่งสินค้าสำเร็จ ✓"
+                            : st.check_in_id
+                              ? "กำลังส่ง..."
+                              : "รอส่ง"}
+                      </span>
+                    </div>
+                  </div>
+                </Popup>
+              </Marker>
+            );
+          })}
 
           {/* Vehicle Live GPS Marker */}
           {vehiclePosition && (
@@ -500,6 +673,7 @@ export const ReleaseGpsMapTab: React.FC<ReleaseGpsMapTabProps> = ({
                 release?.license_plate || "รถขนส่ง",
                 true,
               )}
+              zIndexOffset={2000}
             >
               <Popup>
                 <div className="font-sans text-xs">

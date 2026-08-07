@@ -4221,9 +4221,6 @@ export const CarReleaseList: React.FC = () => {
                                 สิ้นสุดบริการ
                               </th>
                               <th className="px-2.5 py-1 w-24">ระยะเวลาจริง</th>
-                              <th className="px-2.5 py-1 w-24 text-center">
-                                หลักฐานการส่ง
-                              </th>
                               {/* 12. Active Cargo Loading Types Headers */}
                               {activeLoadingTypes.map((lt) => (
                                 <th
@@ -4439,30 +4436,8 @@ export const CarReleaseList: React.FC = () => {
                                       {actualDur}
                                     </td>
 
-                                    {/* 11. หลักฐานการส่ง */}
-                                    <td className="px-2.5 py-1 text-center">
-                                      {st.pod_image ? (
-                                        <a
-                                          href={getImageUrl(st.pod_image)}
-                                          target="_blank"
-                                          rel="noopener noreferrer"
-                                          onClick={(e) => e.stopPropagation()}
-                                          className="inline-block"
-                                        >
-                                          <img
-                                            src={getImageUrl(st.pod_image)}
-                                            alt="POD"
-                                            className="w-5 h-5 object-cover rounded border border-slate-300 hover:scale-110 transition-transform"
-                                          />
-                                        </a>
-                                      ) : (
-                                        <span className="text-slate-400 font-mono">
-                                          -
-                                        </span>
-                                      )}
-                                    </td>
 
-                                    {/* 12. Dynamic Active Cargo Loading Type Cells */}
+                                    {/* 11. Dynamic Active Cargo Loading Type Cells */}
                                     {activeLoadingTypes.map((lt) => {
                                       const qty = getStoreLoadQty(st, lt);
                                       return (
@@ -4475,27 +4450,27 @@ export const CarReleaseList: React.FC = () => {
                                       );
                                     })}
 
-                                    {/* 13. จำนวนทั้งหมด */}
+                                    {/* 12. จำนวนทั้งหมด */}
                                     <td className="px-2.5 py-1 text-center font-mono font-bold text-amber-800">
                                       {st.sum_quantity ?? st.quantity ?? 1}
                                     </td>
 
-                                    {/* 14. การชำระเงิน */}
+                                    {/* 13. การชำระเงิน */}
                                     <td className="px-2.5 py-1 text-center font-bold text-slate-900">
                                       {st.payment_name ?? "-"}
                                     </td>
 
-                                    {/* 15. จำนวนเงินสด */}
+                                    {/* 14. จำนวนเงินสด */}
                                     <td className="px-2.5 py-1 text-center font-bold text-slate-900">
                                       {formatMoney(st.cash ?? 0)}
                                     </td>
 
-                                    {/* 16. จำนวนเงินโอน */}
+                                    {/* 15. จำนวนเงินโอน */}
                                     <td className="px-2.5 py-1 text-center font-bold text-slate-900">
                                       {formatMoney(st.transfer ?? 0)}
                                     </td>
 
-                                    {/* 17. จัดการ */}
+                                    {/* 16. จัดการ */}
                                     <td className="px-2.5 py-1 text-right">
                                       <button
                                         onClick={(e) => {

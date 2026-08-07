@@ -35,7 +35,7 @@ import { AuditLog } from './pages/AuditLog';
 import { ProfilePage } from './pages/ProfilePage';
 import { ApiKeyManagement } from './pages/ApiKeyManagement';
 
-const ProtectedLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+const ProtectedLayout: React.FC<{ children: React.ReactNode; noPadding?: boolean }> = ({ children, noPadding }) => {
   const { isAuthenticated, loading } = useAuth();
 
   if (loading) {
@@ -56,7 +56,7 @@ const ProtectedLayout: React.FC<{ children: React.ReactNode }> = ({ children }) 
         <Navbar />
         <div className="flex flex-1 bg-white overflow-hidden">
           <Sidebar />
-          <main className="flex-1 p-3 sm:p-5 w-full max-w-full bg-white overflow-y-auto overflow-x-hidden pb-24 md:pb-5">
+          <main className={noPadding ? "flex-1 p-0 w-full max-w-full bg-white overflow-hidden" : "flex-1 p-3 sm:p-5 w-full max-w-full bg-white overflow-y-auto overflow-x-hidden pb-24 md:pb-5"}>
             {children}
           </main>
         </div>
@@ -147,7 +147,7 @@ export const App: React.FC = () => {
           <Route path="/user-access" element={<ProtectedLayout><PermissionGuard permKey="user_access"><AccessPage /></PermissionGuard></ProtectedLayout>} />
 
           {/* OptimoRoute Map & Import */}
-          <Route path="/route" element={<ProtectedLayout><PermissionGuard permKey="route"><RoutePage /></PermissionGuard></ProtectedLayout>} />
+          <Route path="/route" element={<ProtectedLayout noPadding><PermissionGuard permKey="route"><RoutePage /></PermissionGuard></ProtectedLayout>} />
           <Route path="/optimoroute" element={<Navigate to="/route" replace />} />
           <Route path="/import-optimo" element={<ProtectedLayout><PermissionGuard permKey="import_optimo"><ImportOptimoPage /></PermissionGuard></ProtectedLayout>} />
 
